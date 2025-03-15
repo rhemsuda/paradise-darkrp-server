@@ -109,7 +109,7 @@ TEAM_GUN = DarkRP.createJob("Gun Dealer", {
     color = Color(255, 140, 0, 255),
     model = "models/player/monk.mdl",
     description = [[A Gun Dealer is the only person who can sell guns to other people.
-        Make sure you aren't caught selling illegal firearms to the public! You might get arrested!]],
+        Make sure you aren't caught selling illegal firearms to the public! You might get arrested!]]--,
     --[[weapons = {},
     command = "gundealer",
     max = 2,
@@ -126,7 +126,7 @@ TEAM_MEDIC = DarkRP.createJob("Medic", {
     description = [[With your medical knowledge you work to restore players to full health.
         Without a medic, people cannot be healed.
         Left click with the Medical Kit to heal other players.
-        Right click with the Medical Kit to heal yourself.]],
+        Right click with the Medical Kit to heal yourself.]]--,
    --[[ weapons = {"med_kit"},
     command = "medic",
     max = 3,
@@ -147,7 +147,7 @@ TEAM_CHIEF = DarkRP.createJob("Civil Protection Chief", {
         Bash a player with a stunstick and they may learn to obey the law.
         The Battering Ram can break down the door of a criminal, with a warrant for their arrest.
         Type /wanted <name> to alert the public to the presence of a criminal.
-        Type /jailpos to set the Jail Position]],
+        Type /jailpos to set the Jail Position]]--,
    --[[weapons = {"arrest_stick", "unarrest_stick", "weapon_deagle2", "stunstick", "door_ram", "weaponchecker"},
     command = "chief",
     max = 1,
@@ -173,7 +173,7 @@ TEAM_MAYOR = DarkRP.createJob("Mayor", {
     Type /lockdown initiate a lockdown of the city.
     Everyone must be inside during a lockdown.
     The cops patrol the area.
-    /unlockdown to end a lockdown]],
+    /unlockdown to end a lockdown]]--,
  --[[  weapons = {},
     command = "mayor",
     max = 1,
@@ -192,7 +192,7 @@ TEAM_HOBO = DarkRP.createJob("Hobo", {
         You have no home.
         Beg for your food and money
         Sing for everyone who passes to get money
-        Make your own wooden home somewhere in a corner or outside someone else's door]],
+        Make your own wooden home somewhere in a corner or outside someone else's door]]--,
   --[[  weapons = {"weapon_bugbait"},
     command = "hobo",
     max = 5,
@@ -211,7 +211,7 @@ TEAM_HOBO = DarkRP.createJob("Hobo", {
         model = "models/player/mossman.mdl",
         description = [[As a cook, it is your responsibility to feed the other members of your city.
             You can spawn a microwave and sell the food you make:
-            /buymicrowave]],
+            /buymicrowave]]--,
       --[[ weapons = {},
         command = "cook",
         max = 2,
