@@ -1,0 +1,113 @@
+[22:59:55] New map: gm_flatgrass
+[23:00:26] Client "Nicknmb" connected.
+[23:00:47] Client "Nicknmb" spawned in server <STEAM_0:0:28182488> (took 21 seconds).
+[23:01:06] Nicknmb<STEAM_0:0:28182488> spawned model models/props_wasteland/prison_heater001a.mdl
+[23:01:31] Nicknmb: !menu
+[23:02:13] Nicknmb: /buyammo shotgun
+[23:02:15] Nicknmb: /buyammo shotgun
+[23:02:43] Nicknmb: !commands
+[23:02:45] Nicknmb: !help
+[23:02:47] Nicknmb: !menu
+[23:06:50] (Console) added Nicknmb to group superadmin
+[23:06:54] Nicknmb: !menu
+[23:07:45] Dropped "Nicknmb" from server<STEAM_0:0:28182488>
+
+
+
+[23:15:32] New map: gm_flatgrass
+
+
+
+[23:16:47] New map: gm_flatgrass
+
+
+
+[23:17:36] New map: gm_flatgrass
+
+
+
+[23:20:35] New map: gm_flatgrass
+
+
+
+[23:20:55] New map: gm_flatgrass
+
+
+
+[23:21:15] New map: gm_flatgrass
+
+
+
+[23:21:33] New map: gm_flatgrass
+
+
+
+[23:22:03] New map: gm_flatgrass
+
+
+
+[23:22:44] New map: gm_flatgrass
+
+
+
+[23:28:59] New map: gm_flatgrass
+
+
+
+[23:29:18] New map: gm_flatgrass
+
+
+
+[23:30:21] New map: gm_flatgrass
+
+
+
+[23:31:09] New map: gm_flatgrass
+
+
+
+[23:31:24] New map: gm_flatgrass
+
+
+
+[23:32:20] New map: gm_flatgrass
+
+
+
+[23:33:47] New map: gm_flatgrass
+[23:35:26] Client "Nicknmb" connected.
+[23:35:50] Client "Nicknmb" spawned in server <STEAM_0:0:28182488> (took 24 seconds).
+[23:38:38] Dropped "Nicknmb" from server<STEAM_0:0:28182488>
+
+
+
+[23:39:50] New map: gm_city_square
+[23:39:50] Server is shutting down/changing levels.
+
+
+
+[23:41:49] New map: gm_city_square
+
+
+
+[23:43:14] New map: gm_city_square
+[23:45:08] Client "Nicknmb" connected.
+[23:46:30] Client "Nicknmb" connected.
+[23:46:51] Client "Nicknmb" spawned in server <STEAM_0:0:28182488> (took 21 seconds).
+[23:48:10] Nicknmb: !menu
+[23:48:36] Client "Celenix" connected.
+[23:48:50] Nicknmb revoked access "ulx thetime" to group user
+[23:49:00] Nicknmb revoked access "ulx motd" to group user
+[23:49:03] Client "Celenix" spawned in server <STEAM_0:0:426472095> (took 27 seconds).
+
+
+
+[23:58:57] New map: rp_downtown_v4c_v2
+
+
+
+[23:59:12] New map: rp_downtown_v4c_v2
+[23:59:23] Client "Celenix" connected.
+[23:59:40] Client "Celenix" spawned in server <STEAM_0:0:426472095> (took 17 seconds).
+[23:59:52] Client "Nicknmb" connected.
+<Logging continued in "data/ulx_logs/03-15-25.txt">

@@ -1,0 +1,244 @@
+Adding Filesystem Addon 'addons/darkrpmodification-master'
+Adding Filesystem Addon 'addons/ulib'
+Adding Filesystem Addon 'addons/ulib-master'
+Adding Filesystem Addon 'addons/ulx'
+Adding Filesystem Addon 'addons/ulx-master'
+Adding Filesystem Addon 'addons/utime-master'
+WS: No +host_workshop_collection or it is invalid!
+Changing gamemode to DarkRP (darkrp)
+Server logging enabled.
+Server logging data to file logs\L0314125.log
+L 03/14/2025 - 23:59:01: Log file started (file "logs\L0314125.log") (game "garrysmod") (version "9529")
+Unknown command "sbox_allownpcs"
+Unknown command "sbox_plpldamage"
+Unknown command "sbox_playergod"
+Unknown command "sbox_maxspawners"
+Unknown command "sbox_maxturrets"
+'banned_ip.cfg' not present; not executing.
+'banned_user.cfg' not present; not executing.
+Network: IP 64.74.161.162, mode MP, dedicated Yes, ports 27055 SV / 27005 CL
+Error loading cfg/trusted_keys_base.txt
+Error loading cfg/pure_server_minimal.txt
+Server logging data to file logs\L0314126.log
+BSP embedded file failed whitelist check - 'detail.vbsp'
+BSP embedded file failed whitelist check - 'ep2\materials\vault_doors\Material.vmt'
+BSP embedded file failed whitelist check - 'ep2\materials\vault_doors\Material_001.vmt'
+BSP embedded file failed whitelist check - 'ep2\materials\vault_doors\vault_door_glass.vmt'
+BSP embedded file failed whitelist check - 'ep2\materials\vault_doors\vault_doors_frame_rc_3.vmt'
+BSP embedded file failed whitelist check - 'ep2\materials\vault_doors\vault_doors_mechanism.vmt'
+BSP embedded file failed whitelist check - 'ep2\materials\vault_doors\vault_doors_mount.vmt'
+PREP OK
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/railingspiked.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/railingspiked.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/railingspiked.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/railingspiked.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/railingspiked.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/railingspiked.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/railingspiked.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/railingspiked.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/railingspiked.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/railingspiked.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/railingspiked.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/railingspiked.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/railingspiked.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/railingspiked.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/railingspiked.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/railingspiked.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/railingspiked.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/railingspiked.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/railingspiked.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/railingspiked.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/largebush01.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/largebush01.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/bushgreenbig.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/largebush01.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/largebush01.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/bushgreenbig.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/light_shop2.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_chateau/light_chandelier02.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_chateau/light_chandelier02.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_chateau/light_chandelier02.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_chateau/light_chandelier02.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_chateau/light_chandelier02.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_chateau/light_chandelier02.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_chateau/light_chandelier02.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_chateau/light_chandelier02.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_chateau/light_chandelier02.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_chateau/light_chandelier02.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_chateau/light_chandelier02.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_chateau/light_chandelier02.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_chateau/light_chandelier02.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_chateau/light_chandelier02.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_chateau/light_chandelier02.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_chateau/light_chandelier02.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_dust/du_window_4x8_arch_flat.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_dust/du_window_4x8_arch_flat.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_dust/du_window_4x8_arch_flat.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_dust/du_window_4x8_arch_flat.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_dust/du_window_4x8_arch_flat.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_dust/du_window_4x8_arch_flat.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_chateau/light_chandelier02.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_chateau/light_chandelier02.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_chateau/light_chandelier02.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_chateau/light_chandelier02.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_chateau/light_chandelier02.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/couch.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/couch.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/couch.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_tides/restaurant_table.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/couch.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/couch.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/couch.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_tides/restaurant_table.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/couch.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/couch.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/couch.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_tides/restaurant_table.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_inferno/fencewooden02.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/fern01lg.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/fern01lg.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/fern01lg.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/fern01lg.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/fern01lg.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/fern01lg.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/fern01lg.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_piranesi/pi_bench.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_piranesi/pi_bench.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_tides/tides_streetlight.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_tides/tides_streetlight.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_tides/tides_streetlight.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_tides/tides_streetlight.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_tides/restaurant_table.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_office/table_meeting.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/couch.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/couch.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_tides/restaurant_table.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/de_tides/restaurant_table.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/couch.mdl)
+SOLID_VPHYSICS static prop with no vphysics model! (models/props/cs_militia/couch.mdl)
+Particles: Missing 'particles/grub_blood.pcf'
+Particles: Missing 'particles/antlion_gib_02.pcf'
+Particles: Missing 'particles/antlion_worker.pcf'
+Particles: Missing 'particles/striderbuster.pcf'
+///////////////////////////////
+//      Ulysses Library      //
+///////////////////////////////
+// Loading...                //
+//  shared/defines.lua       //
+//  shared/misc.lua          //
+//  shared/util.lua          //
+//  shared/hook.lua          //
+//  shared/table.lua         //
+//  shared/player.lua        //
+//  server/player.lua        //
+//  shared/messages.lua      //
+//  shared/commands.lua      //
+//  server/concommand.lua    //
+//  server/util.lua          //
+//  shared/sh_ucl.lua        //
+//  server/ucl.lua           //
+//  server/phys.lua          //
+//  server/player_ext.lua    //
+//  server/entity_ext.lua    //
+//  shared/plugin.lua        //
+//  shared/cami_global.lua   //
+//  shared/cami_ulib.lua     //
+// Load Complete!            //
+///////////////////////////////
+[ULIB] Loading SHARED module: ulx_init.lua
+///////////////////////////////
+//       ULX Admin Mod       //
+///////////////////////////////
+// Loading...                //
+//  sh_defines.lua           //
+//  lib.lua                  //
+//  base.lua                 //
+//  sh_base.lua              //
+//  log.lua                  //
+//  MODULE: slots.lua        //
+//  MODULE: uteam.lua        //
+//  MODULE: votemap.lua      //
+//  MODULE: xgui_server.lua  //
+///////////////////////////////
+// ULX GUI -- by Stickly Man //
+///////////////////////////////
+// Adding Main Modules..     //
+//  bans.lua                 //
+//  commands.lua             //
+//  groups.lua               //
+//  maps.lua                 //
+//  settings.lua             //
+// Adding Setting Modules..  //
+//  client.lua               //
+//  server.lua               //
+// Adding Gamemode Modules.. //
+//  sandbox.lua              //
+// Loading Server Modules..  //
+//  sv_bans.lua              //
+//  sv_groups.lua            //
+//  sv_maps.lua              //
+//  sv_sandbox.lua           //
+//  sv_settings.lua          //
+// XGUI modules added!       //
+///////////////////////////////
+//  MODULE: chat.lua         //
+//  MODULE: fun.lua          //
+//  MODULE: menus.lua        //
+//  MODULE: rcon.lua         //
+//  MODULE: teleport.lua     //
+//  MODULE: user.lua         //
+//  MODULE: userhelp.lua     //
+//  MODULE: util.lua         //
+//  MODULE: vote.lua         //
+//  end.lua                  //
+// Load Complete!            //
+///////////////////////////////
+Particles: Missing 'particles/hunter_flechette.pcf'
+Particles: Missing 'particles/hunter_projectile.pcf'
+Making workshop gamemode available for client download
+Using map cycle file cfg/mapcycle.txt.
+Precache called on a point_template that has no templates: respawn_downtown_shopstorefront01
+Failed to load .nav file: Cannot access!
+Server logging enabled.
+Server logging data to file logs\L0314127.log
+Unknown command "sbox_allownpcs"
+Unknown command "sbox_plpldamage"
+Unknown command "sbox_playergod"
+Unknown command "sbox_maxspawners"
+Unknown command "sbox_maxturrets"
+'banned_ip.cfg' not present; not executing.
+'banned_user.cfg' not present; not executing.
+Client "Celenix" connected (69.41.204.147:40994).
+Client "Nicknmb" connected (69.41.204.147:27005).
+CreateFragmentsFromFile (69.41.204.147:27005): 'maps\rp_downtown_v4c_v2.bsp' size exceeds net_maxfilesize limit (30 MB).
+Dropped Nicknmb from server (Map maps/rp_downtown_v4c_v2.bsp is missing)
+Client "Nicknmb" connected (69.41.204.147:27005).

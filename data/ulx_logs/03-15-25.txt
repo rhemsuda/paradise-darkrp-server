@@ -1,0 +1,3 @@
+<Logging continued from "data/ulx_logs/03-14-25.txt">
+[00:04:58] Client "Nicknmb" connected.
+[00:05:17] Client "Nicknmb" spawned in server <STEAM_0:0:28182488> (took 19 seconds).

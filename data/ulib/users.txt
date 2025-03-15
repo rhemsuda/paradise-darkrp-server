@@ -1,0 +1,11 @@
+"STEAM_0:0:28182488"	
+{
+	"name"	"Nicknmb"
+	"deny"	
+	{
+	}
+	"allow"	
+	{
+	}
+	"group"	"superadmin"
+}
