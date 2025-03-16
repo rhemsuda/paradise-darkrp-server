@@ -5,5 +5,6 @@ RegisterInventoryItem("pistol", {
     useFunction = function(ply)
         ply:Give("weapon_pistol")
         ply:GiveAmmo(30, "Pistol")
-    end
+    end,
+    maxStack = 1
 })

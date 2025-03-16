@@ -8,22 +8,29 @@ net.Receive("SyncInventory", function()
     end
 end)
 
+net.Receive("InventoryMessage", function()
+    local message = net.ReadString()
+    chat.AddText(Color(255, 255, 0), "[Inventory] ", Color(255, 255, 255), message)
+end)
+
 net.Receive("OpenInventory", function()
     if IsValid(InventoryFrame) then
         InventoryFrame:Remove()
     end
 
     InventoryFrame = vgui.Create("DFrame")
-    InventoryFrame:SetSize(400, 300)
+    InventoryFrame:SetSize(600, 400)
     InventoryFrame:Center()
-    InventoryFrame:SetTitle("Your Inventory")
+    InventoryFrame:SetTitle("Inventory")
     InventoryFrame:MakePopup()
+    InventoryFrame.Paint = function(self, w, h)
+        draw.RoundedBox(0, 0, 0, w, h, Color(1, 1, 1, 125))
 
     local ItemContainer = vgui.Create("DPanel", InventoryFrame)
     ItemContainer:Dock(FILL)
     ItemContainer:DockMargin(5, 5, 5, 5)
     ItemContainer.Paint = function(self, w, h)
-        draw.RoundedBox(4, 0, 0, w, h, Color(30, 30, 30, 200))
+        draw.RoundedBox(4, 0, 0, w, h, Color(100, 100, 100, 200))
     end
 
     local ItemGrid = vgui.Create("DIconLayout", ItemContainer)
@@ -39,7 +46,7 @@ net.Receive("OpenInventory", function()
             if item then
                 for i = 1, amount do
                     local ItemIcon = ItemGrid:Add("DModelPanel")
-                    ItemIcon:SetSize(60, 60) -- Increased from 50x50 to 60x60
+                    ItemIcon:SetSize(75, 75) -- Increased from 60x60 to 75x75
                     ItemIcon:SetModel(item.model)
                     ItemIcon:SetTooltip(item.name)
                     ItemIcon:SetCamPos(Vector(20, 20, 20))

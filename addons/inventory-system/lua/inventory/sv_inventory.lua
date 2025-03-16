@@ -3,8 +3,10 @@ util.AddNetworkString("SyncInventory")
 util.AddNetworkString("DropItem")
 util.AddNetworkString("UseItem")
 util.AddNetworkString("DeleteItem")
+util.AddNetworkString("InventoryMessage")
 
 local PlayerInventories = {}
+local PickupCooldown = {} -- Table to track last message time per player per entity
 
 hook.Add("DarkRPDBInitialized", "InitCustomInventoryTable", function()
     MySQLite.begin()
@@ -22,6 +24,13 @@ hook.Add("DarkRPDBInitialized", "InitCustomInventoryTable", function()
         print("[Custom Inventory] Table 'darkrp_custom_inventory' initialized successfully!")
     end)
 end)
+
+local function SendInventoryMessage(ply, message)
+    net.Start("InventoryMessage")
+    net.WriteString(message)
+    net.Send(ply)
+    print("[Inventory Log] " .. ply:Nick() .. " (" .. ply:SteamID() .. "): " .. message)
+end
 
 local function LoadPlayerInventory(ply)
     local steamID = ply:SteamID()
@@ -56,6 +65,7 @@ end
 
 hook.Add("PlayerInitialSpawn", "InitInventory", function(ply)
     LoadPlayerInventory(ply)
+    ply:Give("weapon_inventory")
 end)
 
 hook.Add("PlayerDisconnected", "SaveInventoryOnDisconnect", function(ply)
@@ -66,13 +76,17 @@ function AddItemToInventory(ply, itemID, amount)
     if not IsValid(ply) or not InventoryItems[itemID] then return end
     local steamID = ply:SteamID()
     local inv = PlayerInventories[steamID] or {}
-    inv[itemID] = (inv[itemID] or 0) + (amount or 1)
+    local maxStack = InventoryItems[itemID].maxStack or 64
+    local newAmount = math.min((inv[itemID] or 0) + (amount or 1), maxStack)
 
+    inv[itemID] = newAmount
     PlayerInventories[steamID] = inv
     net.Start("SyncInventory")
     net.WriteTable(inv)
     net.Send(ply)
     SavePlayerInventory(ply)
+
+    SendInventoryMessage(ply, "Added " .. amount .. " " .. InventoryItems[itemID].name .. "(s) to your inventory.")
 end
 
 local function RemoveItemFromInventory(ply, itemID, amount)
@@ -106,23 +120,23 @@ net.Receive("DropItem", function(len, ply)
     if not InventoryItems[itemID] or amount < 1 then return end
 
     RemoveItemFromInventory(ply, itemID, amount)
+    SendInventoryMessage(ply, "Dropped " .. amount .. " " .. InventoryItems[itemID].name .. "(s).")
 
     local itemData = InventoryItems[itemID]
-    local entClass = itemData.entityClass or "prop_physics" -- Default to prop if no entity specified
-    local ent = ents.Create(entClass)
-    if IsValid(ent) then
-        ent:SetModel(itemData.model)
-        ent:SetPos(ply:GetPos() + ply:GetForward() * 50)
-        ent:Spawn()
+    local entClass = itemData.entityClass or "prop_physics"
+    for i = 1, amount do
+        local ent = ents.Create(entClass)
+        if IsValid(ent) then
+            ent:SetModel(itemData.model)
+            ent:SetPos(ply:GetPos() + ply:GetForward() * 50 + Vector(0, 0, i * 10))
+            ent:Spawn()
+            ent:SetNWString("ItemID", itemID)
 
-        -- Store item ID for pickup
-        ent:SetNWString("ItemID", itemID)
-
-        -- Make it usable if it’s a weapon or health kit
-        if entClass == "weapon_pistol" then
-            ent.AmmoAmount = 30 -- Example ammo for weapons
-        elseif entClass == "item_healthkit" then
-            ent:SetHealthAmount(25) -- Example health amount
+            if entClass == "weapon_pistol" then
+                ent.AmmoAmount = 30
+            elseif entClass == "item_healthkit" then
+                ent:SetHealthAmount(25)
+            end
         end
     end
 end)
@@ -134,6 +148,7 @@ net.Receive("UseItem", function(len, ply)
 
     itemData.useFunction(ply)
     RemoveItemFromInventory(ply, itemID, 1)
+    SendInventoryMessage(ply, "Used 1 " .. itemData.name .. ".")
 end)
 
 net.Receive("DeleteItem", function(len, ply)
@@ -142,20 +157,35 @@ net.Receive("DeleteItem", function(len, ply)
     if not InventoryItems[itemID] or amount < 1 then return end
 
     RemoveItemFromInventory(ply, itemID, amount)
+    SendInventoryMessage(ply, "Deleted " .. amount .. " " .. InventoryItems[itemID].name .. "(s).")
 end)
 
 concommand.Add("additem", function(ply, cmd, args)
+    if IsValid(ply) and not ply:IsSuperAdmin() then
+        SendInventoryMessage(ply, "You must be a superadmin to use this command.")
+        return
+    end
     local itemID = args[1]
     local amount = tonumber(args[2]) or 1
     AddItemToInventory(ply, itemID, amount)
 end)
 
--- Pickup logic for dropped items
 hook.Add("PlayerUse", "PickupInventoryItem", function(ply, ent)
     local itemID = ent:GetNWString("ItemID")
     if itemID and InventoryItems[itemID] then
         AddItemToInventory(ply, itemID, 1)
         ent:Remove()
+        SendInventoryMessage(ply, "Picked up 1 " .. InventoryItems[itemID].name .. ".")
         return true
+    else
+        -- Check if the entity is not an inventory item and hasn’t been messaged recently
+        local entIndex = ent:EntIndex()
+        local steamID = ply:SteamID()
+        PickupCooldown[steamID] = PickupCooldown[steamID] or {}
+        local lastMessageTime = PickupCooldown[steamID][entIndex] or 0
+        if CurTime() - lastMessageTime > 5 then -- 5-second cooldown per entity
+            SendInventoryMessage(ply, "You cannot pick up this item.")
+            PickupCooldown[steamID][entIndex] = CurTime()
+        end
     end
 end)
