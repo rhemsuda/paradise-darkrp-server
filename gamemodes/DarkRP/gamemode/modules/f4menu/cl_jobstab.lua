@@ -16,6 +16,7 @@ function PANEL:setJob(job, closeFunc)
 
     if not job.team then
         self:SetVisible(false)
+    -- TODO: Make this use level instead of XP
     elseif currentXP < xpRequired then
         self:SetVisible(true)
         self:SetText("Need " .. xpRequired .. " XP (You have " .. currentXP .. ")")

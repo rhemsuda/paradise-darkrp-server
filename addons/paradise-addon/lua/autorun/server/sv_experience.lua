@@ -1,5 +1,5 @@
 if SERVER then
-    hook.Add("PlayerInitialSpawn", "InitPlayerXP", function(ply)
+    --[[ hook.Add("PlayerInitialSpawn", "InitPlayerXP", function(ply)
         if not ply:GetNWInt("Experience", false) then
             ply:SetNWInt("Experience", 0)
         end
@@ -31,5 +31,5 @@ if SERVER then
             local xp = tonumber(file.Read("player_xp/" .. steamID .. ".txt", "DATA")) or 0
             ply:SetNWInt("Experience", xp)
         end
-    end)
+    end) ]]
 end
