@@ -21,13 +21,16 @@ net.Receive("OpenInventory", function()
     InventoryFrame:Center()
     InventoryFrame:SetTitle("Your Inventory")
     InventoryFrame:MakePopup()
+	InventoryFrame.Paint = function( self, w, h )
+		draw.RoundedBox(4, 0, 0, w, h, Color(10, 10, 10, 150))
+	end
 
     -- Container for the grid
     local ItemContainer = vgui.Create("DPanel", InventoryFrame)
     ItemContainer:Dock(FILL)
     ItemContainer:DockMargin(5, 5, 5, 5)
     ItemContainer.Paint = function(self, w, h)
-        draw.RoundedBox(4, 0, 0, w, h, Color(30, 30, 30, 200)) -- Background
+        draw.RoundedBox(4, 0, 0, w, h, Color(80, 80, 80, 200)) -- Background
     end
 
     -- Grid layout for icons
@@ -44,7 +47,7 @@ net.Receive("OpenInventory", function()
             if item then
                 for i = 1, amount do -- Add one icon per item instance
                     local ItemIcon = ItemGrid:Add("DModelPanel")
-                    ItemIcon:SetSize(50, 50) -- Size of each icon
+                    ItemIcon:SetSize(55, 55) -- Size of each icon
                     ItemIcon:SetModel(item.model)
                     ItemIcon:SetTooltip(item.name) -- Hover text is just the item name
 
