@@ -148,7 +148,104 @@ function DarkRP.initDatabase()
 
             hook.Call("DarkRPDBInitialized")
         end})
+
+
+    --[[---------------------------------------------------------------------------
+    Custom migrations
+    -----------------------------------------------------------------------------]]
+
+    -- Create migrations table
+    MySQLite.queueQuery([[
+        CREATE TABLE IF NOT EXISTS darkrp_migrations (
+            version INTEGER PRIMARY KEY,
+            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ]] .. ENGINE_INNODB .. [[;
+    ]])
+
+    -- Define migrations
+    local migrations = {
+        {
+            version = 1,
+            description = "Initial darkrp_player and darkrp_levelinfo tables",
+            up = function()
+                MySQLite.query([[
+                    CREATE TABLE IF NOT EXISTS darkrp_player (
+                        uid BIGINT NOT NULL PRIMARY KEY,
+                        rpname VARCHAR(45),
+                        salary INTEGER NOT NULL DEFAULT 30,
+                        wallet BIGINT NOT NULL
+                    ) ]] .. ENGINE_INNODB .. [[;
+                ]], nil, function(err) print("[Migration v1] Error creating darkrp_player: " .. err) end)
+
+                MySQLite.query([[
+                    CREATE TABLE IF NOT EXISTS darkrp_levelinfo (
+                        level INTEGER NOT NULL DEFAULT 1,
+                        experienceRequired BIGINT NOT NULL
+                    ) ]] .. ENGINE_INNODB .. [[;
+                ]], nil, function(err) print("[Migration v1] Error creating darkrp_levelinfo: " .. err) end)
+            end
+        },
+        {
+            version = 20,
+            description = "Add experience column to darkrp_player",
+            up = function()
+                -- SQLite: Check columns via pragma
+                MySQLite.query("PRAGMA table_info(darkrp_player)", function(result)
+                    local hasExperience = false
+                    for _, col in ipairs(result) do
+                        if col.name == "experience" then
+                            hasExperience = true
+                            break
+                        end
+                    end
+                    if not hasExperience then
+                        MySQLite.query([[
+                            ALTER TABLE darkrp_player 
+                            ADD COLUMN experience BIGINT NOT NULL DEFAULT 0
+                        ]], function()
+                            print("[Migration v2] Added experience column")
+                        end, function(err)
+                            print("[Migration v2] Error adding experience: " .. err)
+                        end)
+                    else
+                        print("[Migration v2] Experience column already exists, skipping")
+                    end
+                end, function(err)
+                    print("[Migration v2] Error checking columns: " .. err)
+                end)
+            end
+        }
+    }
+
+    -- Function to apply migrations
+    local function ApplyMigrations()
+        print("[Migrations] Applying Migrations")
+        MySQLite.query("SELECT MAX(version) as latest FROM darkrp_migrations", function(result)
+            local currentVersion = result and result[1] and tonumber(result[1].latest) or 0
+            print("[Migrations] Current schema version: " .. currentVersion)
+
+            for _, migration in ipairs(migrations) do
+                if migration.version > currentVersion then
+                    print("[Migrations] Applying v" .. migration.version .. ": " .. migration.description)
+                    migration.up()
+                    MySQLite.query(string.format("INSERT INTO darkrp_migrations (version) VALUES (%d)", migration.version), 
+                        function() print("[Migrations] Marked v" .. migration.version .. " as applied") end,
+                        function(err) print("[Migrations] Error marking v" .. migration.version .. ": " .. err) end)
+                end
+            end
+        end, function(err)
+            print("[Migrations] Error checking version: " .. err)
+        end)
+    end
+
+    --hook.Add("Initialize", "RunDatabaseMigrations", ApplyMigrations)
+    ApplyMigrations()
+
+
+
 end
+
+
 
 --[[---------------------------------------------------------------------------
 Database migration
