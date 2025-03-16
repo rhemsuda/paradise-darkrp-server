@@ -35,9 +35,44 @@ TEAM_CITIZEN = DarkRP.createJob("Citizen", {
     category = "Citizens",
 })
 
+TEAM_MINER = DarkRP.createJob("Miner", {
+    color = Color(247, 160, 38),
+    model = "models/player/Group03/male_09.mdl",
+    description = [[
+        Mine minerals and gems for crafting
+    ]],
+    weapons = {},
+    command = "miner",
+    max = 5,
+    salary = 100,
+    admin = 0,
+    vote = false,
+    hasLicense = false,
+    category = "Citizens",
+    canDemote = false,
+})
+
+TEAM_FORAGER = DarkRP.createJob("Forager", {
+    color = Color(247, 100, 38),
+    model = "models/Characters/Hostage_01.mdl",
+    description = [[
+        Gather Materials for crafting
+    ]],
+   weapons = {},
+    command = "forager",
+    max = 5,
+    salary = 100,
+    admin = 0,
+    vote = false,
+    hasLicense = false,
+    category = "Citizens",
+    canDemote = false,
+})
 
 -- Compatibility for when default teams are disabled
 TEAM_CITIZEN = TEAM_CITIZEN  or -1
+TEAM_MINER = TEAM_MINER or -1
+TEAM_FORAGER = TEAM_FORAGER or -1
 
 -- Door groups
 --AddDoorGroup("Cops and Mayor only", TEAM_CHIEF, TEAM_POLICE, TEAM_MAYOR)
