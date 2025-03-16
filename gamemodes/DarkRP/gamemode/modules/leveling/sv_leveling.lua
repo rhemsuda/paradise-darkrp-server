@@ -93,13 +93,15 @@ if SERVER then
             MySQLite.query("SELECT level, experienceRequired FROM darkrp_levelinfo ORDER BY level ASC", function(levels)
                 if not levels then print("[Leveling] No level data returned!") return end
                 local xp = ply:GetNWInt("Experience", 0)
-                local currentLevel = 1, nextLevel = 1, nextLevelXp = 0
+                local currentLevel = 1--, nextLevel = 1, nextLevelXp = 0
+                local nextLevel = 1
+                local nextLevelXp = 0
                 for _, lvl in ipairs(levels) do
                     if xp >= tonumber(lvl.experienceRequired) then
                         currentLevel = tonumber(lvl.level)
                     else
                         nextLevel = tonumber(lvl.level)
-                        nextLevelXp = lvl.experienceRequired
+                        nextLevelXp = tonumber(lvl.experienceRequired)
                         break
                     end
                 end
@@ -135,7 +137,7 @@ if SERVER then
                     newLevel = tonumber(lvl.level)
                 else
                     nextLevel = tonumber(lvl.level)
-                    nextLevelXp = lvl.experienceRequired
+                    nextLevelXp = tonumber(lvl.experienceRequired)
                     break
                 end
             end
