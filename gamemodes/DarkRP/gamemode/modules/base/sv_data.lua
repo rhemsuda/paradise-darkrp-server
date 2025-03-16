@@ -58,8 +58,16 @@ function DarkRP.initDatabase()
             CREATE TABLE IF NOT EXISTS darkrp_player(
                 uid BIGINT NOT NULL PRIMARY KEY,
                 rpname VARCHAR(45),
-                salary INTEGER NOT NULL DEFAULT 45,
-                wallet BIGINT NOT NULL
+                salary INTEGER NOT NULL DEFAULT 30,
+                wallet BIGINT NOT NULL,
+                experience BIGINT NOT NULL
+            ) ]] .. ENGINE_INNODB .. [[;
+        ]])
+
+        MySQLite.queueQuery([[
+            CREATE TABLE IF NOT EXISTS darkrp_levelinfo(
+                level INTEGER NOT NULL DEFAULT 1,
+                experienceRequired BIGINT NOT NULL
             ) ]] .. ENGINE_INNODB .. [[;
         ]])
 
