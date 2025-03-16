@@ -57,28 +57,41 @@ if SERVER then
                     {level = 50, experienceRequired = 993600}
                 }
                 for _, data in ipairs(levelData) do
-                    MySQLite.query(string.format("INSERT INTO darkrp_levelinfo (level, experienceRequired) VALUES (%d, %d)", data.level, data.experienceRequired))
+                    MySQLite.query(string.format("INSERT INTO darkrp_levelinfo (level, experienceRequired) VALUES (%d, %d)", data.level, data.experienceRequired),
+                        nil, function(err) print("[Leveling] Failed to insert level data: " .. err) end)
                 end
+                print("[Leveling] Initialized level data in MySQL.")
+            else
+                print("[Leveling] Level data already exists: " .. result[1].count .. " rows.")
             end
+        end, function(err)
+            print("[Leveling] Error checking darkrp_levelinfo: " .. err)
         end)
     end)
 
+    -- Load player data on join
     hook.Add("PlayerInitialSpawn", "LoadPlayerLevel", function(ply)
-        local uid = ply:UniqueID() -- Using UniqueID as BIGINT in MySQL
+        local uid = ply:UniqueID()
+        print("[Leveling] Loading data for " .. ply:Nick() .. " (UID: " .. uid .. ")")
         MySQLite.query(string.format("SELECT experience FROM darkrp_player WHERE uid = %d", uid), function(data)
             if data and data[1] then
-                ply:SetNWInt("Experience", tonumber(data[1].experience) or 0)
+                local xp = tonumber(data[1].experience) or 0
+                ply:SetNWInt("Experience", xp)
+                print("[Leveling] Loaded XP: " .. xp .. " for " .. ply:Nick())
             else
-                -- New player: Insert default values
                 MySQLite.query(string.format(
                     "INSERT INTO darkrp_player (uid, rpname, salary, wallet, experience) VALUES (%d, %s, 30, 0, 0)",
                     uid, MySQLite.SQLStr(ply:Nick())
-                ))
+                ), function()
+                    print("[Leveling] Inserted new player " .. ply:Nick() .. " with XP 0")
+                end, function(err)
+                    print("[Leveling] Failed to insert new player: " .. err)
+                end)
                 ply:SetNWInt("Experience", 0)
             end
 
-            -- Calculate level based on XP
             MySQLite.query("SELECT level, experienceRequired FROM darkrp_levelinfo ORDER BY level ASC", function(levels)
+                if not levels then print("[Leveling] No level data returned!") return end
                 local xp = ply:GetNWInt("Experience", 0)
                 local currentLevel = 1
                 for _, lvl in ipairs(levels) do
@@ -89,7 +102,12 @@ if SERVER then
                     end
                 end
                 ply:SetNWInt("Level", currentLevel)
+                print("[Leveling] Set " .. ply:Nick() .. " to Level: " .. currentLevel .. " with XP: " .. xp)
+            end, function(err)
+                print("[Leveling] Error loading level data: " .. err)
             end)
+        end, function(err)
+            print("[Leveling] Error loading player data: " .. err)
         end)
     end)
 
@@ -102,6 +120,7 @@ if SERVER then
         -- Update XP in MySQL and on player
         MySQLite.query(string.format("UPDATE darkrp_player SET experience = %d WHERE uid = %d", newXP, uid))
         ply:SetNWInt("Experience", newXP)
+        print("[Leveling] Added " .. amount .. " XP to " .. ply:Nick() .. ". New XP: " .. newXP)
 
         -- Check for level-up
         MySQLite.query("SELECT level, experienceRequired FROM darkrp_levelinfo ORDER BY level ASC", function(levels)
@@ -117,12 +136,14 @@ if SERVER then
             if newLevel > currentLevel then
                 ply:SetNWInt("Level", newLevel)
                 ply:ChatPrint("You’ve leveled up to Level " .. newLevel .. "!")
+                print("[Leveling] " .. ply:Nick() .. " leveled up to " .. newLevel)
             end
         end)
     end
 
     -- Example: Gain XP on kill
     hook.Add("PlayerDeath", "XPOnKill", function(victim, inflictor, attacker)
+        print("[Leveling] PlayerDeath triggered - Victim: " .. victim:Nick() .. ", Attacker: " .. (IsValid(attacker) and attacker:Nick() or "N/A"))
         if IsValid(attacker) and attacker:IsPlayer() and attacker ~= victim then
             AddXP(attacker, 50)
             attacker:ChatPrint("You gained 50 XP for a kill!")

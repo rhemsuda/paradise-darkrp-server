@@ -47,8 +47,8 @@ local function ReloadConVars()
         Job1 = {0,0,150,200},
         Job2 = {0,0,0,255},
         salary1 = {0,150,0,200},
-        salary2 = {0,0,0,255}
-        experience1 = {0,150,0,200}
+        salary2 = {0,0,0,255},
+        experience1 = {0,150,0,200},
         experience2 = {0,0,0,255}
     }
 
@@ -106,9 +106,6 @@ end
 local salaryText, JobWalletText
 local experienceText
 local function DrawInfo()    
-    local ply = localplayer()
-    if not IsValid(ply) then return end
-
     salaryText = salaryText or DarkRP.getPhrase("salary", DarkRP.formatMoney(localplayer:getDarkRPVar("salary")), "")
     JobWalletText = JobWalletText or string.format("%s\n%s",
         DarkRP.getPhrase("job", localplayer:getDarkRPVar("job") or ""),
@@ -116,9 +113,9 @@ local function DrawInfo()
     )
 
     -- TODO: Add the ability to Remaining XP
-    experienceText = experienceText or string.format("Level: %d | XP: %d",
-        ply:GetNWInt("Level", 1),
-        ply:GetNWInt("Experience", 0)
+    experienceText = string.format("Level: %d | XP: %d",
+        localplayer:GetNWInt("Level", 1),
+        localplayer:GetNWInt("Experience", 0)
     )
 
     draw.DrawNonParsedText(salaryText, "DarkRPHUD2", RelativeX + 5, RelativeY - HUDHeight + 6, ConVars.salary1, 0)
