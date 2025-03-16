@@ -1,10 +1,11 @@
 util.AddNetworkString("OpenInventory")
 util.AddNetworkString("SyncInventory")
 util.AddNetworkString("DropItem")
+util.AddNetworkString("UseItem")
+util.AddNetworkString("DeleteItem")
 
 local PlayerInventories = {}
 
--- Initialize the custom inventory table after DarkRP database is ready
 hook.Add("DarkRPDBInitialized", "InitCustomInventoryTable", function()
     MySQLite.begin()
     local is_mysql = MySQLite.isMySQL()
@@ -22,7 +23,6 @@ hook.Add("DarkRPDBInitialized", "InitCustomInventoryTable", function()
     end)
 end)
 
--- Load inventory from database
 local function LoadPlayerInventory(ply)
     local steamID = ply:SteamID()
     MySQLite.query([[
@@ -31,19 +31,17 @@ local function LoadPlayerInventory(ply)
         if data and data[1] then
             PlayerInventories[steamID] = util.JSONToTable(data[1].items) or {}
         else
-            PlayerInventories[steamID] = {} -- New player, empty inventory
+            PlayerInventories[steamID] = {}
         end
-        -- Sync with client immediately after loading
         net.Start("SyncInventory")
         net.WriteTable(PlayerInventories[steamID])
         net.Send(ply)
     end, function(err)
         print("[Custom Inventory] Error loading inventory for " .. steamID .. ": " .. err)
-        PlayerInventories[steamID] = {} -- Fallback to empty inventory
+        PlayerInventories[steamID] = {}
     end)
 end
 
--- Save inventory to database
 local function SavePlayerInventory(ply)
     local steamID = ply:SteamID()
     local inv = PlayerInventories[steamID] or {}
@@ -56,17 +54,14 @@ local function SavePlayerInventory(ply)
     end)
 end
 
--- Initialize inventory for a player
 hook.Add("PlayerInitialSpawn", "InitInventory", function(ply)
     LoadPlayerInventory(ply)
 end)
 
--- Save inventory when player disconnects
 hook.Add("PlayerDisconnected", "SaveInventoryOnDisconnect", function(ply)
     SavePlayerInventory(ply)
 end)
 
--- Add an item to a player's inventory
 function AddItemToInventory(ply, itemID, amount)
     if not IsValid(ply) or not InventoryItems[itemID] then return end
     local steamID = ply:SteamID()
@@ -74,17 +69,12 @@ function AddItemToInventory(ply, itemID, amount)
     inv[itemID] = (inv[itemID] or 0) + (amount or 1)
 
     PlayerInventories[steamID] = inv
-
-    -- Sync inventory with client
     net.Start("SyncInventory")
     net.WriteTable(inv)
     net.Send(ply)
-
-    -- Save to database
     SavePlayerInventory(ply)
 end
 
--- Remove an item from a player's inventory
 local function RemoveItemFromInventory(ply, itemID, amount)
     if not IsValid(ply) or not InventoryItems[itemID] then return end
     local steamID = ply:SteamID()
@@ -97,17 +87,12 @@ local function RemoveItemFromInventory(ply, itemID, amount)
     end
 
     PlayerInventories[steamID] = inv
-
-    -- Sync inventory with client
     net.Start("SyncInventory")
     net.WriteTable(inv)
     net.Send(ply)
-
-    -- Save to database
     SavePlayerInventory(ply)
 end
 
--- Handle opening the inventory
 net.Receive("OpenInventory", function(len, ply)
     local inv = PlayerInventories[ply:SteamID()] or {}
     net.Start("SyncInventory")
@@ -115,28 +100,62 @@ net.Receive("OpenInventory", function(len, ply)
     net.Send(ply)
 end)
 
--- Handle drop request from client
 net.Receive("DropItem", function(len, ply)
     local itemID = net.ReadString()
     local amount = net.ReadUInt(8)
-
     if not InventoryItems[itemID] or amount < 1 then return end
 
-    -- Remove item from inventory
     RemoveItemFromInventory(ply, itemID, amount)
 
-    -- Spawn the item in the world
-    local ent = ents.Create("prop_physics")
+    local itemData = InventoryItems[itemID]
+    local entClass = itemData.entityClass or "prop_physics" -- Default to prop if no entity specified
+    local ent = ents.Create(entClass)
     if IsValid(ent) then
-        ent:SetModel(InventoryItems[itemID].model)
+        ent:SetModel(itemData.model)
         ent:SetPos(ply:GetPos() + ply:GetForward() * 50)
         ent:Spawn()
+
+        -- Store item ID for pickup
+        ent:SetNWString("ItemID", itemID)
+
+        -- Make it usable if it’s a weapon or health kit
+        if entClass == "weapon_pistol" then
+            ent.AmmoAmount = 30 -- Example ammo for weapons
+        elseif entClass == "item_healthkit" then
+            ent:SetHealthAmount(25) -- Example health amount
+        end
     end
 end)
 
--- Example command to test adding items
+net.Receive("UseItem", function(len, ply)
+    local itemID = net.ReadString()
+    local itemData = InventoryItems[itemID]
+    if not itemData or not itemData.useFunction then return end
+
+    itemData.useFunction(ply)
+    RemoveItemFromInventory(ply, itemID, 1)
+end)
+
+net.Receive("DeleteItem", function(len, ply)
+    local itemID = net.ReadString()
+    local amount = net.ReadUInt(8)
+    if not InventoryItems[itemID] or amount < 1 then return end
+
+    RemoveItemFromInventory(ply, itemID, amount)
+end)
+
 concommand.Add("additem", function(ply, cmd, args)
     local itemID = args[1]
     local amount = tonumber(args[2]) or 1
     AddItemToInventory(ply, itemID, amount)
+end)
+
+-- Pickup logic for dropped items
+hook.Add("PlayerUse", "PickupInventoryItem", function(ply, ent)
+    local itemID = ent:GetNWString("ItemID")
+    if itemID and InventoryItems[itemID] then
+        AddItemToInventory(ply, itemID, 1)
+        ent:Remove()
+        return true
+    end
 end)

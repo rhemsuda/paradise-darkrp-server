@@ -1,7 +1,6 @@
 local InventoryFrame = nil
 local PlayerInventory = {}
 
--- Receive inventory data from server
 net.Receive("SyncInventory", function()
     PlayerInventory = net.ReadTable()
     if IsValid(InventoryFrame) then
@@ -9,35 +8,28 @@ net.Receive("SyncInventory", function()
     end
 end)
 
--- Open the inventory UI
 net.Receive("OpenInventory", function()
     if IsValid(InventoryFrame) then
         InventoryFrame:Remove()
     end
 
-    -- Base frame
     InventoryFrame = vgui.Create("DFrame")
-    InventoryFrame:SetSize(400, 300) -- Fixed size for now, can adjust later
+    InventoryFrame:SetSize(400, 300)
     InventoryFrame:Center()
     InventoryFrame:SetTitle("Your Inventory")
     InventoryFrame:MakePopup()
-	InventoryFrame.Paint = function( self, w, h )
-		draw.RoundedBox(4, 0, 0, w, h, Color(10, 10, 10, 150))
-	end
 
-    -- Container for the grid
     local ItemContainer = vgui.Create("DPanel", InventoryFrame)
     ItemContainer:Dock(FILL)
     ItemContainer:DockMargin(5, 5, 5, 5)
     ItemContainer.Paint = function(self, w, h)
-        draw.RoundedBox(4, 0, 0, w, h, Color(80, 80, 80, 200)) -- Background
+        draw.RoundedBox(4, 0, 0, w, h, Color(30, 30, 30, 200))
     end
 
-    -- Grid layout for icons
     local ItemGrid = vgui.Create("DIconLayout", ItemContainer)
     ItemGrid:Dock(FILL)
-    ItemGrid:SetSpaceX(5) -- Horizontal spacing between icons
-    ItemGrid:SetSpaceY(5) -- Vertical spacing between icons
+    ItemGrid:SetSpaceX(5)
+    ItemGrid:SetSpaceY(5)
 
     function InventoryFrame:UpdateInventory()
         ItemGrid:Clear()
@@ -45,22 +37,34 @@ net.Receive("OpenInventory", function()
         for itemID, amount in pairs(PlayerInventory) do
             local item = InventoryItems[itemID]
             if item then
-                for i = 1, amount do -- Add one icon per item instance
+                for i = 1, amount do
                     local ItemIcon = ItemGrid:Add("DModelPanel")
-                    ItemIcon:SetSize(55, 55) -- Size of each icon
+                    ItemIcon:SetSize(60, 60) -- Increased from 50x50 to 60x60
                     ItemIcon:SetModel(item.model)
-                    ItemIcon:SetTooltip(item.name) -- Hover text is just the item name
-
-                    -- Adjust the model view (optional, for better visibility)
+                    ItemIcon:SetTooltip(item.name)
                     ItemIcon:SetCamPos(Vector(20, 20, 20))
                     ItemIcon:SetLookAt(Vector(0, 0, 0))
 
-                    -- Make the icon clickable to drop the item
                     ItemIcon.DoClick = function()
-                        net.Start("DropItem")
-                        net.WriteString(itemID)
-                        net.WriteUInt(1, 8) -- Drop 1 item
-                        net.SendToServer()
+                        local menu = DermaMenu()
+                        menu:AddOption("Drop", function()
+                            net.Start("DropItem")
+                            net.WriteString(itemID)
+                            net.WriteUInt(1, 8)
+                            net.SendToServer()
+                        end)
+                        menu:AddOption("Use", function()
+                            net.Start("UseItem")
+                            net.WriteString(itemID)
+                            net.SendToServer()
+                        end)
+                        menu:AddOption("Delete", function()
+                            net.Start("DeleteItem")
+                            net.WriteString(itemID)
+                            net.WriteUInt(1, 8)
+                            net.SendToServer()
+                        end)
+                        menu:Open()
                     end
                 end
             end

@@ -6,8 +6,18 @@ else
     include("inventory/cl_inventory.lua")
 end
 
--- Define some example items
-InventoryItems = {
-    ["healthkit"] = { name = "Health Kit", model = "models/items/healthkit.mdl" },
-    ["pistol"] = { name = "Pistol", model = "models/weapons/w_pistol.mdl" }
-}
+InventoryItems = InventoryItems or {}
+
+-- Function to register an item
+function RegisterInventoryItem(itemID, data)
+    InventoryItems[itemID] = data
+end
+
+-- Load all item definitions from a folder
+local itemFiles = file.Find("inventory/items/*.lua", "LUA")
+for _, itemFile in ipairs(itemFiles) do
+    if SERVER then
+        AddCSLuaFile("inventory/items/" .. itemFile)
+    end
+    include("inventory/items/" .. itemFile)
+end
