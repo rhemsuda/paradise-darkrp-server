@@ -15,60 +15,51 @@ net.Receive("OpenInventory", function()
         InventoryFrame:Remove()
     end
 
+    -- Base frame
     InventoryFrame = vgui.Create("DFrame")
-    InventoryFrame:SetSize(400, 300)
+    InventoryFrame:SetSize(400, 300) -- Fixed size for now, can adjust later
     InventoryFrame:Center()
-    InventoryFrame:SetTitle("Inventory")
+    InventoryFrame:SetTitle("Your Inventory")
     InventoryFrame:MakePopup()
 
-    local ScrollPanel = vgui.Create("DScrollPanel", InventoryFrame)
-    ScrollPanel:Dock(FILL)
+    -- Container for the grid
+    local ItemContainer = vgui.Create("DPanel", InventoryFrame)
+    ItemContainer:Dock(FILL)
+    ItemContainer:DockMargin(5, 5, 5, 5)
+    ItemContainer.Paint = function(self, w, h)
+        draw.RoundedBox(4, 0, 0, w, h, Color(30, 30, 30, 200)) -- Background
+    end
 
-    local ItemList = vgui.Create("DPanelList", ScrollPanel)
-    ItemList:Dock(FILL)
-    ItemList:EnableVerticalScrollbar(true)
-    ItemList:SetSpacing(8)
+    -- Grid layout for icons
+    local ItemGrid = vgui.Create("DIconLayout", ItemContainer)
+    ItemGrid:Dock(FILL)
+    ItemGrid:SetSpaceX(5) -- Horizontal spacing between icons
+    ItemGrid:SetSpaceY(5) -- Vertical spacing between icons
 
     function InventoryFrame:UpdateInventory()
-        ItemList:Clear()
+        ItemGrid:Clear()
 
         for itemID, amount in pairs(PlayerInventory) do
             local item = InventoryItems[itemID]
             if item then
-                local ItemPanel = vgui.Create("DPanel")
-                ItemPanel:SetTall(50)
-                ItemPanel:Dock(TOP)
+                for i = 1, amount do -- Add one icon per item instance
+                    local ItemIcon = ItemGrid:Add("DModelPanel")
+                    ItemIcon:SetSize(50, 50) -- Size of each icon
+                    ItemIcon:SetModel(item.model)
+                    ItemIcon:SetTooltip(item.name) -- Hover text is just the item name
 
-                -- Background styling (optional)
-                ItemPanel.Paint = function(self, w, h)
-                    draw.RoundedBox(4, 0, 0, w, h, Color(75, 75, 50, 200))
+                    -- Adjust the model view (optional, for better visibility)
+                    ItemIcon:SetCamPos(Vector(20, 20, 20))
+                    ItemIcon:SetLookAt(Vector(0, 0, 0))
+
+                    -- Make the icon clickable to drop the item
+                    ItemIcon.DoClick = function()
+                        net.Start("DropItem")
+                        net.WriteString(itemID)
+                        net.WriteUInt(1, 8) -- Drop 1 item
+                        net.SendToServer()
+                    end
                 end
-
-                -- Item Icon (DModelPanel)
-                local ItemIcon = vgui.Create("DModelPanel", ItemPanel)
-                ItemIcon:SetSize(40, 40)
-                ItemIcon:SetPos(5, 5)
-                ItemIcon:SetCamPos(Vector(15, 15, 15))
-                ItemIcon:SetLookAt(Vector(0, 0, 0))
-                ItemIcon:SetModel(item.model)
-                ItemIcon:SetTooltip("Click to drop 1 " .. item.name)
-
-                -- Make the icon clickable to drop the item
-                ItemIcon.DoClick = function()
-                    net.Start("DropItem")
-                    net.WriteString(itemID)
-                    net.WriteUInt(1, 8) -- Drop 1 item
-                    net.SendToServer()
-                end
-
-                -- Item Name and Amount
-                local ItemLabel = vgui.Create("DLabel", ItemPanel)
-                ItemLabel:SetPos(50, 10)
-                ItemLabel:SetText(item.name .. " x" .. amount)
-                ItemLabel:SizeToContents()
-                ItemLabel:SetTextColor(Color(255, 255, 255))
-
-                ItemList:AddItem(ItemPanel)
             end
         end
     end
