@@ -93,15 +93,19 @@ if SERVER then
             MySQLite.query("SELECT level, experienceRequired FROM darkrp_levelinfo ORDER BY level ASC", function(levels)
                 if not levels then print("[Leveling] No level data returned!") return end
                 local xp = ply:GetNWInt("Experience", 0)
-                local currentLevel = 1
+                local currentLevel = 1, nextLevel = 1, nextLevelXp = 0
                 for _, lvl in ipairs(levels) do
                     if xp >= tonumber(lvl.experienceRequired) then
                         currentLevel = tonumber(lvl.level)
                     else
+                        nextLevel = tonumber(lvl.level)
+                        nextLevelXp = lvl.experienceRequired
                         break
                     end
                 end
                 ply:SetNWInt("Level", currentLevel)
+                ply:SetNWInt("NextLevel", nextLevel)
+                ply:SetNWInt("NextLevelXP", nextLevelXp)
                 print("[Leveling] Set " .. ply:Nick() .. " to Level: " .. currentLevel .. " with XP: " .. xp)
             end, function(err)
                 print("[Leveling] Error loading level data: " .. err)
@@ -130,11 +134,15 @@ if SERVER then
                 if newXP >= tonumber(lvl.experienceRequired) then
                     newLevel = tonumber(lvl.level)
                 else
+                    nextLevel = tonumber(lvl.level)
+                    nextLevelXp = lvl.experienceRequired
                     break
                 end
             end
             if newLevel > currentLevel then
                 ply:SetNWInt("Level", newLevel)
+                ply:SetNWInt("NextLevel", nextLevel)
+                ply:SetNWInt("NextLevelXP", nextLevelXp)
                 ply:ChatPrint("You’ve leveled up to Level " .. newLevel .. "!")
                 print("[Leveling] " .. ply:Nick() .. " leveled up to " .. newLevel)
             end
@@ -155,5 +163,14 @@ if SERVER then
         local xp = ply:GetNWInt("Experience", 0)
         local level = ply:GetNWInt("Level", 1)
         ply:ChatPrint("Level: " .. level .. " | XP: " .. xp)
+    end)
+
+    concommand.Add("give_xp", function(ply, cmd, args)
+        if not ply:IsSuperAdmin() then return end
+        if not args[1] then return end
+        local amount = tonumber(args[1])
+        if amount then
+            AddXP(ply, amount)
+        end
     end)
 end
