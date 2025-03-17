@@ -11,13 +11,14 @@ if CLIENT then
     SWEP.DrawCrosshair = true
 end
 
-SWEP.Author = "YourName"
+SWEP.Author = "Nick"
 SWEP.Instructions = "Left-click to open your inventory."
 SWEP.Purpose = "Access your items."
 SWEP.Category = "Inventory"
 
 SWEP.Spawnable = true
-SWEP.AdminSpawnable = false
+SWEP.AdminSpawnable = true
+SWEP.ClassName = "weapon_inventory"
 
 SWEP.ViewModel = "models/weapons/v_hands.mdl"
 SWEP.WorldModel = "models/weapons/w_toolgun.mdl"
