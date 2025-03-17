@@ -126,7 +126,7 @@ DarkRP.createShipment("Sniper rifle", {
     allowed = {TEAM_GANG, TEAM_MOB}
 }) -]]
 
-DarkRP.createEntity("Money printer", {
+--[[DarkRP.createEntity("Money printer", {
     ent = "money_printer",
     model = "models/props_c17/consolebox01a.mdl",
     price = 1000,
@@ -141,7 +141,7 @@ DarkRP.createEntity("Tip Jar", {
     max = 2,
     cmd = "tipjar",
     allowTools = true,
-})
+}) --]]
 
 --[[DarkRP.createEntity("Gun lab", {
     ent = "gunlab",
