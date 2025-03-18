@@ -11,17 +11,17 @@ end
 
 function PANEL:setJob(job, closeFunc)
     local ply = LocalPlayer()
-    local currentXP = ply:GetNWInt("Experience", 0)
-    local xpRequired = job.xpRequired or 0
+    local currentLevel = ply:GetNWInt("Level", 0)
+    local levelRequired = job.levelRequired or 0
 
     if not job.team then
         self:SetVisible(false)
     -- TODO: Make this use level instead of XP
-    elseif currentXP < xpRequired then
+    elseif currentLevel < levelRequired then
         self:SetVisible(true)
-        self:SetText("Need " .. xpRequired .. " XP (You have " .. currentXP .. ")")
+        self:SetText("Unlocked at level " .. levelRequired)
         self.DoClick = function()
-            ply:ChatPrint("You need " .. (xpRequired - currentXP) .. " more XP for this job!")
+            ply:ChatPrint("You need level " .. levelRequired)
         end
     elseif job.vote or job.RequiresVote and job.RequiresVote(LocalPlayer(), job.team) then
         self:SetVisible(true)
@@ -29,9 +29,6 @@ function PANEL:setJob(job, closeFunc)
         self.DoClick = fn.Compose{closeFunc, fn.Partial(RunConsoleCommand, "darkrp", "vote" .. job.command)}
     else
         self:SetVisible(false)
-        --self:SetVisible(true)
-        --self:SetText(DarkRP.getPhrase("become_job"))
-        --self.DoClick = fn.Compose{closeFunc, fn.Partial(RunConsoleCommand, "darkrp", job.command)}
     end
 end
 

@@ -33,7 +33,7 @@ TEAM_CITIZEN = DarkRP.createJob("Citizen", {
     hasLicense = false,
     candemote = false,
     category = "Citizens",
-    xpRequired = 0,
+    levelRequired = 0,
 })
 
 TEAM_MINER = DarkRP.createJob("Miner", {
@@ -51,7 +51,7 @@ TEAM_MINER = DarkRP.createJob("Miner", {
     hasLicense = false,
     category = "Citizens",
     canDemote = false,
-    xpRequired = 100,
+    levelRequired = 5,
 })
 
 TEAM_FORAGER = DarkRP.createJob("Forager", {
@@ -60,7 +60,7 @@ TEAM_FORAGER = DarkRP.createJob("Forager", {
     description = [[
         Gather Materials for crafting
     ]],
-   weapons = {},
+    weapons = {},
     command = "forager",
     max = 5,
     salary = 100,
@@ -69,7 +69,7 @@ TEAM_FORAGER = DarkRP.createJob("Forager", {
     hasLicense = false,
     category = "Citizens",
     canDemote = false,
-    xpRequired = 500,
+    levelRequired = 5,
 })
 
 -- Compatibility for when default teams are disabled
