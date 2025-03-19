@@ -114,6 +114,14 @@ local function DrawInfo()
 
     local maxLevel = GetGlobalInt("MaxLevel", 0)
     local currentLevel = localplayer:GetNWInt("Level", 1)
+
+
+
+
+
+
+
+    
     local remainingXP = 0
     
     if currentLevel != maxLevel then 
