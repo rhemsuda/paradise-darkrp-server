@@ -112,13 +112,15 @@ local function DrawInfo()
         DarkRP.getPhrase("wallet", DarkRP.formatMoney(localplayer:getDarkRPVar("money")), "")
     )
 
-    local remainingXp = localplayer:GetNWInt("NextLevelXP", 0) - localplayer:GetNWInt("Experience", 0) 
+    local maxLevel = GetGlobalInt("MaxLevel", 0)
+    local currentLevel = localplayer:GetNWInt("Level", 1)
+    local remainingXP = 0
+    
+    if currentLevel != maxLevel then 
+        remainingXP = localplayer:GetNWInt("NextLevelXP", 0) - localplayer:GetNWInt("Experience", 0) 
+    end
 
-    -- TODO: Add the ability to Remaining XP
-    experienceText = string.format("Level: %d | Remaining XP: %d",
-        localplayer:GetNWInt("Level", 1),
-        remainingXp
-    )
+    experienceText = string.format("Level: %d | Remaining XP: %d", currentLevel, remainingXP)
 
     draw.DrawNonParsedText(salaryText, "DarkRPHUD2", RelativeX + 5, RelativeY - HUDHeight + 6, ConVars.salary1, 0)
     draw.DrawNonParsedText(salaryText, "DarkRPHUD2", RelativeX + 4, RelativeY - HUDHeight + 5, ConVars.salary2, 0)

@@ -2,6 +2,7 @@ if SERVER then
     -- Ensure MySQL tables are initialized (already in sv_data.lua)
     -- Populate darkrp_levelinfo with example data if empty
     hook.Add("Initialize", "SetupLevelingSystem", function()
+        SetGlobalInt("MaxLevel", 50)
         MySQLite.query("SELECT COUNT(*) as count FROM darkrp_levelinfo", function(result)
             if result and tonumber(result[1].count) == 0 then
                 local levelData = { 
