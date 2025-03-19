@@ -112,14 +112,6 @@ local function DrawInfo()
         DarkRP.getPhrase("wallet", DarkRP.formatMoney(localplayer:getDarkRPVar("money")), "")
     )
 
-
-
-
-
-
-
-
-    
     local maxLevel = GetGlobalInt("MaxLevel", 0)
     local currentLevel = localplayer:GetNWInt("Level", 1)
     local remainingXP = 0
