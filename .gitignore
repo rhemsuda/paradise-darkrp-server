@@ -41,4 +41,5 @@ luac.out
 
 # GMod files
 ./data
+./bin
 sv.db
