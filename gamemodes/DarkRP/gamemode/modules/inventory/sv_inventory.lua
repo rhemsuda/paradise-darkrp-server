@@ -7,6 +7,7 @@ util.AddNetworkString("DropItem")
 util.AddNetworkString("UseItem")
 util.AddNetworkString("DeleteItem")
 util.AddNetworkString("InventoryMessage")
+util.AddNetworkString("RequestOpenInventory") -- Ensure this is defined
 
 -- Include shared items if defined separately
 if file.Exists("modules/inventory/sh_items.lua", "LUA") then
@@ -76,7 +77,9 @@ end
 hook.Add("PlayerInitialSpawn", "Inventory_InitInventory", function(ply)
     if not IsValid(ply) then return end
     LoadPlayerInventory(ply)
-    ply:Give("weapon_inventory")
+    if not ply:HasWeapon("weapon_inventory") then
+        ply:Give("weapon_inventory")
+    end
     print("[Debug] Gave " .. ply:Nick() .. " weapon_inventory in Inventory_InitInventory")
     local weapons = {}
     for k, v in pairs(ply:GetWeapons()) do weapons[k] = v:GetClass() end
@@ -112,7 +115,9 @@ hook.Add("PlayerLoadout", "Inventory_GiveInventorySWEP", function(ply)
             ply:Give(v)
         end
     end
-    ply:Give("weapon_inventory")
+    if not ply:HasWeapon("weapon_inventory") then
+        ply:Give("weapon_inventory")
+    end
     ply:SelectWeapon("weapon_inventory")
     local weaponsAfter = {}
     for k, v in pairs(ply:GetWeapons()) do weaponsAfter[k] = v:GetClass() end
@@ -158,12 +163,17 @@ local function RemoveItemFromInventory(ply, itemID, amount)
     SavePlayerInventory(ply)
 end
 
-net.Receive("OpenInventory", function(len, ply)
+net.Receive("RequestOpenInventory", function(len, ply)
+    if not IsValid(ply) or ply:GetActiveWeapon():GetClass() ~= "weapon_inventory" then return end
     local inv = PlayerInventories[ply:SteamID()] or {}
     net.Start("SyncInventory")
     net.WriteTable(inv)
     net.Send(ply)
+    net.Start("OpenInventory")
+    net.Send(ply)
 end)
+
+-- Removed redundant net.Receive("OpenInventory") since RequestOpenInventory handles it
 
 net.Receive("DropItem", function(len, ply)
     local itemID = net.ReadString()
@@ -189,6 +199,11 @@ net.Receive("DropItem", function(len, ply)
             end
         end
     end
+    -- Sync inventory after action
+    local inv = PlayerInventories[ply:SteamID()] or {}
+    net.Start("SyncInventory")
+    net.WriteTable(inv)
+    net.Send(ply)
 end)
 
 net.Receive("UseItem", function(len, ply)
@@ -199,6 +214,11 @@ net.Receive("UseItem", function(len, ply)
     itemData.useFunction(ply)
     RemoveItemFromInventory(ply, itemID, 1)
     SendInventoryMessage(ply, "Used 1 " .. itemData.name .. ".")
+    -- Sync inventory after action
+    local inv = PlayerInventories[ply:SteamID()] or {}
+    net.Start("SyncInventory")
+    net.WriteTable(inv)
+    net.Send(ply)
 end)
 
 net.Receive("DeleteItem", function(len, ply)
@@ -208,6 +228,11 @@ net.Receive("DeleteItem", function(len, ply)
 
     RemoveItemFromInventory(ply, itemID, amount)
     SendInventoryMessage(ply, "Deleted " .. amount .. " " .. InventoryItems[itemID].name .. "(s).")
+    -- Sync inventory after action
+    local inv = PlayerInventories[ply:SteamID()] or {}
+    net.Start("SyncInventory")
+    net.WriteTable(inv)
+    net.Send(ply)
 end)
 
 concommand.Add("additem", function(ply, cmd, args)

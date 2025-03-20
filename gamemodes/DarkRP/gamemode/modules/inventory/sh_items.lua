@@ -1,7 +1,11 @@
-AddCSLuaFile()
+-- Ensure this file is sent to clients and included server-side
+if SERVER then
+    AddCSLuaFile()
+end
 
 InventoryItems = InventoryItems or {}
 
+-- Define items with name, model, and entity class
 InventoryItems["pistol"] = {
     name = "Pistol",
     model = "models/weapons/w_pistol.mdl",
@@ -9,6 +13,7 @@ InventoryItems["pistol"] = {
     maxStack = 1,
     useFunction = function(ply)
         ply:Give("weapon_pistol")
+        ply:SelectWeapon("weapon_pistol")
     end
 }
 
@@ -19,6 +24,17 @@ InventoryItems["healthkit"] = {
     maxStack = 5,
     useFunction = function(ply)
         ply:SetHealth(math.min(ply:Health() + 25, ply:GetMaxHealth()))
+    end
+}
+
+InventoryItems["crowbar"] = {
+    name = "Crowbar",
+    model = "models/weapons/w_crowbar.mdl",
+    entityClass = "weapon_crowbar",
+    maxStack = 1,
+    useFunction = function(ply)
+        ply:Give("weapon_crowbar")
+        ply:SelectWeapon("weapon_crowbar")
     end
 }
 
