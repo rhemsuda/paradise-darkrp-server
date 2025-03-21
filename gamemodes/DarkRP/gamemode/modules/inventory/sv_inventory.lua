@@ -12,8 +12,6 @@ util.AddNetworkString("OpenResourcesMenu")
 util.AddNetworkString("SyncResources")
 util.AddNetworkString("DropResource")
 
-AddCSLuaFile("modules/inventory/cl_resources.lua")
-
 local PlayerInventories = {}
 local PickupCooldown = {}
 
@@ -21,6 +19,9 @@ local PickupCooldown = {}
 if file.Exists("modules/inventory/sh_items.lua", "LUA") then
     include("modules/inventory/sh_items.lua")
 end
+
+-- Remove default DarkRP PlayerLoadout hook
+hook.Remove("PlayerLoadout", "DarkRP_PlayerLoadout")
 
 hook.Add("DarkRPDBInitialized", "InitCustomInventoryTable", function()
     MySQLite.begin()
@@ -31,7 +32,6 @@ hook.Add("DarkRPDBInitialized", "InitCustomInventoryTable", function()
             resources TEXT NOT NULL DEFAULT '{}'
         );
     ]])
-    -- Add resources column if it doesn’t exist
     MySQLite.queueQuery([[
         ALTER TABLE darkrp_custom_inventory ADD COLUMN resources TEXT NOT NULL DEFAULT '{}'
         WHERE NOT EXISTS (SELECT 1 FROM pragma_table_info('darkrp_custom_inventory') WHERE name = 'resources');
@@ -39,6 +39,14 @@ hook.Add("DarkRPDBInitialized", "InitCustomInventoryTable", function()
     MySQLite.commit(function()
         print("[Custom Inventory] Table 'darkrp_custom_inventory' initialized or updated successfully!")
     end)
+end)
+
+-- Debug RPExtraTeams at server start
+hook.Add("InitPostEntity", "DebugRPExtraTeams", function()
+    print("[Debug] RPExtraTeams count: " .. table.Count(RPExtraTeams))
+    for k, v in pairs(RPExtraTeams) do
+        print("[Debug] Team " .. k .. ": " .. v.name)
+    end
 end)
 
 local function SendInventoryMessage(ply, message)
@@ -107,12 +115,10 @@ function RemoveResourceFromInventory(ply, resourceID, amount)
     local steamID = ply:SteamID()
     local inv = PlayerInventories[steamID] or { items = {}, resources = {} }
     if not inv.resources[resourceID] or inv.resources[resourceID] < amount then return end
-
     inv.resources[resourceID] = inv.resources[resourceID] - amount
     if inv.resources[resourceID] <= 0 then
         inv.resources[resourceID] = nil
     end
-
     PlayerInventories[steamID] = inv
     net.Start("SyncResources")
     net.WriteTable(inv.resources)
@@ -127,7 +133,6 @@ function AddItemToInventory(ply, itemID, amount)
     local inv = PlayerInventories[steamID] or { items = {}, resources = {} }
     local maxStack = InventoryItems[itemID].maxStack or 64
     local newAmount = math.min((inv.items[itemID] or 0) + (amount or 1), maxStack)
-
     inv.items[itemID] = newAmount
     PlayerInventories[steamID] = inv
     net.Start("SyncInventory")
@@ -142,12 +147,10 @@ local function RemoveItemFromInventory(ply, itemID, amount)
     local steamID = ply:SteamID()
     local inv = PlayerInventories[steamID] or { items = {}, resources = {} }
     if not inv.items[itemID] or inv.items[itemID] < amount then return end
-
     inv.items[itemID] = inv.items[itemID] - amount
     if inv.items[itemID] <= 0 then
         inv.items[itemID] = nil
     end
-
     PlayerInventories[steamID] = inv
     net.Start("SyncInventory")
     net.WriteTable(inv.items)
@@ -194,10 +197,8 @@ net.Receive("DropItem", function(len, ply)
     local itemID = net.ReadString()
     local amount = net.ReadUInt(8)
     if not InventoryItems[itemID] or amount < 1 then return end
-
     RemoveItemFromInventory(ply, itemID, amount)
     SendInventoryMessage(ply, "Dropped " .. amount .. " " .. InventoryItems[itemID].name .. "(s).")
-
     local itemData = InventoryItems[itemID]
     local entClass = itemData.entityClass or "prop_physics"
     for i = 1, amount do
@@ -220,7 +221,6 @@ net.Receive("UseItem", function(len, ply)
     local itemID = net.ReadString()
     local itemData = InventoryItems[itemID]
     if not itemData or not itemData.useFunction then return end
-
     itemData.useFunction(ply)
     RemoveItemFromInventory(ply, itemID, 1)
     SendInventoryMessage(ply, "Used 1 " .. itemData.name .. ".")
@@ -230,7 +230,6 @@ net.Receive("DeleteItem", function(len, ply)
     local itemID = net.ReadString()
     local amount = net.ReadUInt(8)
     if not InventoryItems[itemID] or amount < 1 then return end
-
     RemoveItemFromInventory(ply, itemID, amount)
     SendInventoryMessage(ply, "Deleted " .. amount .. " " .. InventoryItems[itemID].name .. "(s).")
 end)
@@ -246,43 +245,25 @@ end)
 hook.Add("PlayerInitialSpawn", "Inventory_InitInventory", function(ply)
     if not IsValid(ply) then return end
     LoadPlayerInventory(ply)
-    -- Force valid team on initial spawn
-    local currentTeam = ply:Team()
-    local defaultTeam = TEAM_CITIZEN or 1
-    if not RPExtraTeams[currentTeam] or currentTeam == TEAM_UNASSIGNED then
-        if RPExtraTeams[defaultTeam] then
-            ply:changeTeam(defaultTeam, true)
-            print("[Debug] Forced " .. ply:Nick() .. " to TEAM_CITIZEN (Team " .. defaultTeam .. ") in InitialSpawn")
-        else
-            for teamID, job in pairs(RPExtraTeams) do
-                if job and teamID then
-                    ply:changeTeam(teamID, true)
-                    print("[Debug] Forced " .. ply:Nick() .. " to fallback team " .. teamID .. " (" .. job.name .. ") in InitialSpawn")
-                    break
-                end
-            end
-        end
-    end
-    if not ply:HasWeapon("weapon_inventory") then
-        ply:Give("weapon_inventory")
-    end
+   -- if not ply:HasWeapon("weapon_inventory") then
+        --ply:Give("weapon_inventory")
+   -- end
+    print("[Debug] InitialSpawn for " .. ply:Nick() .. " - Team: " .. ply:Team() .. " (" .. team.GetName(ply:Team()) .. ")")
 end)
 
 hook.Add("PlayerSpawn", "Inventory_SetupTeam", function(ply)
     if not IsValid(ply) then return end
     local currentTeam = ply:Team()
-    local defaultTeam = TEAM_CITIZEN or 1 -- Fallback to 1 if TEAM_CITIZEN isn’t defined
-
+    local defaultTeam = TEAM_CITIZEN or 1
     if not RPExtraTeams[currentTeam] or currentTeam == TEAM_UNASSIGNED then
         if RPExtraTeams[defaultTeam] then
             ply:changeTeam(defaultTeam, true)
-            print("[Debug] Forced " .. ply:Nick() .. " to TEAM_CITIZEN (Team " .. defaultTeam .. ")")
+            print("[Debug] Forced " .. ply:Nick() .. " to TEAM_CITIZEN (Team " .. defaultTeam .. ") in PlayerSpawn")
         else
-            -- If TEAM_CITIZEN isn’t valid, find any valid team
             for teamID, job in pairs(RPExtraTeams) do
                 if job and teamID then
                     ply:changeTeam(teamID, true)
-                    print("[Debug] Forced " .. ply:Nick() .. " to fallback team " .. teamID .. " (" .. job.name .. ")")
+                    print("[Debug] Forced " .. ply:Nick() .. " to fallback team " .. teamID .. " (" .. job.name .. ") in PlayerSpawn")
                     break
                 end
             end
@@ -293,13 +274,15 @@ end)
 
 hook.Add("PlayerLoadout", "Inventory_GiveInventorySWEP", function(ply)
     if not IsValid(ply) then return end
+    print("[Debug] Running Custom PlayerLoadout for " .. ply:Nick() .. " - Team: " .. ply:Team())
     for k, v in pairs(GAMEMODE.Config.DefaultWeapons) do
         ply:Give(v)
     end
     local team = ply:Team()
-    if RPExtraTeams[team] then -- Only proceed if team is valid
-        if RPExtraTeams[team].weapons then
-            for k, v in pairs(RPExtraTeams[team].weapons) do
+    local jobTable = RPExtraTeams[team]
+    if jobTable then
+        if jobTable.weapons then
+            for k, v in pairs(jobTable.weapons) do
                 ply:Give(v)
             end
         end
@@ -310,6 +293,11 @@ hook.Add("PlayerLoadout", "Inventory_GiveInventorySWEP", function(ply)
         ply:Give("weapon_inventory")
     end
     ply:SelectWeapon("weapon_inventory")
+    return true -- Override default DarkRP PlayerLoadout
+end, -20) -- Higher priority
+
+hook.Add("PlayerDisconnected", "SaveInventoryOnDisconnect", function(ply)
+    SavePlayerInventory(ply)
 end)
 
 hook.Add("PlayerUse", "PickupInventoryItem", function(ply, ent)
