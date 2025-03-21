@@ -7,6 +7,8 @@ function meta:changeTeam(t, force, suppressNotification, ignoreMaxMembers)
     local notify = suppressNotification and fn.Id or DarkRP.notify
     local notifyAll = suppressNotification and fn.Id or DarkRP.notifyAll
 
+    
+
     if self:isArrested() and not force then
         notify(self, 1, 4, DarkRP.getPhrase("unable", team.GetName(t), ""))
         return false
@@ -93,6 +95,19 @@ function meta:changeTeam(t, force, suppressNotification, ignoreMaxMembers)
     if isMayor and GetGlobalBool("DarkRP_LockDown") then
         DarkRP.unLockdown(self)
     end
+
+    if not self:hasLevelForJob(TEAM) then
+        notify(self, 1, 4, DarkRP.getPhrase("job_not_high_enough_level", levelRequired))
+        return false
+    end
+
+    --[[ local currentLevel = self:GetNWInt("Level", 0)
+    local levelRequired = TEAM.levelRequired or 0
+    if currentLevel < levelRequired then
+        notify(self, 1, 4, DarkRP.getPhrase("job_not_high_enough_level", levelRequired))
+        return false
+    end ]]
+
     self:updateJob(TEAM.name)
     self:setSelfDarkRPVar("salary", TEAM.salary)
     notifyAll(0, 4, DarkRP.getPhrase("job_has_become", self:Nick(), TEAM.name))
@@ -243,6 +258,17 @@ function meta:changeAllowed(t)
     return true
 end
 
+function meta:hasLevelForJob(job)
+    local currentLevel = self:GetNWInt("Level", 0)
+    local levelRequired = job.levelRequired or 0
+    if currentLevel < levelRequired then
+        notify(self, 1, 4, DarkRP.getPhrase("job_not_high_enough_level", levelRequired))
+        return false
+    end
+    return true
+end
+
+
 function GM:canChangeJob(ply, args)
     if ply:isArrested() then return false end
     if ply.LastJob and 10 - (CurTime() - ply.LastJob) >= 0 then return false, DarkRP.getPhrase("have_to_wait", math.ceil(10 - (CurTime() - ply.LastJob)), "/job") end
@@ -277,6 +303,7 @@ local function ChangeJob(ply, args)
     end
 
     local job = replace or args
+    ply:ChatPrint("Trying to change to job:" .. job)
     DarkRP.notifyAll(2, 4, DarkRP.getPhrase("job_has_become", ply:Nick(), job))
     ply:updateJob(job)
     return ""

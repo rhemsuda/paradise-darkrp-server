@@ -135,6 +135,7 @@ local my_language = {
     wants_to_be = "%s\nwants to be\n%s",
     has_not_been_made_team = "%s has not been made %s!",
     job_has_become = "%s has been made a %s!",
+    job_not_high_enough_level = "You need to be level %s to choose this job",
 
     -- Disasters
     meteor_approaching = "WARNING: Meteor storm approaching!",
