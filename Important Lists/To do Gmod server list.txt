@@ -1,0 +1,33 @@
+Level System (XP,Levels,integrate with weapons and items) - kyle
+
+Inventory System - Nick
+- Make icons slightly bigger -- 
+- Make it consistant with darkRP hud --- 
+- Make SQL tables for inventory --
+- Make items dropped into entities --
+- Make Items Stackable --
+- Make an Item whitelist for inventory (table of items in addons) -- 
+__
+
+List of weapons / armor to be added for item creation
+
+Proplist? HP on props stackable in inventory?
+
+Job Tree (Forester,miner,technician,construction)
+
+Item List possible weapons/armor/materials list
+
+Crafting system - weapons - armor - blueprints - permanent weapons?
+
+Money Printers account levels spawns materials for blueprints and blueprints randomly 
+
+Skilltree (mining,woodcutting,crafting,Technology,Herology)
+
+NPC roster (special items)
+-Start NPC quests 
+
+Mission system - xp/special items/
+
+Gang/Faction System - raid maybe raid xp for pvp?(within 10 levels? maybe power levels with armor/wep)
+
+FastDL/Map and content DL

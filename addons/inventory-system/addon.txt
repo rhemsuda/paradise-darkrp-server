@@ -1,7 +1,0 @@
-"AddonInfo"
-{
-    "name"          "Inventory System"
-    "version"       "1.0"
-    "author_name"   "Nicknmb"
-    "info"          "Inventory System CustomRP"
-}

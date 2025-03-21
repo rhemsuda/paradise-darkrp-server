@@ -434,9 +434,7 @@ GM.Config.AdminWeapons = {
 
 -- These are the default laws, they're unchangeable in-game.
 GM.Config.DefaultLaws = {
-    "Do not attack other citizens except in self-defence.",
-    "Do not steal or break into people's homes.",
-    "Money printers/drugs are illegal.",
+
 }
 
 GM.Config.PocketBlacklist = {
