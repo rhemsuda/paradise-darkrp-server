@@ -1,17 +1,9 @@
-if SERVER then
-    AddCSLuaFile()
-    print("[DEBUG] weapon_inventory.lua loaded on server")
-end
-if CLIENT then
-    print("[DEBUG] weapon_inventory.lua loaded on client")
-end
-
 -- Ensure this file is sent to clients
 AddCSLuaFile()
 
 -- Basic SWEP properties
 SWEP.PrintName = "Inventory"
-SWEP.Author = "Nick"
+SWEP.Author = "Your Name"
 SWEP.Purpose = "Access your inventory with primary attack."
 
 SWEP.Slot = 1          -- Weapon slot in the selection menu
