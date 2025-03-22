@@ -33,11 +33,11 @@ function PANEL:setJob(job, closeFunc)
         
         if currentLevel < levelRequired then
             self:SetText("Unlocked at level " .. levelRequired)
+            self.DoClick = fn.Partial(RunConsoleCommand, "darkrp", job.command)
         else
             self:SetText("Choose Job")
-        end
-        
-        self.DoClick = fn.Compose{closeFunc, fn.Partial(RunConsoleCommand, "darkrp", job.command)}
+            self.DoClick = fn.Compose{closeFunc, fn.Partial(RunConsoleCommand, "darkrp", job.command)}
+        end        
     end
 end
 

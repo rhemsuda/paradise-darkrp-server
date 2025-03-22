@@ -126,6 +126,13 @@ function DarkRP.initDatabase()
             end
         end)
 
+        MySQLite.queueQuery([[CREATE TABLE IF NOT EXISTS missions (
+            uid BIGINT NOT NULL,
+            missionId VARCHAR(50),
+            missionProgressStep INT NOT NULL,
+            PRIMARY KEY (uid)
+        )]])
+
     MySQLite.commit(fp{migrateDB, -- Migrate the database
         function() -- Initialize the data after all the tables have been created
             setUpNonOwnableDoors()

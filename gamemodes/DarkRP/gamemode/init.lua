@@ -24,6 +24,10 @@ AddCSLuaFile("config/jobrelated.lua")
 AddCSLuaFile("config/ammotypes.lua")
 AddCSLuaFile("config/licenseweapons.lua")
 
+AddCSLuaFile("modules/npc/sh_npc_dialog.lua")
+include("modules/npc/sh_npc_dialog.lua")
+AddCSLuaFile("modules/npc/cl_npc_dialog.lua")
+
 AddCSLuaFile("cl_init.lua")
 
 GM.Config = GM.Config or {}

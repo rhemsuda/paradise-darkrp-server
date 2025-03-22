@@ -96,7 +96,9 @@ function meta:changeTeam(t, force, suppressNotification, ignoreMaxMembers)
         DarkRP.unLockdown(self)
     end
 
-    if not self:hasLevelForJob(TEAM) then
+    local currentLevel = self:GetNWInt("Level", 0)
+    local levelRequired = TEAM.levelRequired or 0
+    if currentLevel < levelRequired then
         notify(self, 1, 4, DarkRP.getPhrase("job_not_high_enough_level", levelRequired))
         return false
     end
@@ -257,17 +259,6 @@ function meta:changeAllowed(t)
 
     return true
 end
-
-function meta:hasLevelForJob(job)
-    local currentLevel = self:GetNWInt("Level", 0)
-    local levelRequired = job.levelRequired or 0
-    if currentLevel < levelRequired then
-        notify(self, 1, 4, DarkRP.getPhrase("job_not_high_enough_level", levelRequired))
-        return false
-    end
-    return true
-end
-
 
 function GM:canChangeJob(ply, args)
     if ply:isArrested() then return false end
