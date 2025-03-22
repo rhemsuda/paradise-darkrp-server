@@ -4,7 +4,7 @@ local Resources = {}
 
 local function BuildResourcesMenu()
     local frame = vgui.Create("DFrame")
-    frame:SetSize(800, 600)
+    frame:SetSize(760, 280)
     frame:Center()
     frame:SetTitle("Resources")
     frame:SetDraggable(true)
@@ -16,7 +16,7 @@ local function BuildResourcesMenu()
 
     local gridPanel = vgui.Create("DPanel", frame)
     gridPanel:SetPos(10, 30)
-    gridPanel:SetSize(780, 560)
+    gridPanel:SetSize(740, 240)
     gridPanel.Paint = function(self, w, h)
         draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240))
     end
@@ -25,8 +25,8 @@ local function BuildResourcesMenu()
     scroll:Dock(FILL)
 
     local categories = {
-        { name = "Minerals", items = { "Rock", "Copper", "Iron", "Steel", "Titanium", "Obsidian" } },
-        { name = "Gems", items = { "Quartz", "Emerald", "Sapphire", "Ruby", "Diamond" } },
+        { name = "Minerals", items = { "Rock", "Copper", "Iron", "Steel", "Titanium" } },
+        { name = "Gems", items = { "Emerald", "Ruby", "Sapphire", "Obsidian", "Diamond" } },
         { name = "Lumber", items = { "Ash", "Birch", "Oak", "Mahogany", "Yew" } }
     }
 
