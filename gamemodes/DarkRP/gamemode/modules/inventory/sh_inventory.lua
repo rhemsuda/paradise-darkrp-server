@@ -551,6 +551,12 @@ if CLIENT then
     end
 
     local function OpenToolSelector()
+        -- Debug the contents of list.Get("Tool")
+        print("[Debug] Available tools in list.Get('Tool'):")
+        for k, v in pairs(list.Get("Tool")) do
+            print("[Debug] Tool: " .. k .. " (Name: " .. (v.Name or "Unknown") .. ")")
+        end
+
         print("[Debug] OpenToolSelector started")
         if IsValid(ToolFrame) then
             ToolFrame:Remove()
@@ -588,6 +594,7 @@ if CLIENT then
         toolsTab.Paint = function(self, w, h)
             draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240))
         end
+        print("[Debug] Tools tab panel created: " .. tostring(IsValid(toolsTab)))
 
         local leftPanel = vgui.Create("DPanel", toolsTab)
         leftPanel:Dock(LEFT)
@@ -606,38 +613,33 @@ if CLIENT then
         scroll:Dock(FILL)
         print("[Debug] Tool scroll panel created")
 
-        -- Manually define Construction tools
-        local constructionTools = {
+        -- Define the limited set of tools
+        local allowedTools = {
             { Name = "Button", Class = "button" },
-            { Name = "Duplicator", Class = "duplicator" },
-            { Name = "Dynamite", Class = "dynamite" },
-            { Name = "Emitter", Class = "emitter" },
-            { Name = "Lamp", Class = "lamp" },
-            { Name = "Light", Class = "light" },
-            { Name = "No Collide", Class = "nocollide" },
-            { Name = "Physical Properties", Class = "physprop" },
-            { Name = "Remover", Class = "remover" },
-            { Name = "Thruster", Class = "thruster" },
+            { Name = "Fading Doors", Class = "fading_door" },
+            { Name = "Keypad", Class = "keypad" }, -- Wiremod Keypad
+            { Name = "Camera", Class = "gmod_camera" },
         }
 
-        local categories = { ["Construction"] = constructionTools }
+        local categories = { ["Tools"] = allowedTools }
 
-        -- Try to dynamically add other categories
-        for _, tool in pairs(list.Get("Tool")) do
-            local category = tool.Category or "Other"
-            if category ~= "Construction" then
-                if not categories[category] then
-                    categories[category] = {}
-                end
-                table.insert(categories[category], { Name = tool.Name or tool.Class, Class = tool.Class })
-            end
-        end
+        -- Store Keypad settings locally
+        local keypadSettings = {
+            accessCode = "1234",
+            denyCode = "0000",
+            correctValue = 1,
+            incorrectValue = 0,
+            toggle = false
+        }
+
+        -- Store references to Keypad settings fields
+        local keypadFields = {}
 
         for categoryName, tools in pairs(categories) do
             local cat = vgui.Create("DCollapsibleCategory", scroll)
             cat:Dock(TOP)
             cat:SetLabel(categoryName)
-            cat:SetExpanded(categoryName == "Construction")
+            cat:SetExpanded(true) -- Expand by default
             cat:DockMargin(0, 0, 0, 5)
 
             local toolList = vgui.Create("DPanelList", cat)
@@ -652,30 +654,112 @@ if CLIENT then
                 toolButton:Dock(TOP)
                 toolButton:SetHeight(25)
                 toolButton.DoClick = function()
+                    -- Force tool mode switch
+                    RunConsoleCommand("gmod_toolmode", tool.Class)
                     RunConsoleCommand("gmod_tool", tool.Class)
                     print("[Debug] Selected tool: " .. tool.Class)
+
+                    -- Ensure tool mode updates
+                    timer.Simple(0.1, function()
+                        local currentMode = GetConVarString("gmod_toolmode")
+                        print("[Debug] Current tool mode after delay: " .. currentMode)
+                        if currentMode ~= tool.Class then
+                            print("[Debug] Tool mode did not update, forcing again")
+                            RunConsoleCommand("gmod_toolmode", tool.Class)
+                            RunConsoleCommand("gmod_tool", tool.Class)
+                        end
+                    end)
+
+                    -- Notify server of tool change
+                    net.Start("SelectTool")
+                    net.WriteString(tool.Class)
+                    net.SendToServer()
+
                     surface.PlaySound("buttons/button14.wav")
 
+                    -- Clear right panel and show tool settings
                     for _, child in pairs(rightPanel:GetChildren()) do
                         child:Remove()
                     end
                     local settings = vgui.Create("DPanel", rightPanel)
                     settings:Dock(FILL)
+                    settings:DockMargin(5, 5, 5, 5)
                     settings.Paint = function(self, w, h)
-                        draw.RoundedBox(4, 0, 0, w, h, Color(30, 30, 30, 200))
+                        draw.RoundedBox(4, 0, 0, w, h, Color(150, 150, 150, 200)) -- Lighter background
                     end
 
-                    local toolSettings = spawnmenu.GetToolMenu(tool.Class)
-                    if toolSettings and toolSettings[1] then
-                        local controlPanel = vgui.Create("ControlPanel", settings)
-                        controlPanel:Dock(FILL)
-                        controlPanel:SetTall(300)
-                        toolSettings[1].BuildCPanel(controlPanel)
+                    -- Load the tool's control panel
+                    local toolData = list.Get("Tool")[tool.Class]
+                    if toolData then
+                        print("[Debug] Tool data found for " .. tool.Class)
+                        if toolData.BuildCPanel then
+                            print("[Debug] BuildCPanel exists for " .. tool.Class)
+                            local controlPanel = vgui.Create("DForm", settings)
+                            controlPanel:Dock(FILL)
+                            controlPanel:SetName(tool.Name .. " Settings")
+                            controlPanel:SetExpanded(true)
+                            toolData.BuildCPanel(controlPanel)
+                        else
+                            print("[Debug] BuildCPanel not found for " .. tool.Class)
+                            local label = vgui.Create("DLabel", settings)
+                            label:Dock(TOP)
+                            label:SetText("No settings available for this tool (BuildCPanel missing).")
+                            label:SizeToContents()
+                        end
                     else
-                        local label = vgui.Create("DLabel", settings)
-                        label:Dock(TOP)
-                        label:SetText("No settings available for this tool.")
-                        label:SizeToContents()
+                        print("[Debug] Tool data not found for " .. tool.Class .. " in list.Get('Tool')")
+                        -- Manual settings for each tool
+                        local controlPanel = vgui.Create("DForm", settings)
+                        controlPanel:Dock(FILL)
+                        controlPanel:SetName(tool.Name .. " Settings")
+                        controlPanel:SetExpanded(true)
+
+                        if tool.Class == "button" then
+                            controlPanel:NumSlider("Key to Simulate", nil, 0, 9, 0)
+                            controlPanel:CheckBox("Toggle Mode")
+                        elseif tool.Class == "fading_door" then
+                            controlPanel:NumSlider("Fade Time", nil, 0, 10, 1)
+                            controlPanel:TextEntry("Material", nil)
+                            controlPanel:CheckBox("Toggle")
+                        elseif tool.Class == "gmod_camera" then
+                            controlPanel:NumSlider("Key to Simulate", nil, 0, 9, 0)
+                            controlPanel:CheckBox("Static")
+                        elseif tool.Class == "keypad" then
+                            -- Access Code
+                            keypadFields.accessCode = controlPanel:TextEntry("Access Code", nil)
+                            keypadFields.accessCode:SetValue(keypadSettings.accessCode)
+                            keypadFields.accessCode.OnChange = function(self)
+                                keypadSettings.accessCode = self:GetValue()
+                            end
+
+                            -- Deny Code
+                            keypadFields.denyCode = controlPanel:TextEntry("Deny Code", nil)
+                            keypadFields.denyCode:SetValue(keypadSettings.denyCode)
+                            keypadFields.denyCode.OnChange = function(self)
+                                keypadSettings.denyCode = self:GetValue()
+                            end
+
+                            -- Correct Value
+                            keypadFields.correctValue = controlPanel:NumSlider("Correct Value", nil, 0, 100, 0)
+                            keypadFields.correctValue:SetValue(keypadSettings.correctValue)
+                            keypadFields.correctValue.OnValueChanged = function(self, value)
+                                keypadSettings.correctValue = value
+                            end
+
+                            -- Incorrect Value
+                            keypadFields.incorrectValue = controlPanel:NumSlider("Incorrect Value", nil, 0, 100, 0)
+                            keypadFields.incorrectValue:SetValue(keypadSettings.incorrectValue)
+                            keypadFields.incorrectValue.OnValueChanged = function(self, value)
+                                keypadSettings.incorrectValue = value
+                            end
+
+                            -- Toggle
+                            keypadFields.toggle = controlPanel:CheckBox("Toggle")
+                            keypadFields.toggle:SetValue(keypadSettings.toggle)
+                            keypadFields.toggle.OnChange = function(self, value)
+                                keypadSettings.toggle = value
+                            end
+                        end
                     end
                 end
                 toolButton.Paint = function(self, w, h)
@@ -697,12 +781,15 @@ if CLIENT then
             utilsTab.Paint = function(self, w, h)
                 draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240))
             end
+            print("[Debug] Utilities tab panel created: " .. tostring(IsValid(utilsTab)))
 
             local utilsScroll = vgui.Create("DScrollPanel", utilsTab)
             utilsScroll:Dock(FILL)
+            print("[Debug] Utilities scroll panel created: " .. tostring(IsValid(utilsScroll)))
 
             local utilsList = vgui.Create("DListLayout", utilsScroll)
             utilsList:Dock(FILL)
+            print("[Debug] Utilities list created: " .. tostring(IsValid(utilsList)))
 
             local utils = {
                 { name = "Admin Cleanup", cmd = "gmod_admin_cleanup" },
@@ -710,7 +797,7 @@ if CLIENT then
             }
 
             for _, util in ipairs(utils) do
-                local utilButton = utilsList:Add("DButton")
+                local utilButton = vgui.Create("DButton")
                 utilButton:SetText(util.name)
                 utilButton:Dock(TOP)
                 utilButton:SetHeight(30)
@@ -724,6 +811,12 @@ if CLIENT then
                     if self:IsHovered() then
                         draw.RoundedBox(4, 0, 0, w, h, Color(70, 70, 70, 240))
                     end
+                end
+                if IsValid(utilsList) then
+                    utilsList:Add(utilButton) -- Fixed: Use Add instead of AddItem for DListLayout
+                    print("[Debug] Added utility button: " .. util.name)
+                else
+                    print("[Error] utilsList is not valid, cannot add utility button: " .. util.name)
                 end
             end
 
@@ -806,5 +899,16 @@ if CLIENT then
     net.Receive("InventoryMessage", function()
         local msg = net.ReadString()
         chat.AddText(Color(255, 215, 0), "[Inventory] ", Color(255, 255, 255), msg)
+    end)
+end
+
+-- Server-side (no changes needed)
+if SERVER then
+    util.AddNetworkString("SelectTool")
+
+    net.Receive("SelectTool", function(len, ply)
+        local toolClass = net.ReadString()
+        print("[Server] Player " .. ply:Nick() .. " selected tool: " .. toolClass)
+        -- Add any server-side validation or logic here if needed
     end)
 end

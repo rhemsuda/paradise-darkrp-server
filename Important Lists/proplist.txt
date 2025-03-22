@@ -46,3 +46,4 @@ models/mechanics/solid_steel/i_beam2_32.mdl
 models/mechanics/solid_steel/i_beam2_32.mdl
 models/mechanics/solid_steel/i_beam2_32.mdl
 models/props/cs_assault/billboard.mdl
+models/props/CS_militia/shelves_wood.mdl

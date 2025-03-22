@@ -1,1 +1,40 @@
 Icons / items
+
+rock - models/props_junk/rock001a.mdl
+
+rock on ground - 
+models/props_lab/bigrock.mdl
+models/perftest/rocksground01d.mdl
+models/perftest/rocksground01e.mdl
+models/perftest/rocksground02a.mdl
+models/perftest/rocksground02c.mdl
+models/props_canal/rock_riverbed02b.mdl
+models/props_canal/rock_riverbed02c.mdl
+
+big rock - 
+
+models/props_wasteland/rockcliff01b.mdl
+models/props_wasteland/rockcliff01f.mdl
+models/props_wasteland/rockcliff01j.mdl
+models/props_wasteland/rockcliff01k.mdl
+
+massive rock -
+
+models/props_wasteland/rockcliff05a.mdl
+2x- models/props_wasteland/rockcliff_cluster02a.mdl
+
+
+trees - 
+
+palm - models/egypt/palm_tree/palm_tree.mdl
+bare - models/harvest/tree/tree_small.mdl
+popl - models/props_foliage/tree_poplar_01.mdl
+oak - models/props_foliage/tree_pine_extrasmall.mdl
+Reg - models/lighthouse/b_burnedtree02_01.mdl
+RedVain - models/lighthouse/b_burnedtree02_02.mdl
+trunk - models/props_foliage/tree_slice01.mdl
+trunk 2 - models/props_foliage/tree_slice02.mdl
+stump - models/props_foliage/tree_stump01.mdl
+snow pine - models/props_foliage/tree_pine_extrasmall_snow.mdl
+dead - models/props_foliage/tree_dry01.mdl
+birch - models/props/de_inferno/tree_small.mdl
