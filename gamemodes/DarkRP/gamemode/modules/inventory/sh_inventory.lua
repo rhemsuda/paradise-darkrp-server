@@ -310,10 +310,21 @@ end
 if CLIENT then
     local Resources = {}
     local Inventory = {}
-    local InventoryFrame = nil -- Local to file scope for persistence
+    local InventoryFrame = nil
+    local ToolFrame = nil
 
     local function BuildInventoryUI(parent)
+        if not IsValid(parent) then
+            print("[Debug] BuildInventoryUI: Parent is nil or invalid, aborting")
+            return
+        end
         print("[Debug] Building Inventory UI")
+        -- Clear existing children to prevent lingering panels
+        for _, child in pairs(parent:GetChildren()) do
+            child:Remove()
+        end
+        print("[Debug] Cleared existing children from inventory tab")
+
         local scroll = vgui.Create("DScrollPanel", parent)
         scroll:Dock(FILL)
         print("[Debug] Scroll panel created")
@@ -333,6 +344,7 @@ if CLIENT then
                 itemPanel.Paint = function(self, w, h)
                     draw.RoundedBox(4, 0, 0, w, h, Color(30, 30, 30, 200))
                 end
+                print("[Debug] Item panel created for " .. itemID)
 
                 local model = vgui.Create("DModelPanel", itemPanel)
                 model:SetSize(70, 70)
@@ -341,6 +353,8 @@ if CLIENT then
                 model:SetFOV(20)
                 model:SetCamPos(Vector(15, 15, 15))
                 model:SetLookAt(Vector(0, 0, 0))
+                local x, y = model:GetPos()
+                print("[Debug] DModelPanel created for " .. itemID .. " at position " .. x .. ", " .. y)
                 model.OnMousePressed = function(self, code)
                     if code == MOUSE_LEFT then
                         if IsValid(activeMenu) then
@@ -384,6 +398,8 @@ if CLIENT then
                     local currentAmount = Inventory[itemID] or 0
                     self:SetText(InventoryItems[itemID].name .. " x" .. currentAmount)
                 end
+                local x, y = name:GetPos()
+                print("[Debug] Label created for " .. itemID .. " at position " .. x .. ", " .. y)
             else
                 print("[Inventory Error] Unknown item ID: " .. itemID)
             end
@@ -392,7 +408,17 @@ if CLIENT then
     end
 
     local function BuildResourcesMenu(parent)
+        if not IsValid(parent) then
+            print("[Debug] BuildResourcesMenu: Parent is nil or invalid, aborting")
+            return
+        end
         print("[Debug] Building Resources UI")
+        -- Clear existing children to prevent lingering panels
+        for _, child in pairs(parent:GetChildren()) do
+            child:Remove()
+        end
+        print("[Debug] Cleared existing children from resources tab")
+
         local scroll = vgui.Create("DScrollPanel", parent)
         scroll:Dock(FILL)
         print("[Debug] Resources scroll panel created")
@@ -472,11 +498,11 @@ if CLIENT then
         print("[Debug] OpenCustomQMenu started")
         if IsValid(InventoryFrame) then
             InventoryFrame:Remove()
-            gui.EnableScreenClicker(false) -- Reset cursor
+            gui.EnableScreenClicker(false)
             print("[Debug] Existing InventoryFrame removed")
         end
 
-        gui.EnableScreenClicker(true) -- Enable cursor
+        gui.EnableScreenClicker(true)
         InventoryFrame = vgui.Create("DFrame")
         print("[Debug] DFrame created")
         InventoryFrame:SetSize(1000, 650)
@@ -487,7 +513,10 @@ if CLIENT then
         InventoryFrame:SetVisible(true)
         InventoryFrame:MakePopup()
         InventoryFrame.OnClose = function()
-            gui.EnableScreenClicker(false) -- Disable cursor when closed
+            gui.EnableScreenClicker(false)
+            for _, child in pairs(InventoryFrame:GetChildren()) do
+                child:Remove()
+            end
             print("[Debug] InventoryFrame closed")
         end
         InventoryFrame.Paint = function(self, w, h)
@@ -521,7 +550,193 @@ if CLIENT then
         print("[Debug] OpenCustomQMenu completed")
     end
 
-    hook.Add("PlayerBindPress", "ForceCustomQMenu", function(ply, bind, pressed)
+    local function OpenToolSelector()
+        print("[Debug] OpenToolSelector started")
+        if IsValid(ToolFrame) then
+            ToolFrame:Remove()
+            gui.EnableScreenClicker(false)
+            print("[Debug] Existing ToolFrame removed")
+            return
+        end
+
+        gui.EnableScreenClicker(true)
+        ToolFrame = vgui.Create("DFrame")
+        print("[Debug] ToolFrame created")
+        ToolFrame:SetSize(600, 400)
+        ToolFrame:SetPos(ScrW()/2 - 300, ScrH()/2 - 200)
+        ToolFrame:SetTitle("Toolgun Selector")
+        ToolFrame:SetDraggable(true)
+        ToolFrame:ShowCloseButton(true)
+        ToolFrame:SetVisible(true)
+        ToolFrame:MakePopup()
+        ToolFrame.OnClose = function()
+            gui.EnableScreenClicker(false)
+            print("[Debug] ToolFrame closed")
+        end
+        ToolFrame.Paint = function(self, w, h)
+            draw.RoundedBox(8, 0, 0, w, h, Color(30, 30, 30, 225))
+        end
+        local x, y = ToolFrame:GetPos()
+        print("[Debug] ToolFrame position: " .. x .. ", " .. y)
+
+        local tabPanel = vgui.Create("DPropertySheet", ToolFrame)
+        tabPanel:Dock(FILL)
+        print("[Debug] Tab panel created")
+
+        -- Tools tab
+        local toolsTab = vgui.Create("DPanel", tabPanel)
+        toolsTab.Paint = function(self, w, h)
+            draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240))
+        end
+
+        local leftPanel = vgui.Create("DPanel", toolsTab)
+        leftPanel:Dock(LEFT)
+        leftPanel:SetWide(200)
+        leftPanel.Paint = function(self, w, h)
+            draw.RoundedBox(4, 0, 0, w, h, Color(40, 40, 40, 200))
+        end
+
+        local rightPanel = vgui.Create("DPanel", toolsTab)
+        rightPanel:Dock(FILL)
+        rightPanel.Paint = function(self, w, h)
+            draw.RoundedBox(4, 0, 0, w, h, Color(40, 40, 40, 200))
+        end
+
+        local scroll = vgui.Create("DScrollPanel", leftPanel)
+        scroll:Dock(FILL)
+        print("[Debug] Tool scroll panel created")
+
+        -- Manually define Construction tools
+        local constructionTools = {
+            { Name = "Button", Class = "button" },
+            { Name = "Duplicator", Class = "duplicator" },
+            { Name = "Dynamite", Class = "dynamite" },
+            { Name = "Emitter", Class = "emitter" },
+            { Name = "Lamp", Class = "lamp" },
+            { Name = "Light", Class = "light" },
+            { Name = "No Collide", Class = "nocollide" },
+            { Name = "Physical Properties", Class = "physprop" },
+            { Name = "Remover", Class = "remover" },
+            { Name = "Thruster", Class = "thruster" },
+        }
+
+        local categories = { ["Construction"] = constructionTools }
+
+        -- Try to dynamically add other categories
+        for _, tool in pairs(list.Get("Tool")) do
+            local category = tool.Category or "Other"
+            if category ~= "Construction" then
+                if not categories[category] then
+                    categories[category] = {}
+                end
+                table.insert(categories[category], { Name = tool.Name or tool.Class, Class = tool.Class })
+            end
+        end
+
+        for categoryName, tools in pairs(categories) do
+            local cat = vgui.Create("DCollapsibleCategory", scroll)
+            cat:Dock(TOP)
+            cat:SetLabel(categoryName)
+            cat:SetExpanded(categoryName == "Construction")
+            cat:DockMargin(0, 0, 0, 5)
+
+            local toolList = vgui.Create("DPanelList", cat)
+            toolList:EnableVerticalScrollbar(true)
+            toolList:SetTall(100)
+            toolList:Dock(FILL)
+            cat:SetContents(toolList)
+
+            for _, tool in ipairs(tools) do
+                local toolButton = vgui.Create("DButton")
+                toolButton:SetText(tool.Name)
+                toolButton:Dock(TOP)
+                toolButton:SetHeight(25)
+                toolButton.DoClick = function()
+                    RunConsoleCommand("gmod_tool", tool.Class)
+                    print("[Debug] Selected tool: " .. tool.Class)
+                    surface.PlaySound("buttons/button14.wav")
+
+                    for _, child in pairs(rightPanel:GetChildren()) do
+                        child:Remove()
+                    end
+                    local settings = vgui.Create("DPanel", rightPanel)
+                    settings:Dock(FILL)
+                    settings.Paint = function(self, w, h)
+                        draw.RoundedBox(4, 0, 0, w, h, Color(30, 30, 30, 200))
+                    end
+
+                    local toolSettings = spawnmenu.GetToolMenu(tool.Class)
+                    if toolSettings and toolSettings[1] then
+                        local controlPanel = vgui.Create("ControlPanel", settings)
+                        controlPanel:Dock(FILL)
+                        controlPanel:SetTall(300)
+                        toolSettings[1].BuildCPanel(controlPanel)
+                    else
+                        local label = vgui.Create("DLabel", settings)
+                        label:Dock(TOP)
+                        label:SetText("No settings available for this tool.")
+                        label:SizeToContents()
+                    end
+                end
+                toolButton.Paint = function(self, w, h)
+                    draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240))
+                    if self:IsHovered() then
+                        draw.RoundedBox(4, 0, 0, w, h, Color(70, 70, 70, 240))
+                    end
+                end
+                toolList:AddItem(toolButton)
+            end
+        end
+
+        tabPanel:AddSheet("Tools", toolsTab, "icon16/wrench.png")
+        print("[Debug] Tools tab added")
+
+        -- Utilities tab (admin only)
+        if LocalPlayer():IsAdmin() then
+            local utilsTab = vgui.Create("DPanel", tabPanel)
+            utilsTab.Paint = function(self, w, h)
+                draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240))
+            end
+
+            local utilsScroll = vgui.Create("DScrollPanel", utilsTab)
+            utilsScroll:Dock(FILL)
+
+            local utilsList = vgui.Create("DListLayout", utilsScroll)
+            utilsList:Dock(FILL)
+
+            local utils = {
+                { name = "Admin Cleanup", cmd = "gmod_admin_cleanup" },
+                { name = "User Cleanup", cmd = "gmod_cleanup" },
+            }
+
+            for _, util in ipairs(utils) do
+                local utilButton = utilsList:Add("DButton")
+                utilButton:SetText(util.name)
+                utilButton:Dock(TOP)
+                utilButton:SetHeight(30)
+                utilButton.DoClick = function()
+                    RunConsoleCommand(unpack(string.Split(util.cmd, " ")))
+                    print("[Debug] Ran utility: " .. util.name)
+                    surface.PlaySound("buttons/button14.wav")
+                end
+                utilButton.Paint = function(self, w, h)
+                    draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240))
+                    if self:IsHovered() then
+                        draw.RoundedBox(4, 0, 0, w, h, Color(70, 70, 70, 240))
+                    end
+                end
+            end
+
+            tabPanel:AddSheet("Utilities", utilsTab, "icon16/shield.png")
+            print("[Debug] Utilities tab added (admin only)")
+        end
+
+        print("[Debug] Frame valid: " .. tostring(IsValid(ToolFrame)))
+        print("[Debug] Frame visible: " .. tostring(ToolFrame:IsVisible()))
+        print("[Debug] OpenToolSelector completed")
+    end
+
+    hook.Add("PlayerBindPress", "CustomMenuBinds", function(ply, bind, pressed)
         if bind == "+menu" and pressed then
             print("[Debug] Q key pressed, toggling custom menu")
             if IsValid(InventoryFrame) then
@@ -530,7 +745,11 @@ if CLIENT then
             else
                 OpenCustomQMenu()
             end
-            return true -- Block default Q menu
+            return true
+        elseif bind == "+menu_context" and pressed then
+            print("[Debug] C key pressed, toggling tool selector")
+            OpenToolSelector()
+            return true
         end
     end)
 
@@ -539,11 +758,28 @@ if CLIENT then
         OpenCustomQMenu()
     end)
 
+    concommand.Add("open_tool_selector", function()
+        print("[Debug] Manual tool selector command triggered")
+        OpenToolSelector()
+    end)
+
     net.Receive("SyncInventory", function()
         Inventory = net.ReadTable()
         print("[Debug] Received inventory: " .. table.ToString(Inventory))
         if IsValid(InventoryFrame) then
-            BuildInventoryUI(InventoryFrame:GetChild(0):GetChild(0)) -- Refresh inventory tab
+            local tabPanel = InventoryFrame:GetChild(0)
+            if IsValid(tabPanel) then
+                local inventoryTab = tabPanel:GetChild(0)
+                if IsValid(inventoryTab) then
+                    BuildInventoryUI(inventoryTab)
+                else
+                    print("[Debug] SyncInventory: inventoryTab is nil or invalid")
+                end
+            else
+                print("[Debug] SyncInventory: tabPanel is nil or invalid")
+            end
+        else
+            print("[Debug] SyncInventory: InventoryFrame is nil or invalid")
         end
     end)
 
@@ -551,7 +787,19 @@ if CLIENT then
         Resources = net.ReadTable()
         print("[Debug] Received resources: " .. table.ToString(Resources))
         if IsValid(InventoryFrame) then
-            BuildResourcesMenu(InventoryFrame:GetChild(0):GetChild(1)) -- Refresh resources tab
+            local tabPanel = InventoryFrame:GetChild(0)
+            if IsValid(tabPanel) then
+                local resourcesTab = tabPanel:GetChild(1)
+                if IsValid(resourcesTab) then
+                    BuildResourcesMenu(resourcesTab)
+                else
+                    print("[Debug] SyncResources: resourcesTab is nil or invalid")
+                end
+            else
+                print("[Debug] SyncResources: tabPanel is nil or invalid")
+            end
+        else
+            print("[Debug] SyncResources: InventoryFrame is nil or invalid")
         end
     end)
 
