@@ -1,0 +1,10 @@
+Armor List
+
+models/Police.mdl
+models/Combine_Soldier.mdl
+models/Combine_Super_Soldier.mdl
+models/vortigaunt.mdl
+models/stalker.mdl
+models/breen.mdl
+models/Barney.mdl
+models/player/ct_sas.mdl
