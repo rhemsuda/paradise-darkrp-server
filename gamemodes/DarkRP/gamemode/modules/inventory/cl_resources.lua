@@ -25,9 +25,9 @@ local function BuildResourcesMenu()
     scroll:Dock(FILL)
 
     local categories = {
-        { name = "Minerals", items = { "Rock", "Copper", "Iron", "Steel", "Titanium" } },
-        { name = "Gems", items = { "Emerald", "Ruby", "Sapphire", "Obsidian", "Diamond" } },
-        { name = "Lumber", items = { "Ash", "Birch", "Oak", "Mahogany", "Yew" } }
+        { name = "Minerals", items = { "rock", "copper", "iron", "steel", "titanium" } },
+        { name = "Gems", items = { "emerald", "ruby", "sapphire", "obsidian", "diamond" } },
+        { name = "Lumber", items = { "ash", "birch", "oak", "mahogany", "yew" } }
     }
 
     local layout = vgui.Create("DIconLayout", scroll)
@@ -49,6 +49,7 @@ local function BuildResourcesMenu()
         catLabel:SetColor(Color(255, 215, 0))
 
         for i, resourceID in ipairs(category.items) do
+            print("[Debug] Checking " .. resourceID .. ": " .. tostring(Resources[resourceID] or 0))
             local resPanel = vgui.Create("DPanel", catPanel)
             resPanel:SetPos(10, 30 + (i - 1) * 40)
             resPanel:SetSize(220, 30)
@@ -56,22 +57,26 @@ local function BuildResourcesMenu()
                 draw.RoundedBox(4, 0, 0, w, h, Color(30, 30, 30, 200))
             end
 
-            local amount = Resources[resourceID] or 0
+            local displayName = string.upper(resourceID:sub(1,1)) .. resourceID:sub(2)
             local resLabel = vgui.Create("DLabel", resPanel)
             resLabel:SetPos(10, 5)
-            resLabel:SetText(resourceID .. ": " .. amount)
+            resLabel:SetText(displayName .. ": " .. (Resources[resourceID] or 0))
             resLabel:SetSize(200, 20)
             resLabel:SetColor(Color(255, 255, 255))
+            resLabel.Think = function(self)
+                local currentAmount = Resources[resourceID] or 0
+                self:SetText(displayName .. ": " .. currentAmount)
+            end
             resLabel.OnMousePressed = function(self, code)
-                if code == MOUSE_LEFT and amount > 0 then
+                if code == MOUSE_LEFT and (Resources[resourceID] or 0) > 0 then
                     local menu = DermaMenu()
                     menu:AddOption("Drop Amount", function()
                         Derma_StringRequest(
-                            "Drop " .. resourceID,
-                            "How many " .. resourceID .. " to drop? (Max: " .. amount .. ")",
+                            "Drop " .. displayName,
+                            "How many " .. displayName .. " to drop? (Max: " .. (Resources[resourceID] or 0) .. ")",
                             "1",
                             function(text)
-                                local dropAmount = math.min(tonumber(text) or 1, amount)
+                                local dropAmount = math.min(tonumber(text) or 1, Resources[resourceID] or 0)
                                 if dropAmount > 0 then
                                     net.Start("DropResource")
                                     net.WriteString(resourceID)
@@ -92,10 +97,10 @@ end
 net.Receive("SyncResources", function()
     Resources = net.ReadTable()
     print("[Debug] Received resources: " .. table.ToString(Resources))
-    -- Removed BuildResourcesMenu() here to prevent opening on connect
 end)
 
 net.Receive("OpenResourcesMenu", function()
+    print("[Debug] Opening Resources Menu with Resources: " .. table.ToString(Resources))
     BuildResourcesMenu()
 end)
 
