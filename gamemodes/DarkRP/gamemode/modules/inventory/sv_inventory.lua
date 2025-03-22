@@ -204,12 +204,12 @@ net.Receive("DropItem", function(len, ply)
         local ent = ents.Create("prop_physics")
         if IsValid(ent) then
             ent:SetModel(itemData.model)
-            ent:SetPos(ply:GetPos() + ply:GetForward() * 50 + Vector(0, 0, i * 10))
+            -- Spawn slightly in front and above the player
+            ent:SetPos(ply:EyePos() + ply:GetForward() * 50 + Vector(0, 0, 10 * i))
             ent:Spawn()
             ent:SetNWString("ItemID", itemID)
-            -- Prevent physics interaction if desired (optional)
+            -- Optional: Prevent player collision but allow physics movement
             ent:SetCollisionGroup(COLLISION_GROUP_DEBRIS)
-            ent:GetPhysicsObject():EnableMotion(false) -- Keeps it stationary
         end
     end
 end)
@@ -301,10 +301,6 @@ hook.Add("PlayerUse", "PickupInventoryItem", function(ply, ent)
 
     -- Check if the item is valid in InventoryItems
     if InventoryItems[itemID] then
-        -- Optional: Require the inventory weapon to be equipped
-        -- Uncomment the next line if you want this restriction
-        -- if ply:GetActiveWeapon():GetClass() ~= "weapon_inventory" then return end
-
         AddItemToInventory(ply, itemID, 1)
         ent:Remove()
         SendInventoryMessage(ply, "Picked up 1 " .. InventoryItems[itemID].name .. ".")
