@@ -166,7 +166,7 @@ concommand.Add("addresource", function(ply, cmd, args)
     local resourceID = args[1]
     local amount = tonumber(args[2]) or 1
     if not resourceID then
-        SendInventoryMessage(ply, "Specify a resource ID (e.g., 'addresource Rock 10').")
+        SendInventoryMessage(ply, "Specify a resource ID (e.g., 'addresource rock 10').")
         return
     end
     AddResourceToInventory(ply, resourceID, amount)
@@ -200,19 +200,16 @@ net.Receive("DropItem", function(len, ply)
     RemoveItemFromInventory(ply, itemID, amount)
     SendInventoryMessage(ply, "Dropped " .. amount .. " " .. InventoryItems[itemID].name .. "(s).")
     local itemData = InventoryItems[itemID]
-    local entClass = itemData.entityClass or "prop_physics"
     for i = 1, amount do
-        local ent = ents.Create(entClass)
+        local ent = ents.Create("prop_physics")
         if IsValid(ent) then
             ent:SetModel(itemData.model)
             ent:SetPos(ply:GetPos() + ply:GetForward() * 50 + Vector(0, 0, i * 10))
             ent:Spawn()
             ent:SetNWString("ItemID", itemID)
-            if entClass == "weapon_pistol" then
-                ent.AmmoAmount = 30
-            elseif entClass == "item_healthkit" then
-                ent:SetHealthAmount(25)
-            end
+            -- Prevent physics interaction if desired (optional)
+            ent:SetCollisionGroup(COLLISION_GROUP_DEBRIS)
+            ent:GetPhysicsObject():EnableMotion(false) -- Keeps it stationary
         end
     end
 end)
@@ -245,9 +242,6 @@ end)
 hook.Add("PlayerInitialSpawn", "Inventory_InitInventory", function(ply)
     if not IsValid(ply) then return end
     LoadPlayerInventory(ply)
-   -- if not ply:HasWeapon("weapon_inventory") then
-        --ply:Give("weapon_inventory")
-   -- end
     print("[Debug] InitialSpawn for " .. ply:Nick() .. " - Team: " .. ply:Team() .. " (" .. team.GetName(ply:Team()) .. ")")
 end)
 
@@ -301,13 +295,22 @@ hook.Add("PlayerDisconnected", "SaveInventoryOnDisconnect", function(ply)
 end)
 
 hook.Add("PlayerUse", "PickupInventoryItem", function(ply, ent)
+    -- Early exit if the entity has no ItemID (e.g., doors, props, etc.)
     local itemID = ent:GetNWString("ItemID")
-    if itemID and InventoryItems[itemID] then
+    if not itemID or itemID == "" then return end
+
+    -- Check if the item is valid in InventoryItems
+    if InventoryItems[itemID] then
+        -- Optional: Require the inventory weapon to be equipped
+        -- Uncomment the next line if you want this restriction
+        -- if ply:GetActiveWeapon():GetClass() ~= "weapon_inventory" then return end
+
         AddItemToInventory(ply, itemID, 1)
         ent:Remove()
         SendInventoryMessage(ply, "Picked up 1 " .. InventoryItems[itemID].name .. ".")
         return true
     else
+        -- Only send the message if the entity has an ItemID but it's invalid
         local entIndex = ent:EntIndex()
         local steamID = ply:SteamID()
         PickupCooldown[steamID] = PickupCooldown[steamID] or {}
