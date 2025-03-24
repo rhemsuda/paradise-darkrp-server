@@ -31,6 +31,9 @@ end
 GM.Config = {} -- config table
 GM.NoLicense = GM.NoLicense or {}
 
+
+include("darkrp/gamemode/modules/base/cl_spawnmenu.lua") -- custom context menu
+
 include("config/config.lua")
 include("libraries/sh_cami.lua")
 include("libraries/simplerr.lua")

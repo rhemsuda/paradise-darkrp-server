@@ -1,3 +1,5 @@
+-- gamemodes/darkrp/gamemode/sh_inventory.lua
+
 print("[Inventory Module] sh_inventory.lua loaded successfully")
 
 -- Define network strings (server only)
@@ -311,7 +313,202 @@ if CLIENT then
     local Resources = {}
     local Inventory = {}
     local InventoryFrame = nil
-    local ToolFrame = nil
+    local ToolSelectorFrame = nil
+    local isInventoryOpen = false
+    local isToolSelectorOpen = false
+    local isQKeyHeld = false -- Track whether the Q key is being held
+
+    -- List of allowed tools
+    local allowedTools = {
+        "button",
+        "fading_door",
+        "keypad",
+        "camera",
+        "nocollide",
+        "remover"
+    }
+
+    -- Debug available tools early on client initialization
+    hook.Add("InitPostEntity", "DebugAvailableTools", function()
+        print("[Debug] Available tools in list.Get('Tool') at InitPostEntity:")
+        local toolList = list.Get("Tool")
+        if not toolList or table.IsEmpty(toolList) then
+            print("[Debug] Tool list is empty or nil!")
+        else
+            for toolClass, toolData in pairs(toolList) do
+                print("[Debug] Tool: " .. toolClass .. " (Name: " .. (toolData.Name or "Unknown") .. ")")
+            end
+        end
+    end)
+
+    -- Function to open the Tool Selector menu
+    local function OpenToolSelector()
+        print("[Debug] OpenToolSelector started")
+
+        -- If the menu is already open, don't create a new one
+        if isToolSelectorOpen and IsValid(ToolSelectorFrame) then
+            print("[Debug] ToolSelectorFrame already open, skipping creation")
+            return
+        elseif ToolSelectorFrame ~= nil then
+            print("[Debug] ToolSelectorFrame was invalid, resetting")
+            ToolSelectorFrame = nil
+        end
+
+        -- Ensure the screen clicker is enabled
+        gui.EnableScreenClicker(true)
+        print("[Debug] gui.EnableScreenClicker(true) called for Tool Selector")
+
+        -- Create the tool selector frame
+        ToolSelectorFrame = vgui.Create("DFrame")
+        print("[Debug] ToolSelectorFrame created: " .. tostring(ToolSelectorFrame))
+        print("[Debug] IsValid(ToolSelectorFrame): " .. tostring(IsValid(ToolSelectorFrame)))
+
+        ToolSelectorFrame:SetSize(300, 650) -- Match the height of the inventory menu
+        ToolSelectorFrame:SetPos(ScrW()/2 + 510, ScrH()/2 - 325) -- Position to the right of the inventory menu
+        ToolSelectorFrame:SetTitle("Tool Selector")
+        ToolSelectorFrame:SetDraggable(false) -- Make non-draggable
+        ToolSelectorFrame:ShowCloseButton(false) -- No close button, closes with inventory
+        ToolSelectorFrame:SetVisible(true)
+        ToolSelectorFrame:MakePopup()
+        print("[Debug] ToolSelectorFrame after MakePopup: " .. tostring(IsValid(ToolSelectorFrame)))
+
+        -- Explicitly set focus on the Tool Selector menu
+        ToolSelectorFrame:SetMouseInputEnabled(true)
+        ToolSelectorFrame:SetKeyboardInputEnabled(true)
+        ToolSelectorFrame:RequestFocus()
+        print("[Debug] Focus requested on ToolSelectorFrame")
+        print("[Debug] ToolSelectorFrame has focus: " .. tostring(ToolSelectorFrame:HasFocus()))
+
+        ToolSelectorFrame.OnClose = function()
+            gui.EnableScreenClicker(false)
+            print("[Debug] gui.EnableScreenClicker(false) called (ToolSelectorFrame closed)")
+            isToolSelectorOpen = false
+            ToolSelectorFrame = nil
+            print("[Debug] ToolSelectorFrame closed")
+            -- Reset VGUI focus to ensure no lingering focus issues
+            if gui.IsGameUIVisible() then
+                gui.EnableScreenClicker(false)
+                gui.EnableScreenClicker(true)
+                print("[Debug] Reset VGUI focus after closing Tool Selector")
+            end
+        end
+
+        -- Match the color scheme to the inventory menu
+        ToolSelectorFrame.Paint = function(self, w, h)
+            draw.RoundedBox(8, 0, 0, w, h, Color(30, 30, 30, 225)) -- Match inventory frame background
+        end
+
+        local x, y = ToolSelectorFrame:GetPos()
+        print("[Debug] ToolSelectorFrame position: " .. x .. ", " .. y)
+
+        -- Create a scroll panel for the tools
+        local scroll = vgui.Create("DScrollPanel", ToolSelectorFrame)
+        scroll:Dock(FILL)
+        print("[Debug] Tool scroll panel created")
+
+        -- Create a category for the tools
+        local cat = vgui.Create("DCollapsibleCategory", scroll)
+        cat:Dock(TOP)
+        cat:SetLabel("Tools")
+        cat:SetExpanded(true)
+        cat:DockMargin(0, 0, 0, 5)
+
+        local toolList = vgui.Create("DPanelList", cat)
+        toolList:EnableVerticalScrollbar(true)
+        toolList:SetTall(600) -- Adjust to fit the frame
+        toolList:Dock(FILL)
+        cat:SetContents(toolList)
+        print("[Debug] Tool list created")
+
+        -- Debug the tool list before creating buttons
+        local toolDataList = list.Get("Tool")
+        print("[Debug] Checking available tools before creating buttons:")
+        if not toolDataList or table.IsEmpty(toolDataList) then
+            print("[Debug] Tool list is empty or nil in OpenToolSelector!")
+        else
+            for toolClass, toolData in pairs(toolDataList) do
+                print("[Debug] Available Tool: " .. toolClass .. " (Name: " .. (toolData.Name or "Unknown") .. ")")
+            end
+        end
+
+        -- Add buttons for each allowed tool
+        for _, toolClass in ipairs(allowedTools) do
+            local toolData = list.Get("Tool")[toolClass]
+            local toolName = toolData and toolData.Name or toolClass
+
+            -- Debug: Log tool availability
+            if not toolData then
+                print("[Error] Tool not found in list.Get('Tool'): " .. toolClass)
+            else
+                print("[Debug] Tool found: " .. toolClass .. " (Name: " .. toolName .. ")")
+            end
+
+            local toolButton = vgui.Create("DButton")
+            toolButton:SetText(toolName)
+            toolButton:Dock(TOP)
+            toolButton:SetHeight(25)
+            toolButton.DoClick = function()
+                -- Ensure the toolgun is equipped
+                RunConsoleCommand("use", "gmod_tool")
+                print("[Debug] Ran 'use gmod_tool' to ensure toolgun is equipped")
+
+                -- Check the active weapon after attempting to equip the toolgun
+                timer.Simple(0.05, function()
+                    local activeWeapon = LocalPlayer():GetActiveWeapon()
+                    if IsValid(activeWeapon) then
+                        print("[Debug] Active weapon after 'use gmod_tool': " .. activeWeapon:GetClass())
+                    else
+                        print("[Debug] No active weapon after 'use gmod_tool'!")
+                    end
+                end)
+
+                -- Update the player's tool mode
+                RunConsoleCommand("gmod_toolmode", toolClass)
+                RunConsoleCommand("gmod_tool", toolClass)
+                print("[Debug] Selected tool: " .. toolClass)
+
+                -- Ensure tool mode updates
+                timer.Simple(0.1, function()
+                    local currentMode = GetConVarString("gmod_toolmode")
+                    print("[Debug] Current tool mode after delay: " .. currentMode)
+                    if currentMode ~= toolClass then
+                        print("[Debug] Tool mode did not update to " .. toolClass .. ", forcing again")
+                        RunConsoleCommand("use", "gmod_tool")
+                        RunConsoleCommand("gmod_toolmode", toolClass)
+                        RunConsoleCommand("gmod_tool", toolClass)
+
+                        -- Additional debug for Keypad specifically
+                        if toolClass == "keypad" then
+                            print("[Debug] Keypad tool mode still not set. Current mode: " .. (currentMode or "nil"))
+                            local toolList = list.Get("Tool")
+                            if toolList["keypad"] then
+                                print("[Debug] Keypad tool exists in tool list, but mode not set!")
+                            else
+                                print("[Debug] Keypad tool does not exist in tool list!")
+                            end
+                        end
+                    end
+                end)
+
+                -- Play a sound for tool selection
+                surface.PlaySound("buttons/button14.wav")
+            end
+            -- Match the button color scheme to the inventory menu
+            toolButton.Paint = function(self, w, h)
+                draw.RoundedBox(8, 0, 0, w, h, Color(50, 50, 50, 240)) -- Match inventory tab background
+                if self:IsHovered() then
+                    draw.RoundedBox(8, 0, 0, w, h, Color(70, 70, 70, 240)) -- Slightly lighter on hover
+                end
+            end
+            toolList:AddItem(toolButton)
+            print("[Debug] Added tool button: " .. toolName)
+        end
+
+        isToolSelectorOpen = true
+        print("[Debug] Frame valid: " .. tostring(IsValid(ToolSelectorFrame)))
+        print("[Debug] Frame visible: " .. tostring(ToolSelectorFrame:IsVisible()))
+        print("[Debug] OpenToolSelector completed")
+    end
 
     local function BuildInventoryUI(parent)
         if not IsValid(parent) then
@@ -496,10 +693,12 @@ if CLIENT then
 
     local function OpenCustomQMenu()
         print("[Debug] OpenCustomQMenu started")
-        if IsValid(InventoryFrame) then
-            InventoryFrame:Remove()
-            gui.EnableScreenClicker(false)
-            print("[Debug] Existing InventoryFrame removed")
+        if isInventoryOpen and IsValid(InventoryFrame) then
+            print("[Debug] InventoryFrame already open, skipping creation")
+            return
+        elseif InventoryFrame ~= nil then
+            print("[Debug] InventoryFrame was invalid, resetting")
+            InventoryFrame = nil
         end
 
         gui.EnableScreenClicker(true)
@@ -508,8 +707,8 @@ if CLIENT then
         InventoryFrame:SetSize(1000, 650)
         InventoryFrame:SetPos(ScrW()/2 - 500, ScrH()/2 - 325)
         InventoryFrame:SetTitle("Inventory & Resources")
-        InventoryFrame:SetDraggable(true)
-        InventoryFrame:ShowCloseButton(true)
+        InventoryFrame:SetDraggable(false) -- Make non-draggable
+        InventoryFrame:ShowCloseButton(false) -- No close button, closes on Q release
         InventoryFrame:SetVisible(true)
         InventoryFrame:MakePopup()
         InventoryFrame.OnClose = function()
@@ -517,7 +716,30 @@ if CLIENT then
             for _, child in pairs(InventoryFrame:GetChildren()) do
                 child:Remove()
             end
+            isInventoryOpen = false
+            InventoryFrame = nil
             print("[Debug] InventoryFrame closed")
+
+            -- Close the Tool Selector menu when the inventory closes
+            print("[Debug] Checking ToolSelectorFrame: isToolSelectorOpen = " .. tostring(isToolSelectorOpen) .. ", ToolSelectorFrame = " .. tostring(ToolSelectorFrame))
+            if ToolSelectorFrame ~= nil then
+                print("[Debug] IsValid(ToolSelectorFrame): " .. tostring(IsValid(ToolSelectorFrame)))
+            end
+            if isToolSelectorOpen and ToolSelectorFrame ~= nil then
+                ToolSelectorFrame:Close()
+                ToolSelectorFrame = nil
+                isToolSelectorOpen = false
+                print("[Debug] ToolSelectorFrame closed with InventoryFrame")
+            else
+                print("[Debug] ToolSelectorFrame not closed: isToolSelectorOpen = " .. tostring(isToolSelectorOpen) .. ", ToolSelectorFrame = " .. tostring(ToolSelectorFrame))
+            end
+
+            -- Reset VGUI focus to ensure no lingering focus issues
+            if gui.IsGameUIVisible() then
+                gui.EnableScreenClicker(false)
+                gui.EnableScreenClicker(true)
+                print("[Debug] Reset VGUI focus after closing Inventory")
+            end
         end
         InventoryFrame.Paint = function(self, w, h)
             draw.RoundedBox(8, 0, 0, w, h, Color(30, 30, 30, 225))
@@ -545,304 +767,44 @@ if CLIENT then
         tabPanel:AddSheet("Resources", resourcesTab, "icon16/box.png")
         print("[Debug] Resources tab added")
 
+        isInventoryOpen = true
         print("[Debug] Frame valid: " .. tostring(IsValid(InventoryFrame)))
         print("[Debug] Frame visible: " .. tostring(InventoryFrame:IsVisible()))
         print("[Debug] OpenCustomQMenu completed")
+
+        -- Open the Tool Selector menu alongside the inventory
+        OpenToolSelector()
     end
 
-    local function OpenToolSelector()
-        -- Debug the contents of list.Get("Tool")
-        print("[Debug] Available tools in list.Get('Tool'):")
-        for k, v in pairs(list.Get("Tool")) do
-            print("[Debug] Tool: " .. k .. " (Name: " .. (v.Name or "Unknown") .. ")")
-        end
-
-        print("[Debug] OpenToolSelector started")
-        if IsValid(ToolFrame) then
-            ToolFrame:Remove()
-            gui.EnableScreenClicker(false)
-            print("[Debug] Existing ToolFrame removed")
-            return
-        end
-
-        gui.EnableScreenClicker(true)
-        ToolFrame = vgui.Create("DFrame")
-        print("[Debug] ToolFrame created")
-        ToolFrame:SetSize(600, 400)
-        ToolFrame:SetPos(ScrW()/2 - 300, ScrH()/2 - 200)
-        ToolFrame:SetTitle("Toolgun Selector")
-        ToolFrame:SetDraggable(true)
-        ToolFrame:ShowCloseButton(true)
-        ToolFrame:SetVisible(true)
-        ToolFrame:MakePopup()
-        ToolFrame.OnClose = function()
-            gui.EnableScreenClicker(false)
-            print("[Debug] ToolFrame closed")
-        end
-        ToolFrame.Paint = function(self, w, h)
-            draw.RoundedBox(8, 0, 0, w, h, Color(30, 30, 30, 225))
-        end
-        local x, y = ToolFrame:GetPos()
-        print("[Debug] ToolFrame position: " .. x .. ", " .. y)
-
-        local tabPanel = vgui.Create("DPropertySheet", ToolFrame)
-        tabPanel:Dock(FILL)
-        print("[Debug] Tab panel created")
-
-        -- Tools tab
-        local toolsTab = vgui.Create("DPanel", tabPanel)
-        toolsTab.Paint = function(self, w, h)
-            draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240))
-        end
-        print("[Debug] Tools tab panel created: " .. tostring(IsValid(toolsTab)))
-
-        local leftPanel = vgui.Create("DPanel", toolsTab)
-        leftPanel:Dock(LEFT)
-        leftPanel:SetWide(200)
-        leftPanel.Paint = function(self, w, h)
-            draw.RoundedBox(4, 0, 0, w, h, Color(40, 40, 40, 200))
-        end
-
-        local rightPanel = vgui.Create("DPanel", toolsTab)
-        rightPanel:Dock(FILL)
-        rightPanel.Paint = function(self, w, h)
-            draw.RoundedBox(4, 0, 0, w, h, Color(40, 40, 40, 200))
-        end
-
-        local scroll = vgui.Create("DScrollPanel", leftPanel)
-        scroll:Dock(FILL)
-        print("[Debug] Tool scroll panel created")
-
-        -- Define the limited set of tools
-        local allowedTools = {
-            { Name = "Button", Class = "button" },
-            { Name = "Fading Doors", Class = "fading_door" },
-            { Name = "Keypad", Class = "keypad" }, -- Wiremod Keypad
-            { Name = "Camera", Class = "gmod_camera" },
-        }
-
-        local categories = { ["Tools"] = allowedTools }
-
-        -- Store Keypad settings locally
-        local keypadSettings = {
-            accessCode = "1234",
-            denyCode = "0000",
-            correctValue = 1,
-            incorrectValue = 0,
-            toggle = false
-        }
-
-        -- Store references to Keypad settings fields
-        local keypadFields = {}
-
-        for categoryName, tools in pairs(categories) do
-            local cat = vgui.Create("DCollapsibleCategory", scroll)
-            cat:Dock(TOP)
-            cat:SetLabel(categoryName)
-            cat:SetExpanded(true) -- Expand by default
-            cat:DockMargin(0, 0, 0, 5)
-
-            local toolList = vgui.Create("DPanelList", cat)
-            toolList:EnableVerticalScrollbar(true)
-            toolList:SetTall(100)
-            toolList:Dock(FILL)
-            cat:SetContents(toolList)
-
-            for _, tool in ipairs(tools) do
-                local toolButton = vgui.Create("DButton")
-                toolButton:SetText(tool.Name)
-                toolButton:Dock(TOP)
-                toolButton:SetHeight(25)
-                toolButton.DoClick = function()
-                    -- Force tool mode switch
-                    RunConsoleCommand("gmod_toolmode", tool.Class)
-                    RunConsoleCommand("gmod_tool", tool.Class)
-                    print("[Debug] Selected tool: " .. tool.Class)
-
-                    -- Ensure tool mode updates
-                    timer.Simple(0.1, function()
-                        local currentMode = GetConVarString("gmod_toolmode")
-                        print("[Debug] Current tool mode after delay: " .. currentMode)
-                        if currentMode ~= tool.Class then
-                            print("[Debug] Tool mode did not update, forcing again")
-                            RunConsoleCommand("gmod_toolmode", tool.Class)
-                            RunConsoleCommand("gmod_tool", tool.Class)
-                        end
-                    end)
-
-                    -- Notify server of tool change
-                    net.Start("SelectTool")
-                    net.WriteString(tool.Class)
-                    net.SendToServer()
-
-                    surface.PlaySound("buttons/button14.wav")
-
-                    -- Clear right panel and show tool settings
-                    for _, child in pairs(rightPanel:GetChildren()) do
-                        child:Remove()
-                    end
-                    local settings = vgui.Create("DPanel", rightPanel)
-                    settings:Dock(FILL)
-                    settings:DockMargin(5, 5, 5, 5)
-                    settings.Paint = function(self, w, h)
-                        draw.RoundedBox(4, 0, 0, w, h, Color(150, 150, 150, 200)) -- Lighter background
-                    end
-
-                    -- Load the tool's control panel
-                    local toolData = list.Get("Tool")[tool.Class]
-                    if toolData then
-                        print("[Debug] Tool data found for " .. tool.Class)
-                        if toolData.BuildCPanel then
-                            print("[Debug] BuildCPanel exists for " .. tool.Class)
-                            local controlPanel = vgui.Create("DForm", settings)
-                            controlPanel:Dock(FILL)
-                            controlPanel:SetName(tool.Name .. " Settings")
-                            controlPanel:SetExpanded(true)
-                            toolData.BuildCPanel(controlPanel)
-                        else
-                            print("[Debug] BuildCPanel not found for " .. tool.Class)
-                            local label = vgui.Create("DLabel", settings)
-                            label:Dock(TOP)
-                            label:SetText("No settings available for this tool (BuildCPanel missing).")
-                            label:SizeToContents()
-                        end
-                    else
-                        print("[Debug] Tool data not found for " .. tool.Class .. " in list.Get('Tool')")
-                        -- Manual settings for each tool
-                        local controlPanel = vgui.Create("DForm", settings)
-                        controlPanel:Dock(FILL)
-                        controlPanel:SetName(tool.Name .. " Settings")
-                        controlPanel:SetExpanded(true)
-
-                        if tool.Class == "button" then
-                            controlPanel:NumSlider("Key to Simulate", nil, 0, 9, 0)
-                            controlPanel:CheckBox("Toggle Mode")
-                        elseif tool.Class == "fading_door" then
-                            controlPanel:NumSlider("Fade Time", nil, 0, 10, 1)
-                            controlPanel:TextEntry("Material", nil)
-                            controlPanel:CheckBox("Toggle")
-                        elseif tool.Class == "gmod_camera" then
-                            controlPanel:NumSlider("Key to Simulate", nil, 0, 9, 0)
-                            controlPanel:CheckBox("Static")
-                        elseif tool.Class == "keypad" then
-                            -- Access Code
-                            keypadFields.accessCode = controlPanel:TextEntry("Access Code", nil)
-                            keypadFields.accessCode:SetValue(keypadSettings.accessCode)
-                            keypadFields.accessCode.OnChange = function(self)
-                                keypadSettings.accessCode = self:GetValue()
-                            end
-
-                            -- Deny Code
-                            keypadFields.denyCode = controlPanel:TextEntry("Deny Code", nil)
-                            keypadFields.denyCode:SetValue(keypadSettings.denyCode)
-                            keypadFields.denyCode.OnChange = function(self)
-                                keypadSettings.denyCode = self:GetValue()
-                            end
-
-                            -- Correct Value
-                            keypadFields.correctValue = controlPanel:NumSlider("Correct Value", nil, 0, 100, 0)
-                            keypadFields.correctValue:SetValue(keypadSettings.correctValue)
-                            keypadFields.correctValue.OnValueChanged = function(self, value)
-                                keypadSettings.correctValue = value
-                            end
-
-                            -- Incorrect Value
-                            keypadFields.incorrectValue = controlPanel:NumSlider("Incorrect Value", nil, 0, 100, 0)
-                            keypadFields.incorrectValue:SetValue(keypadSettings.incorrectValue)
-                            keypadFields.incorrectValue.OnValueChanged = function(self, value)
-                                keypadSettings.incorrectValue = value
-                            end
-
-                            -- Toggle
-                            keypadFields.toggle = controlPanel:CheckBox("Toggle")
-                            keypadFields.toggle:SetValue(keypadSettings.toggle)
-                            keypadFields.toggle.OnChange = function(self, value)
-                                keypadSettings.toggle = value
-                            end
-                        end
-                    end
-                end
-                toolButton.Paint = function(self, w, h)
-                    draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240))
-                    if self:IsHovered() then
-                        draw.RoundedBox(4, 0, 0, w, h, Color(70, 70, 70, 240))
-                    end
-                end
-                toolList:AddItem(toolButton)
-            end
-        end
-
-        tabPanel:AddSheet("Tools", toolsTab, "icon16/wrench.png")
-        print("[Debug] Tools tab added")
-
-        -- Utilities tab (admin only)
-        if LocalPlayer():IsAdmin() then
-            local utilsTab = vgui.Create("DPanel", tabPanel)
-            utilsTab.Paint = function(self, w, h)
-                draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240))
-            end
-            print("[Debug] Utilities tab panel created: " .. tostring(IsValid(utilsTab)))
-
-            local utilsScroll = vgui.Create("DScrollPanel", utilsTab)
-            utilsScroll:Dock(FILL)
-            print("[Debug] Utilities scroll panel created: " .. tostring(IsValid(utilsScroll)))
-
-            local utilsList = vgui.Create("DListLayout", utilsScroll)
-            utilsList:Dock(FILL)
-            print("[Debug] Utilities list created: " .. tostring(IsValid(utilsList)))
-
-            local utils = {
-                { name = "Admin Cleanup", cmd = "gmod_admin_cleanup" },
-                { name = "User Cleanup", cmd = "gmod_cleanup" },
-            }
-
-            for _, util in ipairs(utils) do
-                local utilButton = vgui.Create("DButton")
-                utilButton:SetText(util.name)
-                utilButton:Dock(TOP)
-                utilButton:SetHeight(30)
-                utilButton.DoClick = function()
-                    RunConsoleCommand(unpack(string.Split(util.cmd, " ")))
-                    print("[Debug] Ran utility: " .. util.name)
-                    surface.PlaySound("buttons/button14.wav")
-                end
-                utilButton.Paint = function(self, w, h)
-                    draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240))
-                    if self:IsHovered() then
-                        draw.RoundedBox(4, 0, 0, w, h, Color(70, 70, 70, 240))
-                    end
-                end
-                if IsValid(utilsList) then
-                    utilsList:Add(utilButton) -- Fixed: Use Add instead of AddItem for DListLayout
-                    print("[Debug] Added utility button: " .. util.name)
-                else
-                    print("[Error] utilsList is not valid, cannot add utility button: " .. util.name)
-                end
-            end
-
-            tabPanel:AddSheet("Utilities", utilsTab, "icon16/shield.png")
-            print("[Debug] Utilities tab added (admin only)")
-        end
-
-        print("[Debug] Frame valid: " .. tostring(IsValid(ToolFrame)))
-        print("[Debug] Frame visible: " .. tostring(ToolFrame:IsVisible()))
-        print("[Debug] OpenToolSelector completed")
-    end
-
+    -- Use PlayerBindPress to open the menu
     hook.Add("PlayerBindPress", "CustomMenuBinds", function(ply, bind, pressed)
-        if bind == "+menu" and pressed then
-            print("[Debug] Q key pressed, toggling custom menu")
-            if IsValid(InventoryFrame) then
-                InventoryFrame:Remove()
-                gui.EnableScreenClicker(false)
-            else
+        if bind == "+menu" then
+            print("[Debug] PlayerBindPress: +menu detected, pressed = " .. tostring(pressed))
+            if pressed then
+                print("[Debug] Q key pressed, opening custom menu")
+                isQKeyHeld = true
                 OpenCustomQMenu()
             end
             return true
-        elseif bind == "+menu_context" and pressed then
-            print("[Debug] C key pressed, toggling tool selector")
-            OpenToolSelector()
-            return true
+        end
+    end)
+
+    -- Use a Think hook to check if the Q key is released
+    hook.Add("Think", "CheckQKeyRelease", function()
+        -- Check if the Q key (or whatever key is bound to +menu) is no longer held
+        if isQKeyHeld and not input.IsKeyDown(KEY_Q) then
+            print("[Debug] Q key released (via Think hook), closing custom menu")
+            if isInventoryOpen and InventoryFrame ~= nil then
+                if IsValid(InventoryFrame) then
+                    InventoryFrame:Close() -- Use Close() instead of Remove() to trigger OnClose
+                else
+                    -- If the frame is invalid, ensure state is reset
+                    isInventoryOpen = false
+                    InventoryFrame = nil
+                    print("[Debug] InventoryFrame was invalid, state reset")
+                end
+            end
+            isQKeyHeld = false
         end
     end)
 
@@ -851,15 +813,10 @@ if CLIENT then
         OpenCustomQMenu()
     end)
 
-    concommand.Add("open_tool_selector", function()
-        print("[Debug] Manual tool selector command triggered")
-        OpenToolSelector()
-    end)
-
     net.Receive("SyncInventory", function()
         Inventory = net.ReadTable()
         print("[Debug] Received inventory: " .. table.ToString(Inventory))
-        if IsValid(InventoryFrame) then
+        if isInventoryOpen and IsValid(InventoryFrame) then
             local tabPanel = InventoryFrame:GetChild(0)
             if IsValid(tabPanel) then
                 local inventoryTab = tabPanel:GetChild(0)
@@ -879,7 +836,7 @@ if CLIENT then
     net.Receive("SyncResources", function()
         Resources = net.ReadTable()
         print("[Debug] Received resources: " .. table.ToString(Resources))
-        if IsValid(InventoryFrame) then
+        if isInventoryOpen and IsValid(InventoryFrame) then
             local tabPanel = InventoryFrame:GetChild(0)
             if IsValid(tabPanel) then
                 local resourcesTab = tabPanel:GetChild(1)
@@ -899,16 +856,5 @@ if CLIENT then
     net.Receive("InventoryMessage", function()
         local msg = net.ReadString()
         chat.AddText(Color(255, 215, 0), "[Inventory] ", Color(255, 255, 255), msg)
-    end)
-end
-
--- Server-side (no changes needed)
-if SERVER then
-    util.AddNetworkString("SelectTool")
-
-    net.Receive("SelectTool", function(len, ply)
-        local toolClass = net.ReadString()
-        print("[Server] Player " .. ply:Nick() .. " selected tool: " .. toolClass)
-        -- Add any server-side validation or logic here if needed
     end)
 end
