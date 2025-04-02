@@ -1,0 +1,45 @@
+-- gamemodes/darkrp/entities/entities/resource_item/init.lua
+
+AddCSLuaFile("cl_init.lua")
+AddCSLuaFile("shared.lua")
+include("shared.lua")
+
+function ENT:Initialize()
+    self:SetModel("models/props_junk/rock001a.mdl") -- Default model
+    self:PhysicsInit(SOLID_VPHYSICS)
+    self:SetMoveType(MOVETYPE_VPHYSICS)
+    self:SetSolid(SOLID_VPHYSICS)
+    self:SetUseType(SIMPLE_USE)
+    local phys = self:GetPhysicsObject()
+    if IsValid(phys) then
+        phys:Wake()
+    end
+    self:SetAmount(1) -- Default amount
+end
+
+function ENT:SetResourceType(resourceID)
+    self:SetNWString("ResourceID", resourceID)
+end
+
+function ENT:SetAmount(amount)
+    self:SetNWInt("ResourceAmount", amount)
+end
+
+function ENT:Use(activator, caller)
+    if not IsValid(activator) or not activator:IsPlayer() then return end
+    local resourceID = self:GetNWString("ResourceID")
+    local amount = self:GetNWInt("ResourceAmount", 1)
+    if resourceID and amount > 0 then
+        -- Add the full amount to the player's inventory
+        if SERVER then
+            AddResourceToInventory(activator, resourceID, amount)
+            -- Play a pickup sound
+            activator:EmitSound("items/ammopickup.wav")
+            -- Send a more detailed chat message
+            local resourceData = ResourceItems[resourceID] or { name = resourceID }
+            local displayName = resourceData.name or (string.upper(resourceID:sub(1,1)) .. resourceID:sub(2))
+            activator:ChatPrint("[Inventory] Picked up " .. amount .. " " .. displayName .. ".")
+        end
+        self:Remove()
+    end
+end
