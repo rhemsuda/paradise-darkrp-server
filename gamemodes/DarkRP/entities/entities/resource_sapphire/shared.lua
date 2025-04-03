@@ -1,6 +1,6 @@
 ENT.Type = "anim"
 ENT.Base = "base_gmodentity"
-ENT.PrintName = "Resource Item"
+ENT.PrintName = "Sapphire"
 ENT.Author = "Paradise V1"
 ENT.Spawnable = false
 ENT.AdminSpawnable = false

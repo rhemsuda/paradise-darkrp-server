@@ -1,25 +1,25 @@
 include("shared.lua")
 
 function ENT:Draw()
-    self:DrawModel()
+    self:DrawModel() -- Draws with server-set material and color
 
     local pos = self:GetPos() + Vector(0, 0, 20)
     local ang = LocalPlayer():EyeAngles()
     ang:RotateAroundAxis(ang:Forward(), 90)
     ang:RotateAroundAxis(ang:Right(), 90)
 
-    local resourceID = self:GetNWString("ResourceType") -- Match server-side access
+    local resourceID = self:GetNWString("ResourceType")
     local amount = self:GetNWInt("Amount")
     
     if not self.debugPrinted then
-        print("[Debug] resource_item: resourceID = " .. tostring(resourceID) .. ", amount = " .. tostring(amount))
+        print("[Debug] resource_copper: resourceID = " .. tostring(resourceID) .. ", amount = " .. tostring(amount))
         if not resourceID or resourceID == "" then
-            print("[Debug] resource_item: ResourceType is nil or empty!")
+            print("[Debug] resource_copper: ResourceType is nil or empty!")
         end
         if not ResourceItems then
-            print("[Debug] resource_item: ResourceItems is nil!")
+            print("[Debug] resource_copper: ResourceItems is nil!")
         elseif not ResourceItems[resourceID] then
-            print("[Debug] resource_item: ResourceItems[" .. tostring(resourceID) .. "] is nil!")
+            print("[Debug] resource_copper: ResourceItems[" .. tostring(resourceID) .. "] is nil!")
         end
         self.debugPrinted = true
     end

@@ -1,8 +1,5 @@
--- gamemodes/darkrp/gamemode/sh_inventory.lua
-
 print("[Inventory Module] sh_inventory.lua loaded successfully")
 
--- Define network strings (server only)
 if SERVER then
     util.AddNetworkString("SyncInventory")
     util.AddNetworkString("DropItem")
@@ -13,39 +10,65 @@ if SERVER then
     util.AddNetworkString("DropResource")
 end
 
--- Resource definitions
 ResourceItems = ResourceItems or {}
-ResourceItems["rock"] = {
-    name = "Rock",
-    icon = "models/props_junk/rock001a.mdl", -- 3D model for the UI
-    model = "models/props_junk/rock001a.mdl" -- Model for the dropped entity
+local resourceTemplates = {
+    minerals = {
+        { id = "rock", name = "Rock", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
+        { id = "copper", name = "Copper", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
+        { id = "iron", name = "Iron", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
+        { id = "steel", name = "Steel", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
+        { id = "titanium", name = "Titanium", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" }
+    },
+    gems = {
+        { id = "emerald", name = "Emerald", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
+        { id = "ruby", name = "Ruby", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
+        { id = "sapphire", name = "Sapphire", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
+        { id = "obsidian", name = "Obsidian", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
+        { id = "diamond", name = "Diamond", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" }
+    },
+    lumber = {
+        { id = "ash", name = "Ash", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" },
+        { id = "birch", name = "Birch", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" },
+        { id = "oak", name = "Oak", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" },
+        { id = "mahogany", name = "Mahogany", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" },
+        { id = "yew", name = "Yew", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" }
+    }
 }
--- Placeholder definitions for other resources (to avoid fallback icon)
-ResourceItems["copper"] = { name = "Copper", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" }
-ResourceItems["iron"] = { name = "Iron", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" }
-ResourceItems["steel"] = { name = "Steel", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" }
-ResourceItems["titanium"] = { name = "Titanium", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" }
-ResourceItems["emerald"] = { name = "Emerald", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" }
-ResourceItems["ruby"] = { name = "Ruby", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" }
-ResourceItems["sapphire"] = { name = "Sapphire", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" }
-ResourceItems["obsidian"] = { name = "Obsidian", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" }
-ResourceItems["diamond"] = { name = "Diamond", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" }
-ResourceItems["ash"] = { name = "Ash", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" }
-ResourceItems["birch"] = { name = "Birch", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" }
-ResourceItems["oak"] = { name = "Oak", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" }
-ResourceItems["mahogany"] = { name = "Mahogany", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" }
-ResourceItems["yew"] = { name = "Yew", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" }
+for _, category in pairs(resourceTemplates) do
+    for _, data in ipairs(category) do
+        ResourceItems[data.id] = { name = data.name, icon = data.icon, model = data.model }
+    end
+end
 
--- Include shared items
 if file.Exists("modules/inventory/sh_items.lua", "LUA") then
     include("modules/inventory/sh_items.lua")
     if SERVER then AddCSLuaFile("modules/inventory/sh_items.lua") end
 end
 
--- Server-side logic
+PlayerInventories = PlayerInventories or {}
+
+function AddResourceToInventory(ply, resourceID, amount, silent)
+    if not IsValid(ply) or not ResourceItems[resourceID] then 
+        print("[Debug] AddResourceToInventory failed: Invalid ply or resourceID " .. tostring(resourceID))
+        return 
+    end
+    local steamID = ply:SteamID()
+    local inv = PlayerInventories[steamID] or { items = {}, resources = {} }
+    inv.resources[resourceID] = (inv.resources[resourceID] or 0) + (amount or 1)
+    PlayerInventories[steamID] = inv
+    if SERVER then
+        print("[Debug] AddResourceToInventory: Updated " .. steamID .. " resources to " .. table.ToString(inv.resources))
+        net.Start("SyncResources")
+        net.WriteTable(inv.resources)
+        net.Send(ply)
+        SavePlayerInventory(ply)
+        if not silent then SendInventoryMessage(ply, "Added " .. amount .. " " .. ResourceItems[resourceID].name .. " to your resources.") end
+    end
+end
+
 if SERVER then
-    local PlayerInventories = {}
     local PickupCooldown = {}
+    local allowedTools = { "button", "fading_door", "keypad_willox", "camera", "nocollide", "remover", "stacker" }
 
     hook.Remove("PlayerLoadout", "DarkRP_PlayerLoadout")
 
@@ -54,76 +77,16 @@ if SERVER then
         MySQLite.queueQuery([[
             CREATE TABLE IF NOT EXISTS darkrp_custom_inventory (
                 steamid VARCHAR(20) NOT NULL PRIMARY KEY,
-                items TEXT NOT NULL,
+                items TEXT NOT NULL DEFAULT '{}',
                 resources TEXT NOT NULL DEFAULT '{}'
-            );
-        ]])
-        MySQLite.queueQuery([[
-            ALTER TABLE darkrp_custom_inventory ADD COLUMN resources TEXT NOT NULL DEFAULT '{}'
-            WHERE NOT EXISTS (SELECT 1 FROM pragma_table_info('darkrp_custom_inventory') WHERE name = 'resources');
+            )
         ]])
         MySQLite.commit(function()
             print("[Custom Inventory] Table 'darkrp_custom_inventory' initialized or updated successfully!")
         end)
     end)
 
-    hook.Add("InitPostEntity", "DebugRPExtraTeams", function()
-        print("[Debug] RPExtraTeams count: " .. table.Count(RPExtraTeams))
-        for k, v in pairs(RPExtraTeams) do
-            print("[Debug] Team " .. k .. ": " .. v.name)
-        end
-    end)
-
-    -- Debug available tools on the server
-    hook.Add("InitPostEntity", "DebugServerTools", function()
-        timer.Simple(10, function()
-            print("[Debug] Running delayed tool check on server (10 seconds after starting):")
-            local toolList = list.Get("Tool")
-            if not toolList or table.IsEmpty(toolList) then
-                print("[Debug] Tool list is empty or nil on server (delayed check)!")
-            else
-                for toolClass, toolData in pairs(toolList) do
-                    print("[Debug] Server Tool: " .. toolClass .. " (Name: " .. (toolData.Name or "Unknown") .. ")")
-                end
-            end
-        end)
-    end)
-
-    -- Debug command to list server tools
-    concommand.Add("debug_server_tools", function(ply)
-        if not IsValid(ply) or not ply:IsSuperAdmin() then return end
-        local toolList = list.Get("Tool")
-        if not toolList or table.IsEmpty(toolList) then
-            ply:ChatPrint("[Debug] Server tool list is empty or nil!")
-        else
-            for toolClass, toolData in pairs(toolList) do
-                ply:ChatPrint("[Debug] Server Tool: " .. toolClass .. " (Name: " .. (toolData.Name or "Unknown") .. ")")
-            end
-        end
-    end)
-
-    -- Attempt to manually load tools if they're missing
-    local allowedTools = {
-        "button",
-        "fading_door",
-        "keypad_willox",
-        "camera",
-        "nocollide",
-        "remover",
-        "stacker",
-    }
-    for _, tool in ipairs(allowedTools) do
-        local toolFile = "weapons/gmod_tool/stools/" .. tool .. ".lua"
-        if file.Exists(toolFile, "LUA") then
-            AddCSLuaFile(toolFile)
-            include(toolFile)
-            print("[Debug] Manually loaded tool: " .. tool)
-        else
-            print("[Debug] Tool file not found: " .. toolFile)
-        end
-    end
-
-    local function SendInventoryMessage(ply, message)
+    function SendInventoryMessage(ply, message)
         if not IsValid(ply) then return end
         net.Start("InventoryMessage")
         net.WriteString(message)
@@ -134,17 +97,11 @@ if SERVER then
     local function LoadPlayerInventory(ply)
         if not IsValid(ply) then return end
         local steamID = ply:SteamID()
-        MySQLite.query([[
-            SELECT items, resources FROM darkrp_custom_inventory WHERE steamid = ]] .. MySQLite.SQLStr(steamID) .. [[
-        ]], function(data)
-            if data and data[1] then
-                PlayerInventories[steamID] = {
-                    items = util.JSONToTable(data[1].items or "{}") or {},
-                    resources = util.JSONToTable(data[1].resources or "{}") or {}
-                }
-            else
-                PlayerInventories[steamID] = { items = {}, resources = {} }
-            end
+        MySQLite.query("SELECT items, resources FROM darkrp_custom_inventory WHERE steamid = " .. MySQLite.SQLStr(steamID), function(data)
+            PlayerInventories[steamID] = data and data[1] and {
+                items = util.JSONToTable(data[1].items or "{}") or {},
+                resources = util.JSONToTable(data[1].resources or "{}") or {}
+            } or { items = {}, resources = {} }
             net.Start("SyncInventory")
             net.WriteTable(PlayerInventories[steamID].items)
             net.Send(ply)
@@ -157,57 +114,38 @@ if SERVER then
         end)
     end
 
-    local function SavePlayerInventory(ply)
+    function SavePlayerInventory(ply)
         if not IsValid(ply) then return end
         local steamID = ply:SteamID()
         local inv = PlayerInventories[steamID] or { items = {}, resources = {} }
-        local itemsJson = util.TableToJSON(inv.items)
-        local resourcesJson = util.TableToJSON(inv.resources)
-        MySQLite.query([[
-            REPLACE INTO darkrp_custom_inventory (steamid, items, resources) VALUES (]] .. 
-            MySQLite.SQLStr(steamID) .. [[, ]] .. MySQLite.SQLStr(itemsJson) .. [[, ]] .. MySQLite.SQLStr(resourcesJson) .. [[)
-        ]], nil, function(err)
+        MySQLite.query("REPLACE INTO darkrp_custom_inventory (steamid, items, resources) VALUES (" .. 
+            MySQLite.SQLStr(steamID) .. ", " .. MySQLite.SQLStr(util.TableToJSON(inv.items)) .. ", " .. 
+            MySQLite.SQLStr(util.TableToJSON(inv.resources)) .. ")", nil, function(err)
             print("[Custom Inventory] Error saving inventory for " .. steamID .. ": " .. err)
         end)
     end
 
-    function AddResourceToInventory(ply, resourceID, amount)
-        if not IsValid(ply) then return end
-        local steamID = ply:SteamID()
-        local inv = PlayerInventories[steamID] or { items = {}, resources = {} }
-        inv.resources[resourceID] = (inv.resources[resourceID] or 0) + (amount or 1)
-        PlayerInventories[steamID] = inv
-        net.Start("SyncResources")
-        net.WriteTable(inv.resources)
-        net.Send(ply)
-        SavePlayerInventory(ply)
-        SendInventoryMessage(ply, "Added " .. amount .. " " .. resourceID .. " to your resources.")
-    end
-
-    function RemoveResourceFromInventory(ply, resourceID, amount)
-        if not IsValid(ply) then return end
+    local function RemoveResourceFromInventory(ply, resourceID, amount)
+        if not IsValid(ply) or not ResourceItems[resourceID] then return end
         local steamID = ply:SteamID()
         local inv = PlayerInventories[steamID] or { items = {}, resources = {} }
         if not inv.resources[resourceID] or inv.resources[resourceID] < amount then return end
         inv.resources[resourceID] = inv.resources[resourceID] - amount
-        if inv.resources[resourceID] <= 0 then
-            inv.resources[resourceID] = nil
-        end
+        if inv.resources[resourceID] <= 0 then inv.resources[resourceID] = nil end
         PlayerInventories[steamID] = inv
         net.Start("SyncResources")
         net.WriteTable(inv.resources)
         net.Send(ply)
         SavePlayerInventory(ply)
-        SendInventoryMessage(ply, "Dropped " .. amount .. " " .. resourceID .. ".")
+        SendInventoryMessage(ply, "Dropped " .. amount .. " " .. ResourceItems[resourceID].name .. ".")
     end
 
-    function AddItemToInventory(ply, itemID, amount)
+    local function AddItemToInventory(ply, itemID, amount)
         if not IsValid(ply) or not InventoryItems[itemID] then return end
         local steamID = ply:SteamID()
         local inv = PlayerInventories[steamID] or { items = {}, resources = {} }
         local maxStack = InventoryItems[itemID].maxStack or 64
-        local newAmount = math.min((inv.items[itemID] or 0) + (amount or 1), maxStack)
-        inv.items[itemID] = newAmount
+        inv.items[itemID] = math.min((inv.items[itemID] or 0) + (amount or 1), maxStack)
         PlayerInventories[steamID] = inv
         net.Start("SyncInventory")
         net.WriteTable(inv.items)
@@ -222,9 +160,7 @@ if SERVER then
         local inv = PlayerInventories[steamID] or { items = {}, resources = {} }
         if not inv.items[itemID] or inv.items[itemID] < amount then return end
         inv.items[itemID] = inv.items[itemID] - amount
-        if inv.items[itemID] <= 0 then
-            inv.items[itemID] = nil
-        end
+        if inv.items[itemID] <= 0 then inv.items[itemID] = nil end
         PlayerInventories[steamID] = inv
         net.Start("SyncInventory")
         net.WriteTable(inv.items)
@@ -232,27 +168,28 @@ if SERVER then
         SavePlayerInventory(ply)
     end
 
-    concommand.Add("addresource", function(ply, cmd, args)
-        if not IsValid(ply) or not ply:IsSuperAdmin() then
-            SendInventoryMessage(ply, "You must be a superadmin to use this command.")
-            return
-        end
-        local resourceID = args[1]
-        local amount = tonumber(args[2]) or 1
-        if not resourceID then
-            SendInventoryMessage(ply, "Specify a resource ID (e.g., 'addresource rock 10').")
-            return
-        end
-        AddResourceToInventory(ply, resourceID, amount)
-    end)
-
-    concommand.Add("open_resources", function(ply)
-        if not IsValid(ply) then return end
-        local steamID = ply:SteamID()
-        local inv = PlayerInventories[steamID] or { items = {}, resources = {} }
-        net.Start("SyncResources")
-        net.WriteTable(inv.resources)
-        net.Send(ply)
+    hook.Add("Initialize", "PrepareToolLoading", function()
+        timer.Simple(5, function()
+            if not SWEP then print("[Error] SWEP global is nil!") return end
+            if file.Exists("weapons/gmod_tool/shared.lua", "LUA") then
+                AddCSLuaFile("weapons/gmod_tool/shared.lua")
+                include("weapons/gmod_tool/shared.lua")
+                print("[Debug] Loaded gmod_tool/shared.lua")
+            else
+                print("[Error] gmod_tool/shared.lua not found!")
+            end
+            if not TOOL then print("[Error] TOOL global is nil!") return end
+            for _, tool in ipairs(allowedTools) do
+                local toolFile = "weapons/gmod_tool/stools/" .. tool .. ".lua"
+                if file.Exists(toolFile, "LUA") then
+                    AddCSLuaFile(toolFile)
+                    include(toolFile)
+                    print("[Debug] Loaded tool: " .. tool)
+                else
+                    print("[Debug] Tool file not found: " .. toolFile)
+                end
+            end
+        end)
     end)
 
     net.Receive("DropItem", function(len, ply)
@@ -265,7 +202,7 @@ if SERVER then
         for i = 1, amount do
             local ent = ents.Create("prop_physics")
             if IsValid(ent) then
-                ent:SetModel(itemData.model)
+                ent:SetModel(itemData.model or "models/error.mdl")
                 ent:SetPos(ply:EyePos() + ply:GetForward() * 50 + Vector(0, 0, 10 * i))
                 ent:Spawn()
                 ent:SetNWString("ItemID", itemID)
@@ -294,726 +231,378 @@ if SERVER then
     net.Receive("DropResource", function(len, ply)
         local resourceID = net.ReadString()
         local amount = net.ReadUInt(16)
-        if amount < 1 then return end
-        RemoveResourceFromInventory(ply, resourceID, amount)
-
-        -- Spawn a single resource entity with the specified amount
-        local resourceData = ResourceItems[resourceID]
-        if not resourceData then return end
-        local trace = ply:GetEyeTrace()
-        local dropPos = trace.HitPos + Vector(0, 0, 10) -- Slightly above the ground
-        local resourceEnt = ents.Create("resource_item")
-        if IsValid(resourceEnt) then
-            resourceEnt:SetPos(dropPos)
-            resourceEnt:SetResourceType(resourceID)
-            resourceEnt:SetModel(resourceData.model or "models/props_junk/rock001a.mdl")
-            resourceEnt:SetAmount(amount) -- Set the amount on the entity
-            resourceEnt:Spawn()
-            resourceEnt:GetPhysicsObject():SetVelocity(ply:GetAimVector() * 100) -- Give it a slight push
+        print("[Debug] Dropping resource: " .. resourceID .. ", amount = " .. amount)
+        if not ResourceItems[resourceID] or amount < 1 then
+            print("[Inventory Error] Invalid resourceID or amount: " .. resourceID .. ", " .. amount)
+            return
         end
+        RemoveResourceFromInventory(ply, resourceID, amount)
+        local resourceData = ResourceItems[resourceID]
+        local entityMap = {
+            rock = "resource_item",
+            copper = "resource_copper",
+            iron = "resource_iron",
+            steel = "resource_steel",
+            titanium = "resource_titanium",
+            emerald = "resource_emerald",
+            ruby = "resource_ruby",
+            sapphire = "resource_sapphire",
+            obsidian = "resource_obsidian",
+            diamond = "resource_diamond"
+        }
+        local entClass = entityMap[resourceID] or "resource_item"
+        local ent = ents.Create(entClass)
+        if not IsValid(ent) then
+            print("[Inventory Error] Failed to create '" .. entClass .. "' for " .. resourceID)
+            return
+        end
+        ent:SetPos(ply:GetEyeTrace().HitPos + Vector(0, 0, 10))
+        ent:SetNWString("ResourceType", resourceID)
+        ent:SetModel(resourceData.model or "models/props_junk/rock001a.mdl")
+        ent:SetNWInt("Amount", amount)
+        ent:Spawn()
+        ent:GetPhysicsObject():SetVelocity(ply:GetAimVector() * 100)
+        print("[Debug] Spawned " .. entClass .. ": " .. resourceID .. ", amount = " .. amount)
     end)
 
-    hook.Add("PlayerInitialSpawn", "Inventory_InitInventory", function(ply)
-        if not IsValid(ply) then return end
-        LoadPlayerInventory(ply)
-        print("[Debug] InitialSpawn for " .. ply:Nick() .. " - Team: " .. ply:Team() .. " (" .. team.GetName(ply:Team()) .. ")")
-    end)
+    hook.Add("PlayerInitialSpawn", "Inventory_InitInventory", LoadPlayerInventory)
+    hook.Add("PlayerDisconnected", "SaveInventoryOnDisconnect", SavePlayerInventory)
 
     hook.Add("PlayerSpawn", "Inventory_SetupTeam", function(ply)
         if not IsValid(ply) then return end
         local currentTeam = ply:Team()
         local defaultTeam = TEAM_CITIZEN or 1
         if not RPExtraTeams[currentTeam] or currentTeam == TEAM_UNASSIGNED then
-            if RPExtraTeams[defaultTeam] then
-                ply:changeTeam(defaultTeam, true)
-                print("[Debug] Forced " .. ply:Nick() .. " to TEAM_CITIZEN (Team " .. defaultTeam .. ") in PlayerSpawn")
-            else
-                for teamID, job in pairs(RPExtraTeams) do
-                    if job and teamID then
-                        ply:changeTeam(teamID, true)
-                        print("[Debug] Forced " .. ply:Nick() .. " to fallback team " .. teamID .. " (" .. job.name .. ") in PlayerSpawn")
-                        break
-                    end
-                end
-            end
+            ply:changeTeam(RPExtraTeams[defaultTeam] and defaultTeam or next(RPExtraTeams), true)
         end
-        print("[Debug] Team after spawn: " .. ply:Team() .. " (" .. team.GetName(ply:Team()) .. ")")
     end)
 
     hook.Add("PlayerLoadout", "Inventory_GiveLoadout", function(ply)
         if not IsValid(ply) then return end
-        print("[Debug] Running Custom PlayerLoadout for " .. ply:Nick() .. " - Team: " .. ply:Team())
-        for k, v in pairs(GAMEMODE.Config.DefaultWeapons) do
-            ply:Give(v)
-        end
-        local team = ply:Team()
-        local jobTable = RPExtraTeams[team]
-        if jobTable then
-            if jobTable.weapons then
-                for k, v in pairs(jobTable.weapons) do
-                    ply:Give(v)
-                end
-            end
-        else
-            print("[Warning] " .. ply:Nick() .. " has invalid team " .. team .. " in PlayerLoadout")
+        for _, wep in pairs(GAMEMODE.Config.DefaultWeapons) do ply:Give(wep) end
+        local jobTable = RPExtraTeams[ply:Team()]
+        if jobTable and jobTable.weapons then
+            for _, wep in pairs(jobTable.weapons) do ply:Give(wep) end
         end
         return true
     end, -20)
 
-    hook.Add("PlayerDisconnected", "SaveInventoryOnDisconnect", function(ply)
-        SavePlayerInventory(ply)
-    end)
-
     hook.Add("PlayerUse", "PickupInventoryItem", function(ply, ent)
+        if ent:GetClass():match("^resource_") then return end
         local itemID = ent:GetNWString("ItemID")
-        if not itemID or itemID == "" then return end
-        if InventoryItems[itemID] then
-            AddItemToInventory(ply, itemID, 1)
-            ent:Remove()
-            SendInventoryMessage(ply, "Picked up 1 " .. InventoryItems[itemID].name .. ".")
-            return true
-        else
-            local entIndex = ent:EntIndex()
+        if not itemID or itemID == "" or not InventoryItems[itemID] then
             local steamID = ply:SteamID()
             PickupCooldown[steamID] = PickupCooldown[steamID] or {}
-            local lastMessageTime = PickupCooldown[steamID][entIndex] or 0
-            if CurTime() - lastMessageTime > 5 then
+            if CurTime() - (PickupCooldown[steamID][ent:EntIndex()] or 0) > 5 then
                 SendInventoryMessage(ply, "You cannot pick up this item.")
-                PickupCooldown[steamID][entIndex] = CurTime()
+                PickupCooldown[steamID][ent:EntIndex()] = CurTime()
             end
-        end
-    end)
-
-    concommand.Add("additem", function(ply, cmd, args)
-        if IsValid(ply) and not ply:IsSuperAdmin() then
-            SendInventoryMessage(ply, "You must be a superadmin to use this command.")
             return
         end
-        local itemID = args[1]
-        local amount = tonumber(args[2]) or 1
-        AddItemToInventory(ply, itemID, amount)
+        AddItemToInventory(ply, itemID, 1)
+        ent:Remove()
+        SendInventoryMessage(ply, "Picked up 1 " .. InventoryItems[itemID].name .. ".")
+        return true
+    end)
+
+    concommand.Add("addresource", function(ply, _, args)
+        if not IsValid(ply) or not ply:IsSuperAdmin() then return SendInventoryMessage(ply, "Superadmin only.") end
+        local resourceID, amount = args[1], tonumber(args[2]) or 1
+        if not resourceID then return SendInventoryMessage(ply, "Specify a resource ID.") end
+        AddResourceToInventory(ply, resourceID, amount)
+    end)
+
+    concommand.Add("additem", function(ply, _, args)
+        if not IsValid(ply) or not ply:IsSuperAdmin() then return SendInventoryMessage(ply, "Superadmin only.") end
+        AddItemToInventory(ply, args[1], tonumber(args[2]) or 1)
+    end)
+
+    concommand.Add("open_resources", function(ply)
+        if not IsValid(ply) then return end
+        net.Start("SyncResources")
+        net.WriteTable(PlayerInventories[ply:SteamID()] and PlayerInventories[ply:SteamID()].resources or {})
+        net.Send(ply)
     end)
 end
 
--- Client-side logic
 if CLIENT then
-    local Resources = {}
-    local Inventory = {}
-    local InventoryFrame = nil
-    local ToolSelectorFrame = nil
-    local isInventoryOpen = false
-    local isToolSelectorOpen = false
-    local isQKeyHeld = false -- Track whether the Q key is being held
-    local currentTooltip = nil -- Track the active tooltip
-    local resourcesTab = nil -- Store a reference to the resources tab
-
-    -- List of allowed tools
-    local allowedTools = {
-        "button",
-        "fading_door",
-        "keypad_willox",
-        "camera",
-        "nocollide",
-        "remover"
-    }
-
-    -- Debug available tools early on client initialization
-    hook.Add("InitPostEntity", "DebugAvailableTools", function()
-        print("[Debug] Available tools in list.Get('Tool') at InitPostEntity:")
-        local toolList = list.Get("Tool")
-        if not toolList or table.IsEmpty(toolList) then
-            print("[Debug] Tool list is empty or nil!")
-        else
-            for toolClass, toolData in pairs(toolList) do
-                print("[Debug] Tool: " .. toolClass .. " (Name: " .. (toolData.Name or "Unknown") .. ")")
-            end
-        end
-    end)
-
-    -- Debug available tools after joining
-    hook.Add("InitPostEntity", "DebugAvailableToolsDelayed", function()
-        timer.Simple(10, function()
-            print("[Debug] Running delayed tool check (10 seconds after joining):")
-            print("[Debug] Available tools in list.Get('Tool'):")
-            local toolList = list.Get("Tool")
-            if not toolList or table.IsEmpty(toolList) then
-                print("[Debug] Tool list is empty or nil!")
-            else
-                for toolClass, toolData in pairs(toolList) do
-                    print("[Debug] Tool: " .. toolClass .. " (Name: " .. (toolData.Name or "Unknown") .. ")")
-                end
-            end
-        end)
-    end)
+    local Resources, Inventory = {}, {}
+    local InventoryFrame, ToolSelectorFrame
+    local isInventoryOpen, isToolSelectorOpen, isQKeyHeld = false, false, false
+    local currentTooltip
+    local resourcesTab
+    local allowedTools = { "button", "fading_door", "keypad_willox", "camera", "nocollide", "remover", "stacker" }
+    local activeMenus = {}
 
     local function OpenToolSelector()
-        print("[Debug] OpenToolSelector started")
-
-        -- If the menu is already open, don't create a new one
-        if isToolSelectorOpen and IsValid(ToolSelectorFrame) then
-            print("[Debug] ToolSelectorFrame already open, skipping creation")
-            return
-        elseif ToolSelectorFrame ~= nil then
-            print("[Debug] ToolSelectorFrame was invalid, resetting")
-            ToolSelectorFrame = nil
-        end
-
-        -- Ensure the screen clicker is enabled
+        if isToolSelectorOpen and IsValid(ToolSelectorFrame) then return end
         gui.EnableScreenClicker(true)
-        print("[Debug] gui.EnableScreenClicker(true) called for Tool Selector")
-
-        -- Create the tool selector frame
         ToolSelectorFrame = vgui.Create("DFrame")
-        print("[Debug] ToolSelectorFrame created: " .. tostring(ToolSelectorFrame))
-        print("[Debug] IsValid(ToolSelectorFrame): " .. tostring(IsValid(ToolSelectorFrame)))
-
-        ToolSelectorFrame:SetSize(300, 650) -- Match the height of the inventory menu
-        ToolSelectorFrame:SetPos(ScrW()/2 + 510, ScrH()/2 - 325) -- Position to the right of the inventory menu
+        ToolSelectorFrame:SetSize(300, 650)
+        ToolSelectorFrame:SetPos(ScrW()/2 + 510, ScrH()/2 - 325)
         ToolSelectorFrame:SetTitle("Tool Selector")
-        ToolSelectorFrame:SetDraggable(false) -- Make non-draggable
-        ToolSelectorFrame:ShowCloseButton(false) -- No close button, closes with inventory
-        ToolSelectorFrame:SetVisible(true)
+        ToolSelectorFrame:SetDraggable(false)
+        ToolSelectorFrame:ShowCloseButton(false)
         ToolSelectorFrame:MakePopup()
-        print("[Debug] ToolSelectorFrame after MakePopup: " .. tostring(IsValid(ToolSelectorFrame)))
+        ToolSelectorFrame.Paint = function(self, w, h) draw.RoundedBox(8, 0, 0, w, h, Color(30, 30, 30, 225)) end
+        ToolSelectorFrame.OnClose = function() gui.EnableScreenClicker(false) isToolSelectorOpen = false ToolSelectorFrame = nil end
 
-        -- Explicitly set focus on the Tool Selector menu
-        ToolSelectorFrame:SetMouseInputEnabled(true)
-        ToolSelectorFrame:SetKeyboardInputEnabled(true)
-        ToolSelectorFrame:RequestFocus()
-        print("[Debug] Focus requested on ToolSelectorFrame")
-        print("[Debug] ToolSelectorFrame has focus: " .. tostring(ToolSelectorFrame:HasFocus()))
-
-        ToolSelectorFrame.OnClose = function()
-            gui.EnableScreenClicker(false)
-            print("[Debug] gui.EnableScreenClicker(false) called (ToolSelectorFrame closed)")
-            isToolSelectorOpen = false
-            ToolSelectorFrame = nil
-            print("[Debug] ToolSelectorFrame closed")
-            -- Reset VGUI focus to ensure no lingering focus issues
-            if gui.IsGameUIVisible() then
-                gui.EnableScreenClicker(false)
-                gui.EnableScreenClicker(true)
-                print("[Debug] Reset VGUI focus after closing Tool Selector")
-            end
-        end
-
-        -- Match the color scheme to the inventory menu
-        ToolSelectorFrame.Paint = function(self, w, h)
-            draw.RoundedBox(8, 0, 0, w, h, Color(30, 30, 30, 225)) -- Match inventory frame background
-        end
-
-        local x, y = ToolSelectorFrame:GetPos()
-        print("[Debug] ToolSelectorFrame position: " .. x .. ", " .. y)
-
-        -- Create a scroll panel for the tools
         local scroll = vgui.Create("DScrollPanel", ToolSelectorFrame)
         scroll:Dock(FILL)
-        print("[Debug] Tool scroll panel created")
-
-        -- Create a category for the tools
         local cat = vgui.Create("DCollapsibleCategory", scroll)
         cat:Dock(TOP)
         cat:SetLabel("Tools")
         cat:SetExpanded(true)
-        cat:DockMargin(0, 0, 0, 5)
-
         local toolList = vgui.Create("DPanelList", cat)
         toolList:EnableVerticalScrollbar(true)
-        toolList:SetTall(600) -- Adjust to fit the frame
+        toolList:SetTall(600)
         toolList:Dock(FILL)
         cat:SetContents(toolList)
-        print("[Debug] Tool list created")
 
-        -- Fallback tool names in case list.Get("Tool") is empty
-        local toolNames = {
-            button = "Button",
-            fading_door = "Fading Door",
-            keypad_willox = "Keypad",
-            camera = "Camera",
-            nocollide = "No-Collide",
-            remover = "Remover"
+        local toolNames = { 
+            button = "Button", 
+            fading_door = "Fading Door", 
+            keypad_willox = "Keypad", 
+            camera = "Camera", 
+            nocollide = "No-Collide", 
+            remover = "Remover", 
+            stacker = "Stacker" 
         }
-
-        -- Debug the tool list before creating buttons
-        local toolDataList = list.Get("Tool")
-        print("[Debug] Checking available tools before creating buttons:")
-        if not toolDataList or table.IsEmpty(toolDataList) then
-            print("[Debug] Tool list is empty or nil in OpenToolSelector!")
-        else
-            for toolClass, toolData in pairs(toolDataList) do
-                print("[Debug] Available Tool: " .. toolClass .. " (Name: " .. (toolData.Name or "Unknown") .. ")")
-            end
-        end
-
-        -- Add buttons for each allowed tool
         for _, toolClass in ipairs(allowedTools) do
             local toolData = list.Get("Tool")[toolClass]
-            local toolName = toolData and toolData.Name or toolNames[toolClass] or toolClass
-
-            -- Debug: Log tool availability
-            if not toolData then
-                print("[Error] Tool not found in list.Get('Tool'): " .. toolClass)
-            else
-                print("[Debug] Tool found: " .. toolClass .. " (Name: " .. toolName .. ")")
-            end
-
-            local toolButton = vgui.Create("DButton")
-            toolButton:SetText(toolName)
-            toolButton:Dock(TOP)
-            toolButton:SetHeight(25)
-            toolButton.DoClick = function()
-                -- Ensure the toolgun is equipped
+            local btn = vgui.Create("DButton")
+            btn:SetText(toolData and toolData.Name or toolNames[toolClass] or toolClass)
+            btn:Dock(TOP)
+            btn:SetHeight(25)
+            btn.DoClick = function()
                 RunConsoleCommand("use", "gmod_tool")
-                print("[Debug] Ran 'use gmod_tool' to ensure toolgun is equipped")
-
-                -- Check the active weapon after attempting to equip the toolgun
-                timer.Simple(0.05, function()
-                    local activeWeapon = LocalPlayer():GetActiveWeapon()
-                    if IsValid(activeWeapon) then
-                        print("[Debug] Active weapon after 'use gmod_tool': " .. activeWeapon:GetClass())
-                    else
-                        print("[Debug] No active weapon after 'use gmod_tool'!")
-                    end
-                end)
-
-                -- Update the player's tool mode
                 RunConsoleCommand("gmod_toolmode", toolClass)
                 RunConsoleCommand("gmod_tool", toolClass)
-                print("[Debug] Selected tool: " .. toolClass)
-
-                -- Ensure tool mode updates
-                timer.Simple(0.1, function()
-                    local currentMode = GetConVarString("gmod_toolmode")
-                    print("[Debug] Current tool mode after delay: " .. currentMode)
-                    if currentMode ~= toolClass then
-                        print("[Debug] Tool mode did not update to " .. toolClass .. ", forcing again")
-                        RunConsoleCommand("use", "gmod_tool")
-                        RunConsoleCommand("gmod_toolmode", toolClass)
-                        RunConsoleCommand("gmod_tool", toolClass)
-
-                        -- Additional debug for Keypad specifically
-                        if toolClass == "keypad" then
-                            print("[Debug] Keypad tool mode still not set. Current mode: " .. (currentMode or "nil"))
-                            local toolList = list.Get("Tool")
-                            if toolList["keypad"] then
-                                print("[Debug] Keypad tool exists in tool list, but mode not set!")
-                            else
-                                print("[Debug] Keypad tool does not exist in tool list!")
-                            end
-                        end
-                    end
-                end)
-
-                -- Play a sound for tool selection
                 surface.PlaySound("buttons/button14.wav")
             end
-            -- Match the button color scheme to the inventory menu
-            toolButton.Paint = function(self, w, h)
-                draw.RoundedBox(8, 0, 0, w, h, Color(50, 50, 50, 240)) -- Match inventory tab background
-                if self:IsHovered() then
-                    draw.RoundedBox(8, 0, 0, w, h, Color(70, 70, 70, 240)) -- Slightly lighter on hover
-                end
+            btn.Paint = function(self, w, h)
+                draw.RoundedBox(8, 0, 0, w, h, self:IsHovered() and Color(70, 70, 70, 240) or Color(50, 50, 50, 240))
             end
-            toolList:AddItem(toolButton)
-            print("[Debug] Added tool button: " .. toolName)
+            toolList:AddItem(btn)
         end
-
         isToolSelectorOpen = true
-        print("[Debug] Frame valid: " .. tostring(IsValid(ToolSelectorFrame)))
-        print("[Debug] Frame visible: " .. tostring(ToolSelectorFrame:IsVisible()))
-        print("[Debug] OpenToolSelector completed")
     end
 
     local function BuildInventoryUI(parent)
-        if not IsValid(parent) then
-            print("[Debug] BuildInventoryUI: Parent is nil or invalid, aborting")
-            return
-        end
-        print("[Debug] Building Inventory UI")
-        -- Clear existing children to prevent lingering panels
-        for _, child in pairs(parent:GetChildren()) do
-            child:Remove()
-        end
-        print("[Debug] Cleared existing children from inventory tab")
-
+        if not IsValid(parent) then return end
+        for _, child in pairs(parent:GetChildren()) do child:Remove() end
         local scroll = vgui.Create("DScrollPanel", parent)
         scroll:Dock(FILL)
-        print("[Debug] Scroll panel created")
-
         local layout = vgui.Create("DIconLayout", scroll)
         layout:Dock(FILL)
         layout:SetSpaceX(8)
         layout:SetSpaceY(8)
-        print("[Debug] Layout created")
-
-        local activeMenu = nil
 
         for itemID, amount in pairs(Inventory) do
-            if InventoryItems[itemID] then
-                local itemPanel = layout:Add("DPanel")
-                itemPanel:SetSize(90, 101)
-                itemPanel.Paint = function(self, w, h)
-                    draw.RoundedBox(4, 0, 0, w, h, Color(30, 30, 30, 200))
-                end
-                print("[Debug] Item panel created for " .. itemID)
+            if not InventoryItems[itemID] then continue end
+            local panel = layout:Add("DPanel")
+            panel:SetSize(90, 101)
+            panel.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(30, 30, 30, 200)) end
 
-                local model = vgui.Create("DModelPanel", itemPanel)
-                model:SetSize(70, 70)
-                model:SetPos(10, 5)
-                model:SetModel(InventoryItems[itemID].model or "models/error.mdl")
-                model:SetFOV(20)
-                model:SetCamPos(Vector(15, 15, 15))
-                model:SetLookAt(Vector(0, 0, 0))
-                local x, y = model:GetPos()
-                print("[Debug] DModelPanel created for " .. itemID .. " at position " .. x .. ", " .. y)
-                model.OnMousePressed = function(self, code)
-                    if code == MOUSE_LEFT then
-                        if IsValid(activeMenu) then
-                            activeMenu:Remove()
-                        end
-                        local menu = DermaMenu()
-                        menu:AddOption("Use", function()
-                            print("[Debug] Selected Use for " .. itemID)
-                            net.Start("UseItem")
-                            net.WriteString(itemID)
-                            net.SendToServer()
-                        end)
-                        menu:AddOption("Drop", function()
-                            print("[Debug] Selected Drop for " .. itemID)
-                            net.Start("DropItem")
-                            net.WriteString(itemID)
-                            net.WriteUInt(1, 8)
-                            net.SendToServer()
-                        end)
-                        menu:AddOption("Delete", function()
-                            print("[Debug] Selected Delete for " .. itemID)
-                            net.Start("DeleteItem")
-                            net.WriteString(itemID)
-                            net.WriteUInt(1, 8)
-                            net.SendToServer()
-                        end)
-                        local x, y = self:LocalToScreen(10, 71)
-                        menu:Open(x, y)
-                        activeMenu = menu
-                        menu.OnRemove = function()
-                            activeMenu = nil
+            local model = vgui.Create("DModelPanel", panel)
+            model:SetSize(70, 70)
+            model:SetPos(10, 5)
+            model:SetModel(InventoryItems[itemID].model or "models/error.mdl")
+            model:SetFOV(20)
+            model:SetCamPos(Vector(15, 15, 15))
+            model:SetLookAt(Vector(0, 0, 0))
+            model.OnMousePressed = function(self, code)
+                if code ~= MOUSE_LEFT or not isInventoryOpen then return end
+                local menu = DermaMenu()
+                table.insert(activeMenus, menu)
+                if InventoryItems[itemID].useFunction then
+                    menu:AddOption("Use", function()
+                        if not isInventoryOpen then return end
+                        net.Start("UseItem")
+                        net.WriteString(itemID)
+                        net.SendToServer()
+                    end)
+                end
+                menu:AddOption("Drop", function()
+                    if not isInventoryOpen then return end
+                    net.Start("DropItem")
+                    net.WriteString(itemID)
+                    net.WriteUInt(1, 8)
+                    net.SendToServer()
+                end)
+                menu:AddOption("Delete", function()
+                    if not isInventoryOpen then return end
+                    net.Start("DeleteItem")
+                    net.WriteString(itemID)
+                    net.WriteUInt(1, 8)
+                    net.SendToServer()
+                end)
+                menu:Open(self:LocalToScreen(10, 71))
+                menu.OnRemove = function()
+                    for i, m in ipairs(activeMenus) do
+                        if m == menu then
+                            table.remove(activeMenus, i)
+                            break
                         end
                     end
                 end
-
-                local name = vgui.Create("DLabel", itemPanel)
-                name:SetText(InventoryItems[itemID].name .. " x" .. amount)
-                name:SetPos(10, 76)
-                name:SizeToContents()
-                name.Think = function(self)
-                    local currentAmount = Inventory[itemID] or 0
-                    self:SetText(InventoryItems[itemID].name .. " x" .. currentAmount)
-                end
-                local x, y = name:GetPos()
-                print("[Debug] Label created for " .. itemID .. " at position " .. x .. ", " .. y)
-            else
-                print("[Inventory Error] Unknown item ID: " .. itemID)
             end
+
+            local label = vgui.Create("DLabel", panel)
+            label:SetPos(10, 76)
+            label:SetText(InventoryItems[itemID].name .. " x" .. amount)
+            label:SizeToContents()
+            label.Think = function(self) self:SetText(InventoryItems[itemID].name .. " x" .. (Inventory[itemID] or 0)) end
         end
-        print("[Debug] Inventory UI built")
     end
 
     local function BuildResourcesMenu(parent)
-        if not IsValid(parent) then
-            print("[Debug] BuildResourcesMenu: Parent is nil or invalid, aborting")
-            return
-        end
-        print("[Debug] Building Resources UI")
-        -- Clear existing children to prevent lingering panels
-        for _, child in pairs(parent:GetChildren()) do
-            child:Remove()
-        end
-        print("[Debug] Cleared existing children from resources tab")
-
+        if not IsValid(parent) then return end
+        for _, child in pairs(parent:GetChildren()) do child:Remove() end
         local scroll = vgui.Create("DScrollPanel", parent)
         scroll:Dock(FILL)
-        print("[Debug] Resources scroll panel created")
-
-        local categories = {
-            { name = "Minerals", items = { "rock", "copper", "iron", "steel", "titanium" } },
-            { name = "Gems", items = { "emerald", "ruby", "sapphire", "obsidian", "diamond" } },
-            { name = "Lumber", items = { "ash", "birch", "oak", "mahogany", "yew" } }
-        }
-
         local layout = vgui.Create("DIconLayout", scroll)
         layout:Dock(FILL)
         layout:SetSpaceX(10)
         layout:SetSpaceY(10)
-        print("[Debug] Resources layout created")
 
-        for _, category in ipairs(categories) do
+        local resourceColors = {
+            rock = Color(100, 100, 100), -- Gray for rock
+            copper = Color(184, 115, 51) -- Copper color
+            -- Add others later
+        }
+
+        local categories = {
+            { name = "Minerals", items = resourceTemplates.minerals },
+            { name = "Gems", items = resourceTemplates.gems },
+            { name = "Lumber", items = resourceTemplates.lumber }
+        }
+        for _, cat in ipairs(categories) do
             local catPanel = layout:Add("DPanel")
-            catPanel:SetSize(240, 40 + #category.items * 40)
-            catPanel.Paint = function(self, w, h)
-                draw.RoundedBox(4, 0, 0, w, h, Color(40, 40, 40, 200))
-            end
+            catPanel:SetSize(240, 40 + table.Count(cat.items) * 40)
+            catPanel.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(40, 40, 40, 200)) end
 
             local catLabel = vgui.Create("DLabel", catPanel)
             catLabel:SetPos(10, 10)
-            catLabel:SetText(category.name)
+            catLabel:SetText(cat.name)
             catLabel:SetSize(220, 20)
             catLabel:SetColor(Color(255, 215, 0))
 
-            for i, resourceID in ipairs(category.items) do
+            local i = 1
+            for _, data in ipairs(cat.items) do
+                local resourceID = data.id
                 local resPanel = vgui.Create("DPanel", catPanel)
                 resPanel:SetPos(10, 30 + (i - 1) * 40)
                 resPanel:SetSize(220, 30)
-                resPanel.Paint = function(self, w, h)
-                    draw.RoundedBox(4, 0, 0, w, h, Color(30, 30, 30, 200))
-                end
+                resPanel.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(30, 30, 30, 200)) end
 
-                local resourceData = ResourceItems[resourceID] or { name = resourceID, icon = "icon16/error.png" }
-                local displayName = resourceData.name or (string.upper(resourceID:sub(1,1)) .. resourceID:sub(2))
-
-                -- Use DModelPanel for rock, DImage for others
-                local resIcon
-                if resourceID == "rock" then
-                    resIcon = vgui.Create("DModelPanel", resPanel)
-                    resIcon:SetSize(20, 20)
-                    resIcon:SetPos(5, 5)
-                    resIcon:SetModel(resourceData.icon)
-                    resIcon:SetFOV(20)
-                    resIcon:SetCamPos(Vector(15, 15, 15))
-                    resIcon:SetLookAt(Vector(0, 0, 0))
-                else
-                    resIcon = vgui.Create("DImage", resPanel)
-                    resIcon:SetPos(5, 5)
-                    resIcon:SetSize(20, 20)
-                    resIcon:SetImage(resourceData.icon)
-                end
-
-                -- Custom tooltip (fixed position)
+                local resIcon = vgui.Create("DModelPanel", resPanel)
+                resIcon:SetPos(5, 5)
+                resIcon:SetSize(20, 20)
+                resIcon:SetModel(data.icon)
+                resIcon:SetFOV(20)
+                resIcon:SetCamPos(Vector(15, 15, 15))
+                resIcon:SetLookAt(Vector(0, 0, 0))
+                resIcon:SetMaterial("models/shiny")
+                resIcon:SetColor(resourceColors[resourceID] or Color(255, 255, 255)) -- Default white if undefined
                 resIcon.OnCursorEntered = function(self)
-                    if IsValid(currentTooltip) then
-                        currentTooltip:Remove()
-                    end
-                    if not IsValid(InventoryFrame) then return end
-                    currentTooltip = vgui.Create("DLabel", InventoryFrame)
-                    currentTooltip:SetText(displayName)
-                    currentTooltip:SetFont("DermaDefault")
-                    currentTooltip:SetTextColor(Color(255, 255, 255))
-                    currentTooltip:SetContentAlignment(5)
+                    if IsValid(currentTooltip) then currentTooltip:Remove() end
+                    currentTooltip = vgui.Create("DLabel", resPanel)
+                    currentTooltip:SetText(data.name)
+                    currentTooltip:SetPos(25, 5)
                     currentTooltip:SetSize(100, 20)
-                    -- Position the tooltip to the right of the icon
-                    local iconX, iconY = self:LocalToScreen(0, 0)
-                    currentTooltip:SetPos(iconX + 25, iconY) -- 25 pixels to the right of the icon
-                    currentTooltip:SetZPos(10000) -- High ZPos to ensure it's above the menu
-                    currentTooltip.Paint = function(self, w, h)
-                        draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240))
-                    end
+                    currentTooltip:SetZPos(10000)
+                    currentTooltip.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240)) end
                 end
-                resIcon.OnCursorExited = function(self)
-                    if IsValid(currentTooltip) then
-                        currentTooltip:Remove()
-                        currentTooltip = nil
-                    end
-                end
-                -- Remove the Think function since we don't need to update the position dynamically
-                -- The tooltip will stay in place next to the icon
-
-                -- Drop behavior: Left-click to drop 1, right-click to drop X
+                resIcon.OnCursorExited = function() if IsValid(currentTooltip) then currentTooltip:Remove() currentTooltip = nil end end
                 resIcon.OnMousePressed = function(self, code)
                     if (Resources[resourceID] or 0) <= 0 then return end
-
                     if code == MOUSE_LEFT then
-                        -- Left-click: Drop 1 resource
                         net.Start("DropResource")
                         net.WriteString(resourceID)
                         net.WriteUInt(1, 16)
                         net.SendToServer()
                     elseif code == MOUSE_RIGHT then
-                        -- Right-click: Open a popup to drop X amount
-                        Derma_StringRequest(
-                            "Drop " .. displayName,
-                            "How many " .. displayName .. "s would you like to drop? (Max: " .. (Resources[resourceID] or 0) .. ")",
-                            "1",
+                        Derma_StringRequest("Drop " .. data.name, "How many to drop? (Max: " .. (Resources[resourceID] or 0) .. ")", "1",
                             function(text)
-                                local amount = tonumber(text)
-                                if not amount or amount < 1 then
-                                    chat.AddText(Color(255, 215, 0), "[Inventory] ", Color(255, 255, 255), "Invalid amount entered.")
-                                    return
-                                end
-                                amount = math.floor(amount) -- Ensure it's an integer
-                                amount = math.min(amount, Resources[resourceID] or 0) -- Cap at available amount
+                                local amount = math.min(math.floor(tonumber(text) or 0), Resources[resourceID] or 0)
                                 if amount > 0 then
                                     net.Start("DropResource")
                                     net.WriteString(resourceID)
                                     net.WriteUInt(amount, 16)
                                     net.SendToServer()
                                 end
-                            end,
-                            function() end, -- Cancel callback
-                            "Drop",
-                            "Cancel"
-                        )
+                            end, nil, "Drop", "Cancel")
                     end
                 end
 
-                -- Amount label
                 local resAmount = vgui.Create("DLabel", resPanel)
                 resAmount:SetPos(30, 5)
                 resAmount:SetText(": " .. (Resources[resourceID] or 0))
                 resAmount:SetSize(180, 20)
-                resAmount:SetColor(Color(255, 255, 255))
-                resAmount.Think = function(self)
-                    local currentAmount = Resources[resourceID] or 0
-                    self:SetText(": " .. currentAmount)
-                end
+                resAmount.Think = function(self) self:SetText(": " .. (Resources[resourceID] or 0)) end
+                i = i + 1
             end
         end
-        print("[Debug] Resources UI built")
     end
 
     local function OpenCustomQMenu()
-        print("[Debug] OpenCustomQMenu started")
-        if isInventoryOpen and IsValid(InventoryFrame) then
-            print("[Debug] InventoryFrame already open, skipping creation")
-            return
-        elseif InventoryFrame ~= nil then
-            print("[Debug] InventoryFrame was invalid, resetting")
-            InventoryFrame = nil
-        end
-
+        if isInventoryOpen and IsValid(InventoryFrame) then return end
         gui.EnableScreenClicker(true)
         InventoryFrame = vgui.Create("DFrame")
-        print("[Debug] DFrame created")
         InventoryFrame:SetSize(1000, 650)
         InventoryFrame:SetPos(ScrW()/2 - 500, ScrH()/2 - 325)
         InventoryFrame:SetTitle("Inventory & Resources")
-        InventoryFrame:SetDraggable(false) -- Make non-draggable
-        InventoryFrame:ShowCloseButton(false) -- No close button, closes on Q release
-        InventoryFrame:SetVisible(true)
+        InventoryFrame:SetDraggable(false)
+        InventoryFrame:ShowCloseButton(false)
         InventoryFrame:MakePopup()
+        InventoryFrame.Paint = function(self, w, h) draw.RoundedBox(8, 0, 0, w, h, Color(30, 30, 30, 225)) end
         InventoryFrame.OnClose = function()
             gui.EnableScreenClicker(false)
-            for _, child in pairs(InventoryFrame:GetChildren()) do
-                child:Remove()
-            end
-            -- Clean up the tooltip when the menu closes
-            if IsValid(currentTooltip) then
-                currentTooltip:Remove()
-                currentTooltip = nil
-            end
             isInventoryOpen = false
+            if IsValid(currentTooltip) then currentTooltip:Remove() currentTooltip = nil end
+            for _, menu in ipairs(activeMenus) do
+                if IsValid(menu) then menu:Remove() end
+            end
+            activeMenus = {}
             InventoryFrame = nil
-            resourcesTab = nil -- Reset the reference
-            print("[Debug] InventoryFrame closed")
-
-            -- Close the Tool Selector menu when the inventory closes
-            print("[Debug] Checking ToolSelectorFrame: isToolSelectorOpen = " .. tostring(isToolSelectorOpen) .. ", ToolSelectorFrame = " .. tostring(ToolSelectorFrame))
-            if ToolSelectorFrame ~= nil then
-                print("[Debug] IsValid(ToolSelectorFrame): " .. tostring(IsValid(ToolSelectorFrame)))
-            end
-            if isToolSelectorOpen and ToolSelectorFrame ~= nil then
-                ToolSelectorFrame:Close()
-                ToolSelectorFrame = nil
-                isToolSelectorOpen = false
-                print("[Debug] ToolSelectorFrame closed with InventoryFrame")
-            else
-                print("[Debug] ToolSelectorFrame not closed: isToolSelectorOpen = " .. tostring(isToolSelectorOpen) .. ", ToolSelectorFrame = " .. tostring(ToolSelectorFrame))
-            end
-
-            -- Reset VGUI focus to ensure no lingering focus issues
-            if gui.IsGameUIVisible() then
-                gui.EnableScreenClicker(false)
-                gui.EnableScreenClicker(true)
-                print("[Debug] Reset VGUI focus after closing Inventory")
-            end
+            resourcesTab = nil
+            if isToolSelectorOpen and IsValid(ToolSelectorFrame) then ToolSelectorFrame:Close() end
         end
-        InventoryFrame.Paint = function(self, w, h)
-            draw.RoundedBox(8, 0, 0, w, h, Color(30, 30, 30, 225))
-        end
-        local x, y = InventoryFrame:GetPos()
-        print("[Debug] DFrame position: " .. x .. ", " .. y)
 
         local tabPanel = vgui.Create("DPropertySheet", InventoryFrame)
         tabPanel:Dock(FILL)
-        print("[Debug] Tab panel created")
-
         local inventoryTab = vgui.Create("DPanel", tabPanel)
-        inventoryTab.Paint = function(self, w, h)
-            draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240))
-        end
+        inventoryTab.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240)) end
         BuildInventoryUI(inventoryTab)
         tabPanel:AddSheet("Inventory", inventoryTab, "icon16/briefcase.png")
-        print("[Debug] Inventory tab added")
-
-        resourcesTab = vgui.Create("DPanel", tabPanel) -- Store the reference
-        resourcesTab.Paint = function(self, w, h)
-            draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240))
-        end
+        resourcesTab = vgui.Create("DPanel", tabPanel)
+        resourcesTab.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240)) end
         BuildResourcesMenu(resourcesTab)
         tabPanel:AddSheet("Resources", resourcesTab, "icon16/box.png")
-        print("[Debug] Resources tab added")
-
         isInventoryOpen = true
-        print("[Debug] Frame valid: " .. tostring(IsValid(InventoryFrame)))
-        print("[Debug] Frame visible: " .. tostring(InventoryFrame:IsVisible()))
-        print("[Debug] OpenCustomQMenu completed")
-
-        -- Open the Tool Selector menu alongside the inventory
         OpenToolSelector()
     end
 
-    -- Use PlayerBindPress to open the menu
-    hook.Add("PlayerBindPress", "CustomMenuBinds", function(ply, bind, pressed)
-        if bind == "+menu" then
-            print("[Debug] PlayerBindPress: +menu detected, pressed = " .. tostring(pressed))
-            if pressed then
-                print("[Debug] Q key pressed, opening custom menu")
-                isQKeyHeld = true
-                OpenCustomQMenu()
-            end
+    hook.Add("PlayerBindPress", "CustomMenuBinds", function(_, bind, pressed)
+        if bind == "+menu" and pressed then
+            isQKeyHeld = true
+            OpenCustomQMenu()
             return true
         end
     end)
 
-    -- Use a Think hook to check if the Q key is released
     hook.Add("Think", "CheckQKeyRelease", function()
-        -- Check if the Q key (or whatever key is bound to +menu) is no longer held
-        if isQKeyHeld and not input.IsKeyDown(KEY_Q) then
-            print("[Debug] Q key released (via Think hook), closing custom menu")
-            if isInventoryOpen and InventoryFrame ~= nil then
-                if IsValid(InventoryFrame) then
-                    InventoryFrame:Close() -- Use Close() instead of Remove() to trigger OnClose
-                else
-                    -- If the frame is invalid, ensure state is reset
-                    isInventoryOpen = false
-                    InventoryFrame = nil
-                    print("[Debug] InventoryFrame was invalid, state reset")
-                end
-            end
+        if isQKeyHeld and not input.IsKeyDown(KEY_Q) and isInventoryOpen and IsValid(InventoryFrame) then
+            InventoryFrame:Close()
             isQKeyHeld = false
         end
     end)
 
-    concommand.Add("open_inventory_menu", function()
-        print("[Debug] Manual command triggered")
-        OpenCustomQMenu()
-    end)
-
     net.Receive("SyncInventory", function()
         Inventory = net.ReadTable()
-        print("[Debug] Received inventory: " .. table.ToString(Inventory))
         if isInventoryOpen and IsValid(InventoryFrame) then
-            local tabPanel = InventoryFrame:GetChild(0)
-            if IsValid(tabPanel) then
-                local inventoryTab = tabPanel:GetChild(0)
-                if IsValid(inventoryTab) then
-                    BuildInventoryUI(inventoryTab)
-                else
-                    print("[Debug] SyncInventory: inventoryTab is nil or invalid")
-                end
-            else
-                print("[Debug] SyncInventory: tabPanel is nil or invalid")
-            end
-        else
-            print("[Debug] SyncInventory: InventoryFrame is nil or invalid")
+            BuildInventoryUI(InventoryFrame:GetChild(0):GetChild(0))
         end
     end)
 
@@ -1022,13 +611,12 @@ if CLIENT then
         print("[Debug] Received resources: " .. table.ToString(Resources))
         if isInventoryOpen and IsValid(InventoryFrame) and IsValid(resourcesTab) then
             BuildResourcesMenu(resourcesTab)
-        else
-            print("[Debug] SyncResources: InventoryFrame or resourcesTab is nil or invalid")
         end
     end)
 
     net.Receive("InventoryMessage", function()
-        local msg = net.ReadString()
-        chat.AddText(Color(255, 215, 0), "[Inventory] ", Color(255, 255, 255), msg)
+        chat.AddText(Color(255, 215, 0), "[Inventory] ", Color(255, 255, 255), net.ReadString())
     end)
+
+    concommand.Add("open_inventory_menu", OpenCustomQMenu)
 end

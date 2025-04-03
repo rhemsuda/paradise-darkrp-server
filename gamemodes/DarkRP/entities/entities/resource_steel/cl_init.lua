@@ -12,14 +12,14 @@ function ENT:Draw()
     local amount = self:GetNWInt("Amount")
     
     if not self.debugPrinted then
-        print("[Debug] resource_item: resourceID = " .. tostring(resourceID) .. ", amount = " .. tostring(amount))
+        print("[Debug] resource_steel: resourceID = " .. tostring(resourceID) .. ", amount = " .. tostring(amount))
         if not resourceID or resourceID == "" then
-            print("[Debug] resource_item: ResourceType is nil or empty!")
+            print("[Debug] resource_steel: ResourceType is nil or empty!")
         end
         if not ResourceItems then
-            print("[Debug] resource_item: ResourceItems is nil!")
+            print("[Debug] resource_steel: ResourceItems is nil!")
         elseif not ResourceItems[resourceID] then
-            print("[Debug] resource_item: ResourceItems[" .. tostring(resourceID) .. "] is nil!")
+            print("[Debug] resource_steel: ResourceItems[" .. tostring(resourceID) .. "] is nil!")
         end
         self.debugPrinted = true
     end

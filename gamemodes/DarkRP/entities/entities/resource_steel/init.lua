@@ -27,11 +27,11 @@ function ENT:Use(activator, caller)
     if not IsValid(activator) or not activator:IsPlayer() then return end
     local resourceID = self:GetNWString("ResourceType") -- Direct access for debugging
     local amount = self:GetNWInt("Amount")
-    print("[Debug] resource_item: Use called with resourceID = " .. tostring(resourceID) .. ", amount = " .. tostring(amount))
+    print("[Debug] resource_steel: Use called with resourceID = " .. tostring(resourceID) .. ", amount = " .. tostring(amount))
     if resourceID and resourceID != "" and amount > 0 then
         if SERVER then
             if AddResourceToInventory then
-                print("[Debug] resource_item: Calling AddResourceToInventory for " .. activator:Nick() .. " with " .. resourceID .. " x" .. amount)
+                print("[Debug] resource_steel: Calling AddResourceToInventory for " .. activator:Nick() .. " with " .. resourceID .. " x" .. amount)
                 AddResourceToInventory(activator, resourceID, amount, true)
                 activator:EmitSound("items/ammopickup.wav")
                 local resourceData = ResourceItems[resourceID] or { name = resourceID }
@@ -43,6 +43,6 @@ function ENT:Use(activator, caller)
             end
         end
     else
-        print("[Debug] resource_item: Invalid resourceID or amount!")
+        print("[Debug] resource_steel: Invalid resourceID or amount!")
     end
 end

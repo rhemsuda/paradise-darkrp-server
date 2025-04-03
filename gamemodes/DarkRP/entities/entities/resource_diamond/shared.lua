@@ -1,9 +1,9 @@
 ENT.Type = "anim"
 ENT.Base = "base_gmodentity"
-ENT.PrintName = "Resource Item"
-ENT.Author = "Paradise V1"
-ENT.Spawnable = false
-ENT.AdminSpawnable = false
+ENT.PrintName = "Diamond"
+ENT.Author = "Nick"
+ENT.Spawnable = true
+ENT.Category = "Resources"
 
 function ENT:SetupDataTables()
     self:NetworkVar("String", 0, "ResourceType")

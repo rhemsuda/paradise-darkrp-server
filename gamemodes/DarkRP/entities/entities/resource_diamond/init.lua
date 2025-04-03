@@ -2,6 +2,13 @@ AddCSLuaFile("cl_init.lua")
 AddCSLuaFile("shared.lua")
 include("shared.lua")
 
+ENT.Type = "anim"
+ENT.Base = "base_gmodentity"
+ENT.PrintName = "Diamond Resource"
+ENT.Author = "Nick"
+ENT.Spawnable = true
+ENT.Category = "Resources"
+
 function ENT:Initialize()
     self:SetModel("models/props_junk/rock001a.mdl")
     self:PhysicsInit(SOLID_VPHYSICS)
@@ -12,26 +19,23 @@ function ENT:Initialize()
     if IsValid(phys) then
         phys:Wake()
     end
-    self:SetNWInt("Amount", 1) -- Default amount
-end
+    self:SetNWString("ResourceType", "diamond") -- Set specific resource ID
+    self:SetNWInt("Amount", 1)
 
-function ENT:SetResourceType(resourceID)
-    self:SetNWString("ResourceType", resourceID)
-end
-
-function ENT:SetAmount(amount)
-    self:SetNWInt("Amount", amount)
+    self:SetMaterial("models/shiny")
+    self:SetColor(Color(240, 248, 255, 190))
+    self:SetRenderMode(RENDERMODE_TRANSCOLOR)
 end
 
 function ENT:Use(activator, caller)
     if not IsValid(activator) or not activator:IsPlayer() then return end
-    local resourceID = self:GetNWString("ResourceType") -- Direct access for debugging
+    local resourceID = self:GetNWString("ResourceType")
     local amount = self:GetNWInt("Amount")
-    print("[Debug] resource_item: Use called with resourceID = " .. tostring(resourceID) .. ", amount = " .. tostring(amount))
+    print("[Debug] resource_diamond: Use called with resourceID = " .. tostring(resourceID) .. ", amount = " .. tostring(amount))
     if resourceID and resourceID != "" and amount > 0 then
         if SERVER then
             if AddResourceToInventory then
-                print("[Debug] resource_item: Calling AddResourceToInventory for " .. activator:Nick() .. " with " .. resourceID .. " x" .. amount)
+                print("[Debug] resource_diamond: Calling AddResourceToInventory for " .. activator:Nick() .. " with " .. resourceID .. " x" .. amount)
                 AddResourceToInventory(activator, resourceID, amount, true)
                 activator:EmitSound("items/ammopickup.wav")
                 local resourceData = ResourceItems[resourceID] or { name = resourceID }
@@ -43,6 +47,6 @@ function ENT:Use(activator, caller)
             end
         end
     else
-        print("[Debug] resource_item: Invalid resourceID or amount!")
+        print("[Debug] resource_diamond: Invalid resourceID or amount!")
     end
 end
