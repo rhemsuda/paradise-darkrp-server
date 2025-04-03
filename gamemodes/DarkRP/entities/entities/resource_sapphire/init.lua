@@ -12,15 +12,12 @@ function ENT:Initialize()
     if IsValid(phys) then
         phys:Wake()
     end
-    self:SetNWInt("Amount", 1) -- Default amount
-end
+    self:SetNWString("ResourceType", "sapphire") -- Set specific resource ID
+    self:SetNWInt("Amount", 1)
 
-function ENT:SetResourceType(resourceID)
-    self:SetNWString("ResourceType", resourceID)
-end
-
-function ENT:SetAmount(amount)
-    self:SetNWInt("Amount", amount)
+    self:SetMaterial("models/shiny")
+    self:SetColor(Color(0, 0, 255, 220))
+    self:SetRenderMode(RENDERMODE_TRANSCOLOR)
 end
 
 function ENT:Use(activator, caller)

@@ -12,14 +12,11 @@ function ENT:Initialize()
     if IsValid(phys) then
         phys:Wake()
     end
-    self:SetNWInt("Amount", 1) -- Default amount
-end
-
-self:SetNWString("ResourceType", "diamond") -- Set specific resource ID
+    self:SetNWString("ResourceType", "iron") -- Set specific resource ID
     self:SetNWInt("Amount", 1)
 
     self:SetMaterial("models/shiny")
-    self:SetColor(Color(0, 255, 127, 200))
+    self:SetColor(Color(169, 169, 169))
     self:SetRenderMode(RENDERMODE_TRANSCOLOR)
 end
 
