@@ -62,7 +62,23 @@ function AddResourceToInventory(ply, resourceID, amount, silent)
         net.WriteTable(inv.resources)
         net.Send(ply)
         SavePlayerInventory(ply)
-        if not silent then SendInventoryMessage(ply, "Mined a " .. ResourceItems[resourceID].name) end -- Changed message
+        if not silent then SendInventoryMessage(ply, "Mined a " .. ResourceItems[resourceID].name) end
+    end
+end
+
+function AddItemToInventory(ply, itemID, amount)
+    if not IsValid(ply) or not InventoryItems[itemID] then return end
+    local steamID = ply:SteamID()
+    local inv = PlayerInventories[steamID] or { items = {}, resources = {} }
+    local maxStack = InventoryItems[itemID].maxStack or 64
+    inv.items[itemID] = math.min((inv.items[itemID] or 0) + (amount or 1), maxStack)
+    PlayerInventories[steamID] = inv
+    if SERVER then
+        net.Start("SyncInventory")
+        net.WriteTable(inv.items)
+        net.Send(ply)
+        SavePlayerInventory(ply)
+        SendInventoryMessage(ply, "Added " .. amount .. " " .. InventoryItems[itemID].name .. "(s) to your inventory.")
     end
 end
 
@@ -139,23 +155,6 @@ if SERVER then
         SavePlayerInventory(ply)
         SendInventoryMessage(ply, "Dropped " .. amount .. " " .. ResourceItems[resourceID].name .. ".")
     end
-
-    -- Move this outside the SERVER block, near the top after PlayerInventories definition
-function AddItemToInventory(ply, itemID, amount)
-    if not IsValid(ply) or not InventoryItems[itemID] then return end
-    local steamID = ply:SteamID()
-    local inv = PlayerInventories[steamID] or { items = {}, resources = {} }
-    local maxStack = InventoryItems[itemID].maxStack or 64
-    inv.items[itemID] = math.min((inv.items[itemID] or 0) + (amount or 1), maxStack)
-    PlayerInventories[steamID] = inv
-    if SERVER then
-        net.Start("SyncInventory")
-        net.WriteTable(inv.items)
-        net.Send(ply)
-        SavePlayerInventory(ply)
-        SendInventoryMessage(ply, "Added " .. amount .. " " .. InventoryItems[itemID].name .. "(s) to your inventory.")
-    end
-end
 
     local function RemoveItemFromInventory(ply, itemID, amount)
         if not IsValid(ply) or not InventoryItems[itemID] then return end
@@ -344,9 +343,10 @@ if CLIENT then
     local resourcesTab
     local allowedTools = { "button", "fading_door", "keypad_willox", "camera", "nocollide", "remover", "stacker" }
     local activeMenus = {}
+    local sortMode = "name" -- Default sort mode: "name", "quantity", "category"
 
     local resourceAppearances = {
-        rock = { material = "", color = nil }, -- Plain rock, no material
+        rock = { material = "", color = nil },
         copper = { material = "models/shiny", color = Color(184, 115, 51, 100) },
         iron = { material = "models/shiny", color = Color(169, 169, 169, 255) },
         steel = { material = "models/shiny", color = Color(192, 192, 192, 255) },
@@ -419,21 +419,39 @@ if CLIENT then
         scroll:Dock(FILL)
         local layout = vgui.Create("DIconLayout", scroll)
         layout:Dock(FILL)
-        layout:SetSpaceX(8)
-        layout:SetSpaceY(8)
+        layout:SetSpaceX(10)
+        layout:SetSpaceY(10)
 
+        local itemList = {}
         for itemID, amount in pairs(Inventory) do
-            if not InventoryItems[itemID] then continue end
+            if InventoryItems[itemID] then
+                table.insert(itemList, { id = itemID, amount = amount, name = InventoryItems[itemID].name, category = InventoryItems[itemID].category or "Misc" })
+            end
+        end
+
+        if sortMode == "name" then
+            table.sort(itemList, function(a, b) return a.name < b.name end)
+        elseif sortMode == "quantity" then
+            table.sort(itemList, function(a, b) return a.amount > b.amount end)
+        elseif sortMode == "category" then
+            table.sort(itemList, function(a, b)
+                if a.category == b.category then return a.name < b.name end
+                return a.category < b.category
+            end)
+        end
+
+        for _, item in ipairs(itemList) do
+            local itemID, amount = item.id, item.amount
             local panel = layout:Add("DPanel")
-            panel:SetSize(90, 101)
+            panel:SetSize(100, 110)
             panel.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(30, 30, 30, 200)) end
 
             local model = vgui.Create("DModelPanel", panel)
-            model:SetSize(70, 70)
+            model:SetSize(80, 80)
             model:SetPos(10, 5)
             model:SetModel(InventoryItems[itemID].model or "models/error.mdl")
-            model:SetFOV(30) -- Match resources
-            model:SetCamPos(Vector(30, 30, 30)) -- Zoomed out like resources
+            model:SetFOV(30)
+            model:SetCamPos(Vector(30, 30, 30))
             model:SetLookAt(Vector(0, 0, 0))
             model.OnMousePressed = function(self, code)
                 if code ~= MOUSE_LEFT or not isInventoryOpen then return end
@@ -461,19 +479,16 @@ if CLIENT then
                     net.WriteUInt(1, 8)
                     net.SendToServer()
                 end)
-                menu:Open(self:LocalToScreen(10, 71))
+                menu:Open(self:LocalToScreen(10, 80))
                 menu.OnRemove = function()
                     for i, m in ipairs(activeMenus) do
-                        if m == menu then
-                            table.remove(activeMenus, i)
-                            break
-                        end
+                        if m == menu then table.remove(activeMenus, i) break end
                     end
                 end
             end
 
             local label = vgui.Create("DLabel", panel)
-            label:SetPos(10, 76)
+            label:SetPos(10, 85)
             label:SetText(InventoryItems[itemID].name .. " x" .. amount)
             label:SizeToContents()
             label.Think = function(self) self:SetText(InventoryItems[itemID].name .. " x" .. (Inventory[itemID] or 0)) end
@@ -598,9 +613,31 @@ if CLIENT then
             if isToolSelectorOpen and IsValid(ToolSelectorFrame) then ToolSelectorFrame:Close() end
         end
 
+        -- Sorting controls (top-right)
+        local sortPanel = vgui.Create("DPanel", InventoryFrame)
+        sortPanel:SetSize(250, 30)
+        sortPanel:SetPos(ScrW()/2 + 350, 5) -- Top-right corner relative to frame center
+        sortPanel.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(40, 40, 40, 200)) end
+
+        local sortLabel = vgui.Create("DLabel", sortPanel)
+        sortLabel:SetPos(5, 5)
+        sortLabel:SetText("Sort by:")
+        sortLabel:SizeToContents()
+
+        local sortCombo = vgui.Create("DComboBox", sortPanel)
+        sortCombo:SetPos(60, 5)
+        sortCombo:SetSize(180, 20)
+        sortCombo:AddChoice("Name", "name", true)
+        sortCombo:AddChoice("Quantity", "quantity")
+        sortCombo:AddChoice("Category", "category")
+        sortCombo.OnSelect = function(_, _, value, data)
+            sortMode = data
+            if IsValid(inventoryTab) then BuildInventoryUI(inventoryTab) end
+        end
+
         local tabPanel = vgui.Create("DPropertySheet", InventoryFrame)
         tabPanel:Dock(FILL)
-        local inventoryTab = vgui.Create("DPanel", tabPanel)
+        inventoryTab = vgui.Create("DPanel", tabPanel)
         inventoryTab.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240)) end
         BuildInventoryUI(inventoryTab)
         tabPanel:AddSheet("Inventory", inventoryTab, "icon16/briefcase.png")
@@ -629,8 +666,8 @@ if CLIENT then
 
     net.Receive("SyncInventory", function()
         Inventory = net.ReadTable()
-        if isInventoryOpen and IsValid(InventoryFrame) then
-            BuildInventoryUI(InventoryFrame:GetChild(0):GetChild(0))
+        if isInventoryOpen and IsValid(InventoryFrame) and IsValid(inventoryTab) then
+            BuildInventoryUI(inventoryTab)
         end
     end)
 
