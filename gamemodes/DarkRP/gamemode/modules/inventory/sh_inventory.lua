@@ -62,7 +62,7 @@ function AddResourceToInventory(ply, resourceID, amount, silent)
         net.WriteTable(inv.resources)
         net.Send(ply)
         SavePlayerInventory(ply)
-        if not silent then SendInventoryMessage(ply, "Added " .. amount .. " " .. ResourceItems[resourceID].name .. " to your resources.") end
+        if not silent then SendInventoryMessage(ply, "Mined a " .. ResourceItems[resourceID].name) end -- Changed message
     end
 end
 
@@ -140,19 +140,22 @@ if SERVER then
         SendInventoryMessage(ply, "Dropped " .. amount .. " " .. ResourceItems[resourceID].name .. ".")
     end
 
-    local function AddItemToInventory(ply, itemID, amount)
-        if not IsValid(ply) or not InventoryItems[itemID] then return end
-        local steamID = ply:SteamID()
-        local inv = PlayerInventories[steamID] or { items = {}, resources = {} }
-        local maxStack = InventoryItems[itemID].maxStack or 64
-        inv.items[itemID] = math.min((inv.items[itemID] or 0) + (amount or 1), maxStack)
-        PlayerInventories[steamID] = inv
+    -- Move this outside the SERVER block, near the top after PlayerInventories definition
+function AddItemToInventory(ply, itemID, amount)
+    if not IsValid(ply) or not InventoryItems[itemID] then return end
+    local steamID = ply:SteamID()
+    local inv = PlayerInventories[steamID] or { items = {}, resources = {} }
+    local maxStack = InventoryItems[itemID].maxStack or 64
+    inv.items[itemID] = math.min((inv.items[itemID] or 0) + (amount or 1), maxStack)
+    PlayerInventories[steamID] = inv
+    if SERVER then
         net.Start("SyncInventory")
         net.WriteTable(inv.items)
         net.Send(ply)
         SavePlayerInventory(ply)
         SendInventoryMessage(ply, "Added " .. amount .. " " .. InventoryItems[itemID].name .. "(s) to your inventory.")
     end
+end
 
     local function RemoveItemFromInventory(ply, itemID, amount)
         if not IsValid(ply) or not InventoryItems[itemID] then return end
@@ -206,7 +209,15 @@ if SERVER then
                 ent:SetPos(ply:EyePos() + ply:GetForward() * 50 + Vector(0, 0, 10 * i))
                 ent:Spawn()
                 ent:SetNWString("ItemID", itemID)
+                local phys = ent:GetPhysicsObject()
+                if IsValid(phys) then
+                    phys:Wake()
+                    phys:SetVelocity(Vector(0, 0, -100))
+                else
+                    print("[Drop Debug] Failed to create physics for "..itemID)
+                end
                 ent:SetCollisionGroup(COLLISION_GROUP_DEBRIS)
+                print("[Drop Debug] Dropped "..itemID.." at "..tostring(ent:GetPos()))
             end
         end
     end)

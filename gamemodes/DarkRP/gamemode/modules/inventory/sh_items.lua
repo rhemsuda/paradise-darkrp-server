@@ -40,13 +40,26 @@ InventoryItems["crowbar"] = {
 
 InventoryItems["shovel"] = {
     name = "Shovel",
-    model = "models/props_farm/tools_shovel.mdl",
+    model = "models/props_junk/shovel01a.mdl",
     entityClass = "weapon_shovel",
-    maxStack = 1,
+    maxStack = 5,
     useFunction = function(ply)
-        ply:Give("weapon_shovel")
-        ply:SelectWeapon("weapon_shovel")
-        print("[Debug] Equipped "..ply:Nick().." with weapon_shovel")
+        local wep = ply:Give("weapon_shovel")
+        if IsValid(wep) then
+            print("[Shovel Debug] Successfully gave "..ply:Nick().." weapon_shovel")
+            timer.Simple(0.2, function()
+                if IsValid(ply) and ply:HasWeapon("weapon_shovel") then
+                    ply:SelectWeapon("weapon_shovel")
+                    print("[Shovel Debug] Equipped "..ply:Nick().." with weapon_shovel")
+                else
+                    print("[Shovel Debug] Failed to equip "..ply:Nick()..": weapon_shovel not in inventory")
+                end
+            end)
+        else
+            print("[Shovel Debug] Failed to give "..ply:Nick().." weapon_shovel - SWEP not registered")
+            AddItemToInventory(ply, "shovel", 1) -- Line 60: Now works with global function
+            SendInventoryMessage(ply, "Shovel failed to equip - returned to inventory.")
+        end
     end
 }
 
