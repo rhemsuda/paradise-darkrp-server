@@ -38,4 +38,16 @@ InventoryItems["crowbar"] = {
     end
 }
 
+InventoryItems["shovel"] = {
+    name = "Shovel",
+    model = "models/props_farm/tools_shovel.mdl",
+    entityClass = "weapon_shovel",
+    maxStack = 1,
+    useFunction = function(ply)
+        ply:Give("weapon_shovel")
+        ply:SelectWeapon("weapon_shovel")
+        print("[Debug] Equipped "..ply:Nick().." with weapon_shovel")
+    end
+}
+
 print("[Inventory Module] sh_items.lua loaded successfully")

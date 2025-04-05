@@ -2,6 +2,13 @@ AddCSLuaFile("cl_init.lua")
 AddCSLuaFile("shared.lua")
 include("shared.lua")
 
+ENT.Type = "anim"
+ENT.Base = "base_gmodentity"
+ENT.PrintName = "Rock Resource"
+ENT.Author = "YourName"
+ENT.Spawnable = true
+ENT.Category = "Resources"
+
 function ENT:Initialize()
     self:SetModel("models/props_junk/rock001a.mdl")
     self:PhysicsInit(SOLID_VPHYSICS)
@@ -12,20 +19,14 @@ function ENT:Initialize()
     if IsValid(phys) then
         phys:Wake()
     end
-    self:SetNWInt("Amount", 1) -- Default amount
-end
-
-function ENT:SetResourceType(resourceID)
-    self:SetNWString("ResourceType", resourceID)
-end
-
-function ENT:SetAmount(amount)
-    self:SetNWInt("Amount", amount)
+    self:SetNWString("ResourceType", "rock")
+    self:SetNWInt("Amount", 1)
+    -- No SetMaterial or SetColor for rock
 end
 
 function ENT:Use(activator, caller)
     if not IsValid(activator) or not activator:IsPlayer() then return end
-    local resourceID = self:GetNWString("ResourceType") -- Direct access for debugging
+    local resourceID = self:GetNWString("ResourceType")
     local amount = self:GetNWInt("Amount")
     print("[Debug] resource_item: Use called with resourceID = " .. tostring(resourceID) .. ", amount = " .. tostring(amount))
     if resourceID and resourceID != "" and amount > 0 then

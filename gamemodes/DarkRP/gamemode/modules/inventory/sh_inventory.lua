@@ -334,6 +334,19 @@ if CLIENT then
     local allowedTools = { "button", "fading_door", "keypad_willox", "camera", "nocollide", "remover", "stacker" }
     local activeMenus = {}
 
+    local resourceAppearances = {
+        rock = { material = "", color = nil }, -- Plain rock, no material
+        copper = { material = "models/shiny", color = Color(184, 115, 51, 100) },
+        iron = { material = "models/shiny", color = Color(169, 169, 169, 255) },
+        steel = { material = "models/shiny", color = Color(192, 192, 192, 255) },
+        titanium = { material = "models/shiny", color = Color(46, 139, 87, 255) },
+        emerald = { material = "models/shiny", color = Color(0, 255, 127, 200) },
+        ruby = { material = "models/shiny", color = Color(255, 36, 0, 200) },
+        sapphire = { material = "models/shiny", color = Color(0, 191, 255, 200) },
+        obsidian = { material = "models/shiny", color = Color(47, 79, 79, 200) },
+        diamond = { material = "models/shiny", color = Color(240, 248, 255, 200) }
+    }
+
     local function OpenToolSelector()
         if isToolSelectorOpen and IsValid(ToolSelectorFrame) then return end
         gui.EnableScreenClicker(true)
@@ -408,8 +421,8 @@ if CLIENT then
             model:SetSize(70, 70)
             model:SetPos(10, 5)
             model:SetModel(InventoryItems[itemID].model or "models/error.mdl")
-            model:SetFOV(20)
-            model:SetCamPos(Vector(15, 15, 15))
+            model:SetFOV(30) -- Match resources
+            model:SetCamPos(Vector(30, 30, 30)) -- Zoomed out like resources
             model:SetLookAt(Vector(0, 0, 0))
             model.OnMousePressed = function(self, code)
                 if code ~= MOUSE_LEFT or not isInventoryOpen then return end
@@ -466,12 +479,6 @@ if CLIENT then
         layout:SetSpaceX(10)
         layout:SetSpaceY(10)
 
-        local resourceColors = {
-            rock = Color(100, 100, 100), -- Gray for rock
-            copper = Color(184, 115, 51) -- Copper color
-            -- Add others later
-        }
-
         local categories = {
             { name = "Minerals", items = resourceTemplates.minerals },
             { name = "Gems", items = resourceTemplates.gems },
@@ -479,37 +486,47 @@ if CLIENT then
         }
         for _, cat in ipairs(categories) do
             local catPanel = layout:Add("DPanel")
-            catPanel:SetSize(240, 40 + table.Count(cat.items) * 40)
+            catPanel:SetSize(300, 60 + table.Count(cat.items) * 50)
             catPanel.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(40, 40, 40, 200)) end
 
             local catLabel = vgui.Create("DLabel", catPanel)
             catLabel:SetPos(10, 10)
             catLabel:SetText(cat.name)
-            catLabel:SetSize(220, 20)
+            catLabel:SetSize(280, 20)
             catLabel:SetColor(Color(255, 215, 0))
 
             local i = 1
             for _, data in ipairs(cat.items) do
                 local resourceID = data.id
                 local resPanel = vgui.Create("DPanel", catPanel)
-                resPanel:SetPos(10, 30 + (i - 1) * 40)
-                resPanel:SetSize(220, 30)
+                resPanel:SetPos(10, 40 + (i - 1) * 50)
+                resPanel:SetSize(280, 40)
                 resPanel.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(30, 30, 30, 200)) end
 
                 local resIcon = vgui.Create("DModelPanel", resPanel)
-                resIcon:SetPos(5, 5)
-                resIcon:SetSize(20, 20)
+                resIcon:SetPos(5, 0)
+                resIcon:SetSize(40, 40)
                 resIcon:SetModel(data.icon)
-                resIcon:SetFOV(20)
-                resIcon:SetCamPos(Vector(15, 15, 15))
+                resIcon:SetFOV(30)
+                resIcon:SetCamPos(Vector(30, 30, 30))
                 resIcon:SetLookAt(Vector(0, 0, 0))
-                resIcon:SetMaterial("models/shiny")
-                resIcon:SetColor(resourceColors[resourceID] or Color(255, 255, 255)) -- Default white if undefined
+                local appearance = resourceAppearances[resourceID] or { material = "models/shiny", color = Color(255, 255, 255) }
+                print("[Debug] Setting up "..resourceID.." with model "..data.icon)
+                if appearance.material != "" then
+                    resIcon.Entity:SetMaterial(appearance.material)
+                    print("[Debug] Set "..resourceID.." material to "..appearance.material)
+                end
+                if appearance.color then
+                    resIcon:SetColor(appearance.color)
+                    print("[Debug] Set "..resourceID.." DModelPanel color to "..tostring(appearance.color).." with alpha "..appearance.color.a)
+                else
+                    print("[Debug] Set "..resourceID.." to default appearance (no color)")
+                end
                 resIcon.OnCursorEntered = function(self)
                     if IsValid(currentTooltip) then currentTooltip:Remove() end
                     currentTooltip = vgui.Create("DLabel", resPanel)
                     currentTooltip:SetText(data.name)
-                    currentTooltip:SetPos(25, 5)
+                    currentTooltip:SetPos(50, 10)
                     currentTooltip:SetSize(100, 20)
                     currentTooltip:SetZPos(10000)
                     currentTooltip.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240)) end
@@ -537,9 +554,9 @@ if CLIENT then
                 end
 
                 local resAmount = vgui.Create("DLabel", resPanel)
-                resAmount:SetPos(30, 5)
+                resAmount:SetPos(50, 10)
                 resAmount:SetText(": " .. (Resources[resourceID] or 0))
-                resAmount:SetSize(180, 20)
+                resAmount:SetSize(220, 20)
                 resAmount.Think = function(self) self:SetText(": " .. (Resources[resourceID] or 0)) end
                 i = i + 1
             end
