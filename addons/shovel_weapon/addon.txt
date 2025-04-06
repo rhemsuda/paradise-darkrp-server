@@ -1,7 +1,0 @@
-"AddonInfo"
-{
-    "name"              "Shovel Weapon"
-    "version"           "1.0"
-    "author_name"       "Nick"
-    "info"              "Adds a shovel weapon for DarkRP"
-}
