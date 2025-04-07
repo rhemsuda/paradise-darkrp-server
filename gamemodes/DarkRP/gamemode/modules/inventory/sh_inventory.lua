@@ -99,11 +99,54 @@ function AddItemToInventory(ply, itemID, amount, stats, page)
         local isWeaponOrArmor = InventoryItems[itemID].category == "Weapons" or InventoryItems[itemID].category == "Armor"
         stats = stats or {
             damage = isWeaponOrArmor and math.random(10, 80) or 0,
-            slots = isWeaponOrArmor and math.random(0, 6) or 0,
-            rarity = isWeaponOrArmor and ({ "Common", "Uncommon", "Rare", "Epic" })[math.random(1, 4)] or nil,
+            slots = 0, -- Will be set based on rarity
+            rarity = nil, -- Will be set below
+            slotType = nil, -- Will be set for weapons
             crafter = ply:Nick()
         }
-        local itemInstance = { id = uniqueID, itemID = itemID, damage = stats.damage, slots = stats.slots, rarity = stats.rarity, crafter = stats.crafter }
+
+        if isWeaponOrArmor then
+            -- Determine rarity with weighted probabilities
+            local rarityRoll = math.random(1, 500)
+            if rarityRoll == 1 then
+                stats.rarity = "Legendary" -- 1/500 chance (0.2%)
+            elseif rarityRoll <= 3 then
+                stats.rarity = "Epic" -- 1/200 chance (0.5%)
+            elseif rarityRoll <= 10 then
+                stats.rarity = "Rare" -- 1/50 chance (2%)
+            elseif rarityRoll <= 50 then
+                stats.rarity = "Uncommon" -- 1/10 chance (10%)
+            else
+                stats.rarity = "Common" -- Default (88.8%)
+            end
+
+            -- Set slot count based on rarity
+            local slotCaps = {
+                Common = 2,
+                Uncommon = 3,
+                Rare = 4,
+                Epic = 5,
+                Legendary = 6
+            }
+            local maxSlots = slotCaps[stats.rarity] or 2
+            stats.slots = math.random(0, maxSlots)
+
+            -- For weapons, determine slot type (Primary or Sidearm)
+            if InventoryItems[itemID].category == "Weapons" then
+                local slotTypeRoll = math.random(1, 100)
+                stats.slotType = (slotTypeRoll <= 10) and "Sidearm" or "Primary" -- 10% chance for Sidearm
+            end
+        end
+
+        local itemInstance = { 
+            id = uniqueID, 
+            itemID = itemID, 
+            damage = stats.damage, 
+            slots = stats.slots, 
+            rarity = stats.rarity, 
+            slotType = stats.slotType, 
+            crafter = stats.crafter 
+        }
         table.insert(inv.items[page], itemInstance)
         for row = 1, 6 do
             for col = 1, 10 do
@@ -152,19 +195,14 @@ if SERVER then
         ]])
         MySQLite.commit(function()
             print("[Custom Inventory] Table 'darkrp_custom_inventory' initialized or updated successfully!")
-            MySQLite.query("PRAGMA table_info(darkrp_custom_inventory)", function(columns)
-                local hasLoadout = false
-                for _, col in ipairs(columns) do
-                    if col.name == "loadout" then hasLoadout = true break end
-                end
-                if not hasLoadout then
-                    MySQLite.query("ALTER TABLE darkrp_custom_inventory ADD COLUMN loadout TEXT NOT NULL DEFAULT '{}'", function()
-                        print("[Custom Inventory] Added loadout column to darkrp_custom_inventory")
-                    end, function(err)
-                        print("[Custom Inventory] Failed to add loadout column: " .. err)
-                    end)
-                end
+            -- Attempt to add the loadout column if it doesn't exist
+            MySQLite.query("ALTER TABLE darkrp_custom_inventory ADD COLUMN loadout TEXT NOT NULL DEFAULT '{}'", function()
+                print("[Custom Inventory] Added loadout column to darkrp_custom_inventory (or it already exists)")
+            end, function(err)
+                print("[Custom Inventory] Loadout column already exists or failed to add: " .. err)
             end)
+        end, function(err)
+            print("[Custom Inventory] Failed to initialize table: " .. err)
         end)
     end)
 
@@ -274,30 +312,6 @@ if SERVER then
         end
     end
 
-    hook.Add("Initialize", "PrepareToolLoading", function()
-        timer.Simple(5, function()
-            if not SWEP then print("[Error] SWEP global is nil!") return end
-            if file.Exists("weapons/gmod_tool/shared.lua", "LUA") then
-                AddCSLuaFile("weapons/gmod_tool/shared.lua")
-                include("weapons/gmod_tool/shared.lua")
-                print("[Debug] Loaded gmod_tool/shared.lua")
-            else
-                print("[Error] gmod_tool/shared.lua not found!")
-            end
-            if not TOOL then print("[Error] TOOL global is nil!") return end
-            for _, tool in ipairs(allowedTools) do
-                local toolFile = "weapons/gmod_tool/stools/" .. tool .. ".lua"
-                if file.Exists(toolFile, "LUA") then
-                    AddCSLuaFile(toolFile)
-                    include(toolFile)
-                    print("[Debug] Loaded tool: " .. tool)
-                else
-                    print("[Debug] Tool file not found: " .. toolFile)
-                end
-            end
-        end)
-    end)
-
     net.Receive("UpdateInventoryPositions", function(len, ply)
         local page = net.ReadUInt(8)
         local steamID = ply:SteamID()
@@ -317,7 +331,7 @@ if SERVER then
         if not item or not itemData then return end
         if itemData.category == "Weapons" or itemData.category == "Armor" then
             SendInventoryMessage(ply, "Cannot drop weapons or armor!")
-            AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, slots = item.slots, rarity = item.rarity, crafter = item.crafter }, page)
+            AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, slots = item.slots, rarity = item.rarity, slotType = item.slotType, crafter = item.crafter }, page)
             return
         end
         SendInventoryMessage(ply, "Dropped 1 " .. itemData.name .. " from page " .. page .. ".")
@@ -386,6 +400,8 @@ if SERVER then
         local steamID = ply:SteamID()
         local inv = PlayerInventories[steamID] or { items = { [1] = {} }, resources = {}, positions = { [1] = {} }, maxPages = 1, loadout = {} }
         local item, itemData
+
+        -- Find and remove the item from inventory
         for i, it in ipairs(inv.items[page] or {}) do
             if it.id == uniqueID then
                 item = it
@@ -396,18 +412,56 @@ if SERVER then
             end
         end
         if not item or not itemData then return end
+
+        -- Validate the slot
         local validSlots = {["Armor"] = true, ["Weapon"] = true, ["Sidearm"] = true, ["Boots"] = true, ["Utility"] = true}
         if not validSlots[slot] then return end
+
+        -- Check category compatibility
         if (slot == "Weapon" or slot == "Sidearm") and itemData.category ~= "Weapons" then
             SendInventoryMessage(ply, "Only weapons can be equipped to " .. slot .. "!")
-            AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, slots = item.slots, rarity = item.rarity, crafter = item.crafter }, page)
+            AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, slots = item.slots, rarity = item.rarity, slotType = item.slotType, crafter = item.crafter }, page)
             return
         end
         if slot == "Utility" and itemData.category ~= "Utility" then
             SendInventoryMessage(ply, "Only utility items can be equipped to Utility!")
-            AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, slots = item.slots, rarity = item.rarity, crafter = item.crafter }, page)
+            AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, slots = item.slots, rarity = item.rarity, slotType = item.slotType, crafter = item.crafter }, page)
             return
         end
+
+        -- Check slot type compatibility for weapons
+        if slot == "Weapon" or slot == "Sidearm" then
+            local requiredSlotType = (slot == "Weapon") and "Primary" or "Sidearm"
+            if item.slotType and item.slotType ~= requiredSlotType then
+                SendInventoryMessage(ply, "This weapon is a " .. item.slotType .. " and cannot be equipped to " .. slot .. "!")
+                AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, slots = item.slots, rarity = item.rarity, slotType = item.slotType, crafter = item.crafter }, page)
+                return
+            end
+        end
+
+        -- Check if the target slot is already occupied
+        local existingItem = inv.loadout[slot]
+        if existingItem and InventoryItems[existingItem.itemID] then
+            -- Unequip the existing item in the slot
+            local existingItemData = InventoryItems[existingItem.itemID]
+            if existingItemData.category == "Weapons" then
+                local weaponClass = existingItemData.entityClass or existingItem.itemID
+                ply:StripWeapon(weaponClass)
+                print("[Debug] Stripped " .. ply:Nick() .. " of weapon " .. weaponClass .. " from " .. slot)
+            end
+            AddItemToInventory(ply, existingItem.itemID, 1, { 
+                id = existingItem.id, 
+                damage = existingItem.damage, 
+                slots = existingItem.slots, 
+                rarity = existingItem.rarity, 
+                slotType = existingItem.slotType, 
+                crafter = existingItem.crafter 
+            }, 1)
+            inv.loadout[slot] = nil
+            SendInventoryMessage(ply, "Unequipped " .. existingItemData.name .. " from " .. slot .. " to equip new item.")
+        end
+
+        -- Equip the new item
         inv.loadout[slot] = item
         PlayerInventories[steamID] = inv
         SavePlayerInventory(ply)
@@ -437,7 +491,7 @@ if SERVER then
         if not item or not InventoryItems[item.itemID] then return end
         local itemData = InventoryItems[item.itemID]
         inv.loadout[slot] = nil
-        AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, slots = item.slots, rarity = item.rarity, crafter = item.crafter }, 1)
+        AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, slots = item.slots, rarity = item.rarity, slotType = item.slotType, crafter = item.crafter }, 1)
         PlayerInventories[steamID] = inv
         SavePlayerInventory(ply)
         net.Start("SyncLoadout")
@@ -463,9 +517,10 @@ if SERVER then
             damage = ent:GetNWInt("Damage", 0),
             slots = ent:GetNWInt("Slots", 0),
             rarity = ent:GetNWString("Rarity", ""),
+            slotType = ent:GetNWString("SlotType", ""),
             crafter = ent:GetNWString("Crafter", "Unknown")
         }
-        if InventoryItems[itemID].category == "Weapons" or InventoryItems[itemID].category == "Armor" then return end
+        if InventoryThrows[itemID].category == "Weapons" or InventoryItems[itemID].category == "Armor" then return end
         AddItemToInventory(ply, itemID, 1, stats, 1)
         ent:Remove()
         SendInventoryMessage(ply, "Picked up 1 " .. InventoryItems[itemID].name .. ".")
@@ -495,11 +550,10 @@ if CLIENT then
     local Resources, Inventory, InventoryPositions, Loadout = {}, {}, {}, {}
     local InventoryFrame, ToolSelectorFrame, inventoryTab, resourcesTab
     local isInventoryOpen, isToolSelectorOpen, isQKeyHeld = false, false, false
-    local currentTooltip
+    local currentTooltip, currentInfoBox
     local activeMenus = {}
     local allowedTools = { "button", "fading_door", "keypad_willox", "camera", "nocollide", "remover", "stacker" }
     local currentPage = 1
-    local lastTooltipTime = 0 -- Debounce for tooltip
 
     local resourceAppearances = {
         rock = { material = "", color = nil },
@@ -513,6 +567,173 @@ if CLIENT then
         obsidian = { material = "models/shiny", color = Color(47, 79, 79, 200) },
         diamond = { material = "models/shiny", color = Color(240, 248, 255, 200) }
     }
+
+    -- Define a custom font for tooltips
+    surface.CreateFont("TooltipFont", {
+        font = "DermaDefault",
+        size = 14,
+        weight = 500
+    })
+
+    -- Shared tooltip constants
+    local TOOLTIP_LINE_HEIGHT = 18
+    local TOOLTIP_PADDING_X = 10
+    local TOOLTIP_PADDING_Y = 10
+    local TOOLTIP_ZPOS = 32767 -- Maximum ZPos to ensure tooltip renders on top
+    local TOOLTIP_SPACING = 2 -- Spacing between icon and tooltip
+    local TOOLTIP_FADEOUT_DELAY = 0.2 -- Delay before removing tooltip after cursor exits
+    local RARITY_COLORS = {
+        common = Color(200, 200, 200),    -- Light gray for Common
+        uncommon = Color(0, 255, 0),      -- Green for Uncommon
+        rare = Color(0, 0, 139),          -- Dark blue for Rare
+        epic = Color(255, 245, 200),      -- Yellowish white for Epic
+        legendary = Color(139, 0, 0)      -- Dark red for Legendary
+    }
+
+    -- Shared function to calculate slot counts for an item
+    local function CalculateSlotCounts(item, itemData)
+        local isWeaponOrArmor = itemData.category == "Weapons" or itemData.category == "Armor"
+        local slotCount = item.slots or 0
+
+        -- Determine base slot count for weapons
+        local baseSlotCount = 0
+        if isWeaponOrArmor then
+            if itemData.category == "Weapons" then
+                local weaponSlots = {
+                    ak47 = 2,
+                    m4a1 = 2,
+                    sg552 = 2,
+                    aug = 2,
+                    m249 = 2
+                }
+                baseSlotCount = weaponSlots[item.itemID] or 1
+            else
+                baseSlotCount = 1
+            end
+        end
+
+        local displaySlotCount = isWeaponOrArmor and math.max(slotCount, baseSlotCount) or slotCount
+        return slotCount, baseSlotCount, displaySlotCount
+    end
+
+    -- Shared function to create tooltip content
+    local function CreateTooltipContent(item, itemData)
+        local isWeaponOrArmor = itemData.category == "Weapons" or itemData.category == "Armor"
+        local isUtility = itemData.category == "Utility"
+        local rarity = isWeaponOrArmor and (item.rarity or itemData.baseRarity or "Common") or nil
+        local rarityColor = rarity and RARITY_COLORS[rarity:lower()] or Color(255, 255, 255)
+        local damage = item.damage or "N/A"
+        local slotCount, baseSlotCount, displaySlotCount = CalculateSlotCounts(item, itemData)
+        local slotType = item.slotType or "N/A"
+        local crafter = item.crafter or "Unknown"
+
+        -- Debug slot counts
+        print("[Debug] Item " .. item.itemID .. " (uniqueID: " .. (item.id or "loadout") .. ") - slotCount: " .. slotCount .. ", baseSlotCount: " .. baseSlotCount .. ", displaySlotCount: " .. displaySlotCount)
+
+        -- Prepare tooltip lines
+        local lines = {}
+        if isWeaponOrArmor then
+            table.insert(lines, { text = rarity, color = rarityColor })
+            table.insert(lines, { text = "Item: " .. itemData.name, color = Color(255, 255, 255) })
+            if itemData.category == "Weapons" then
+                table.insert(lines, { text = "Slot Type: " .. slotType, color = Color(255, 255, 255) })
+            end
+            table.insert(lines, { text = "Damage: " .. damage, color = Color(255, 255, 255) })
+            if displaySlotCount > 0 then
+                table.insert(lines, { text = "Slots:", color = Color(255, 255, 255) })
+                for i = 1, displaySlotCount do
+                    local slotText = (slotCount > 0) and "Empty Slot" or "No Slots"
+                    table.insert(lines, { text = "  " .. slotText, color = Color(255, 255, 255) })
+                end
+            end
+            table.insert(lines, { text = "Crafter: " .. crafter, color = Color(255, 255, 255) })
+        elseif isUtility then
+            table.insert(lines, { text = itemData.name, color = Color(255, 255, 255) })
+            table.insert(lines, { text = "Crafter: " .. crafter, color = Color(255, 255, 255) })
+        else
+            table.insert(lines, { text = itemData.name, color = Color(255, 255, 255) })
+            table.insert(lines, { text = "Damage: " .. damage, color = Color(255, 255, 255) })
+            table.insert(lines, { text = "Crafter: " .. crafter, color = Color(255, 255, 255) })
+        end
+        return lines
+    end
+
+    -- Shared function to create and position a tooltip
+    local function CreateTooltip(parent, tooltipParent, lines, posX, posY, adjustX, adjustY)
+        -- Calculate tooltip size
+        local maxWidth = 0
+        for _, line in ipairs(lines) do
+            surface.SetFont("TooltipFont")
+            local textWidth, _ = surface.GetTextSize(line.text)
+            maxWidth = math.max(maxWidth, textWidth)
+        end
+        local tooltipWidth = maxWidth + TOOLTIP_PADDING_X * 2
+        local tooltipHeight = (#lines * TOOLTIP_LINE_HEIGHT) + (TOOLTIP_PADDING_Y * 2)
+
+        -- Create tooltip with the specified parent
+        currentTooltip = vgui.Create("DPanel", tooltipParent or parent)
+        currentTooltip:SetSize(tooltipWidth, tooltipHeight)
+
+        -- Convert position if tooltipParent is different from parent
+        local finalPosX, finalPosY = posX, posY
+        if tooltipParent and tooltipParent ~= parent then
+            local screenX, screenY = parent:LocalToScreen(posX, posY)
+            finalPosX, finalPosY = tooltipParent:ScreenToLocal(screenX, screenY)
+        end
+
+        -- Prefer right side, check screen bounds instead of parent bounds
+        local preferredX = finalPosX + adjustX -- Right side
+        local screenX, screenY = (tooltipParent or parent):LocalToScreen(preferredX, finalPosY)
+        local screenW, screenH = ScrW(), ScrH()
+        if screenX + tooltipWidth > screenW then
+            preferredX = finalPosX - tooltipWidth - TOOLTIP_SPACING -- Fall back to left side
+        end
+
+        -- Ensure the tooltip doesn't go off the left edge of the screen
+        screenX, screenY = (tooltipParent or parent):LocalToScreen(preferredX, finalPosY)
+        if screenX < 0 then
+            preferredX = preferredX - screenX -- Adjust to keep tooltip on screen
+        end
+
+        -- Adjust Y position to prevent going off the bottom of the parent
+        local parentHeight = (tooltipParent or parent):GetTall()
+        local adjustedY = finalPosY
+        if finalPosY + tooltipHeight > parentHeight then
+            adjustedY = finalPosY - tooltipHeight + adjustY
+        end
+
+        currentTooltip:SetPos(preferredX, adjustedY)
+        currentTooltip:SetZPos(TOOLTIP_ZPOS)
+        currentTooltip:SetVisible(true)
+        currentTooltip.Lines = lines
+
+        -- Paint the tooltip
+        currentTooltip.Paint = function(self, w, h)
+            draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 200))
+            for i, line in ipairs(self.Lines) do
+                draw.SimpleText(line.text, "TooltipFont", TOOLTIP_PADDING_X, TOOLTIP_PADDING_Y + (i - 1) * TOOLTIP_LINE_HEIGHT, line.color, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+            end
+        end
+
+        -- Debug tooltip visibility with throttling
+        currentTooltip.LastDebugTime = 0
+        currentTooltip.Think = function(self)
+            if not IsValid(self) then return end
+            local currentTime = CurTime()
+            if currentTime - self.LastDebugTime >= 1 then -- Print every 1 second
+                local screenX, screenY = self:LocalToScreen(0, 0)
+                print("[Debug] Tooltip visibility check for " .. lines[1].text .. " at " .. preferredX .. "," .. adjustedY .. " (screen: " .. screenX .. "," .. screenY .. "), visible: " .. tostring(self:IsVisible()))
+                self.LastDebugTime = currentTime
+            end
+        end
+
+        -- Debug tooltip creation
+        local parentName = (tooltipParent or parent):GetName() or "unnamed"
+        screenX, screenY = (tooltipParent or parent):LocalToScreen(preferredX, adjustedY)
+        print("[Debug] Tooltip created for " .. lines[1].text .. " at " .. preferredX .. "," .. adjustedY .. " (screen: " .. (screenX or 0) .. "," .. (screenY or 0) .. "), size: " .. tooltipWidth .. "x" .. tooltipHeight .. ", adjustX: " .. adjustX .. ", parent: " .. parentName .. ", visible: " .. tostring(currentTooltip:IsVisible()))
+
+        return currentTooltip, preferredX, adjustedY, tooltipWidth, tooltipHeight
+    end
 
     local function OpenToolSelector()
         if isToolSelectorOpen and IsValid(ToolSelectorFrame) then return end
@@ -651,61 +872,26 @@ if CLIENT then
             model.UniqueID = uniqueID
         
             model.OnCursorEntered = function(self)
-                print("[Debug] OnCursorEntered triggered for " .. itemID .. " (uniqueID: " .. uniqueID .. ")")
                 if IsValid(currentTooltip) then currentTooltip:Remove() end
+                print("[Debug] OnCursorEntered triggered for " .. itemID .. " (uniqueID: " .. uniqueID .. ")")
                 local itemData = InventoryItems[itemID]
-                local isWeaponOrArmor = itemData.category == "Weapons" or itemData.category == "Armor"
-                local rarity = isWeaponOrArmor and (item.rarity or itemData.baseRarity or "Common") or nil
-                local rarityColors = {
-                    common = Color(0, 255, 0),
-                    uncommon = Color(0, 0, 255),
-                    rare = Color(255, 165, 0),
-                    epic = Color(255, 0, 0)
-                }
-                local rarityColor = rarity and rarityColors[rarity:lower()] or Color(255, 255, 255)
-                local damage = item.damage or "N/A"
-                local slotCount = item.slots or 0
-                local baseSlotCount = isWeaponOrArmor and (itemData.category == "Weapons" and (itemID == "ak47" and 2 or itemID == "m4a1" and 2 or itemID == "sg552" and 2 or itemID == "aug" and 2 or itemID == "m249" and 2 or 1) or 1) or 0
-                local displaySlotCount = isWeaponOrArmor and math.max(slotCount, baseSlotCount) or slotCount
-                local crafter = item.crafter or "Unknown"
-                local tooltipHeight = isWeaponOrArmor and (60 + displaySlotCount * 20) or 60
-        
-                currentTooltip = vgui.Create("DPanel", gridPanel)
-                currentTooltip:SetSize(250, tooltipHeight)
+                local lines = CreateTooltipContent(item, itemData)
                 local slotPanel = slots[row][col]
                 local slotX, slotY = IsValid(slotPanel) and slotPanel:GetPos() or 0, 0
-                currentTooltip:SetPos(slotX + 30, slotY + slotHeight)
-                currentTooltip:SetZPos(1000)
-                currentTooltip:SetVisible(true)
-                currentTooltip.Paint = function(self, w, h)
-                    draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 200))
-                    if isWeaponOrArmor then
-                        draw.WordBox(4, 5, 5, rarity, "DermaDefault", Color(50, 50, 50, 200), rarityColor)
-                        draw.WordBox(4, 5, 25, "Item: " .. itemData.name, "DermaDefault", Color(50, 50, 50, 200), Color(255, 255, 255))
-                        draw.WordBox(4, 5, 45, "Damage: " .. damage, "DermaDefault", Color(50, 50, 50, 200), Color(255, 255, 255))
-                        if displaySlotCount > 0 then
-                            draw.WordBox(4, 5, 65, "Slots:", "DermaDefault", Color(50, 50, 50, 200), Color(255, 255, 255))
-                            for i = 1, displaySlotCount do
-                                local slotText = (slotCount > 0) and "Empty Slot" or "No Slots"
-                                draw.WordBox(4, 15, 65 + i * 20, slotText, "DermaDefault", Color(50, 50, 50, 200), Color(255, 255, 255))
-                            end
-                        end
-                        local crafterY = displaySlotCount > 0 and (65 + (displaySlotCount + 1) * 20) or 65
-                        draw.WordBox(4, 5, crafterY, "Crafter: " .. crafter, "DermaDefault", Color(50, 50, 50, 200), Color(255, 255, 255))
-                    else
-                        draw.WordBox(4, 5, 5, itemData.name, "DermaDefault", Color(50, 50, 50, 200), Color(255, 255, 255))
-                        draw.WordBox(4, 5, 25, "Damage: " .. damage, "DermaDefault", Color(50, 50, 50, 200), Color(255, 255, 255))
-                        draw.WordBox(4, 5, 45, "Crafter: " .. crafter, "DermaDefault", Color(50, 50, 50, 200), Color(255, 255, 255))
-                    end
-                end
-                print("[Debug] Tooltip created for " .. itemData.name .. " at " .. tostring(currentTooltip:GetPos()) .. ", size: " .. tostring(currentTooltip:GetSize()))
+                -- Icon is 75x75, centered in 97x97 slot. Right edge of icon: (97-75)/2 + 75 = 86. Add spacing.
+                local adjustX = 86 + TOOLTIP_SPACING
+                CreateTooltip(gridPanel, nil, lines, slotX, slotY, adjustX, slotHeight)
             end
+
             model.OnCursorExited = function(self)
                 print("[Debug] OnCursorExited triggered for " .. itemID .. " (uniqueID: " .. uniqueID .. ")")
                 if IsValid(currentTooltip) then
-                    currentTooltip:Remove()
-                    currentTooltip = nil
-                    print("[Debug] Tooltip removed")
+                    timer.Simple(TOOLTIP_FADEOUT_DELAY, function()
+                        if IsValid(currentTooltip) and not self:IsHovered() then
+                            currentTooltip:Remove()
+                            print("[Debug] Tooltip removed after delay")
+                        end
+                    end)
                 end
             end
         
@@ -891,92 +1077,72 @@ if CLIENT then
         OpenToolSelector()
     end
 
-    local function RefreshEquipmentSlots(slotsPanel)
-        if not IsValid(slotsPanel) then return end
+    local function RefreshEquipmentSlots(frame, slotsPanel)
+        if not IsValid(slotsPanel) or not IsValid(frame) then return end
         for _, child in pairs(slotsPanel:GetChildren()) do child:Remove() end
 
+        -- Get frame dimensions
+        local frameW, frameH = frame:GetSize()
         local slotOrder = {"Armor", "Weapon", "Sidearm", "Boots", "Utility"}
         local slotLabels = {Armor = "Armor", Weapon = "Primary Weapon", Sidearm = "Sidearm", Boots = "Boots", Utility = "Utility"}
+
+        -- Calculate slot dimensions based on slotsPanel size
+        local slotsPanelW, slotsPanelH = slotsPanel:GetSize()
+        local slotHeight = math.floor((slotsPanelH - 10 * (#slotOrder + 1)) / #slotOrder) -- 10px padding between slots
+        local slotWidth = slotsPanelW - 20 -- 10px padding on each side
+        local iconSize = math.min(slotWidth - 20, slotHeight - 20) -- Ensure icon fits within slot
+
         for i, slot in ipairs(slotOrder) do
             local slotPanel = vgui.Create("DPanel", slotsPanel)
-            slotPanel:SetSize(160, 90)
-            slotPanel:SetPos(10, (i-1) * 100 + 10)
+            slotPanel:SetSize(slotWidth, slotHeight)
+            slotPanel:SetPos(10, (i-1) * (slotHeight + 10) + 10)
             slotPanel.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240)) end
 
             local label = vgui.Create("DLabel", slotPanel)
             label:SetPos(5, 5)
-            label:SetSize(150, 20)
+            label:SetSize(slotWidth - 10, 20)
             label:SetText(slotLabels[slot])
 
             local item = Loadout[slot]
             if item and InventoryItems[item.itemID] then
                 local model = vgui.Create("DModelPanel", slotPanel)
-                model:SetSize(70, 70)
-                model:SetPos(45, 20)
+                model:SetSize(iconSize, iconSize)
+                model:SetPos((slotWidth - iconSize) / 2, (slotHeight - iconSize) / 2)
                 model:SetModel(InventoryItems[item.itemID].model or "models/error.mdl")
                 model:SetFOV(30)
                 model:SetCamPos(Vector(30, 30, 30))
                 model:SetLookAt(Vector(0, 0, 0))
+                model:SetMouseInputEnabled(true)
                 model.Slot = slot
+                model.Item = item
 
                 model.OnCursorEntered = function(self)
-                    local now = CurTime()
-                    if now - lastTooltipTime < 0.1 then return end -- Debounce
+                    if IsValid(currentInfoBox) then currentInfoBox:Remove() end
                     print("[Debug] OnCursorEntered triggered for " .. item.itemID .. " in loadout slot " .. slot)
-                    if IsValid(currentTooltip) then currentTooltip:Remove() end
                     local itemData = InventoryItems[item.itemID]
-                    local isWeaponOrArmor = itemData.category == "Weapons" or itemData.category == "Armor"
-                    local rarity = isWeaponOrArmor and (item.rarity or itemData.baseRarity or "Common") or nil
-                    local rarityColors = {
-                        common = Color(0, 255, 0),
-                        uncommon = Color(0, 0, 255),
-                        rare = Color(255, 165, 0),
-                        epic = Color(255, 0, 0)
-                    }
-                    local rarityColor = rarity and rarityColors[rarity:lower()] or Color(255, 255, 255)
-                    local damage = item.damage or "N/A"
-                    local slotCount = item.slots or 0
-                    local baseSlotCount = isWeaponOrArmor and (itemData.category == "Weapons" and (item.itemID == "ak47" and 2 or item.itemID == "m4a1" and 2 or item.itemID == "sg552" and 2 or item.itemID == "aug" and 2 or item.itemID == "m249" and 2 or 1) or 1) or 0
-                    local displaySlotCount = isWeaponOrArmor and math.max(slotCount, baseSlotCount) or slotCount
-                    local crafter = item.crafter or "Unknown"
-                    local tooltipHeight = isWeaponOrArmor and (80 + displaySlotCount * 25) or 80
-
-                    currentTooltip = vgui.Create("DPanel", slotsPanel:GetParent())
-                    currentTooltip:SetSize(250, tooltipHeight)
-                    local slotX, slotY = slotPanel:GetPos()
-                    currentTooltip:SetPos(330, 50 + (i-1) * 100 + 10)
-                    currentTooltip:SetZPos(10000)
-                    currentTooltip:SetVisible(true)
-                    currentTooltip.Paint = function(self, w, h)
+                    local lines = CreateTooltipContent(item, itemData)
+                    local infoBoxHeight = (#lines * TOOLTIP_LINE_HEIGHT) + (TOOLTIP_PADDING_Y * 2)
+                    currentInfoBox = vgui.Create("DPanel", frame)
+                    currentInfoBox:SetSize(frame.InfoBoxWidth, infoBoxHeight)
+                    currentInfoBox:SetPos(frame.InfoBoxX, frame.InfoBoxY)
+                    currentInfoBox.Lines = lines
+                    currentInfoBox.Paint = function(self, w, h)
                         draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 200))
-                        if isWeaponOrArmor then
-                            draw.WordBox(4, 5, 5, rarity, "DermaDefault", Color(50, 50, 50, 200), rarityColor)
-                            draw.WordBox(4, 5, 30, "Item: " .. itemData.name, "DermaDefault", Color(50, 50, 50, 200), Color(255, 255, 255))
-                            draw.WordBox(4, 5, 55, "Damage: " .. damage, "DermaDefault", Color(50, 50, 50, 200), Color(255, 255, 255))
-                            if displaySlotCount > 0 then
-                                draw.WordBox(4, 5, 80, "Slots:", "DermaDefault", Color(50, 50, 50, 200), Color(255, 255, 255))
-                                for j = 1, displaySlotCount do
-                                    local slotText = (slotCount > 0) and "Empty Slot" or "No Slots"
-                                    draw.WordBox(4, 15, 80 + j * 25, slotText, "DermaDefault", Color(50, 50, 50, 200), Color(255, 255, 255))
-                                end
-                            end
-                            local crafterY = displaySlotCount > 0 and (80 + (displaySlotCount + 1) * 25) or 80
-                            draw.WordBox(4, 5, crafterY, "Crafter: " .. crafter, "DermaDefault", Color(50, 50, 50, 200), Color(255, 255, 255))
-                        else
-                            draw.WordBox(4, 5, 5, itemData.name, "DermaDefault", Color(50, 50, 50, 200), Color(255, 255, 255))
-                            draw.WordBox(4, 5, 30, "Damage: " .. damage, "DermaDefault", Color(50, 50, 50, 200), Color(255, 255, 255))
-                            draw.WordBox(4, 5, 55, "Crafter: " .. crafter, "DermaDefault", Color(50, 50, 50, 200), Color(255, 255, 255))
+                        for j, line in ipairs(self.Lines) do
+                            draw.SimpleText(line.text, "TooltipFont", TOOLTIP_PADDING_X, TOOLTIP_PADDING_Y + (j - 1) * TOOLTIP_LINE_HEIGHT, line.color, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
                         end
                     end
-                    lastTooltipTime = now
-                    print("[Debug] Tooltip created for " .. itemData.name .. " at " .. tostring(currentTooltip:GetPos()) .. ", size: " .. tostring(currentTooltip:GetSize()))
                 end
+
                 model.OnCursorExited = function(self)
                     print("[Debug] OnCursorExited triggered for " .. item.itemID .. " in loadout slot " .. slot)
-                    if IsValid(currentTooltip) then
-                        currentTooltip:Remove()
-                        currentTooltip = nil
-                        print("[Debug] Tooltip removed")
+                    if IsValid(currentInfoBox) then
+                        timer.Simple(TOOLTIP_FADEOUT_DELAY, function()
+                            if IsValid(currentInfoBox) and not self:IsHovered() then
+                                currentInfoBox:Remove()
+                                print("[Debug] Info box removed after delay")
+                            end
+                        end)
                     end
                 end
 
@@ -988,7 +1154,7 @@ if CLIENT then
                         net.WriteString(slot)
                         net.SendToServer()
                     end)
-                    menu:Open(self:LocalToScreen(10, 70))
+                    menu:Open(self:LocalToScreen(10, iconSize))
                     menu.OnRemove = function()
                         for j, m in ipairs(activeMenus) do
                             if m == menu then table.remove(activeMenus, j) break end
@@ -1000,39 +1166,70 @@ if CLIENT then
     end
 
     local function OpenEquipmentMenu()
+        -- Calculate frame size based on screen resolution
+        local screenW, screenH = ScrW(), ScrH()
+        local frameWidth = math.min(screenW * 0.4, 500) -- 40% of screen width, max 500
+        local baseFrameHeight = math.min(screenH * 0.6, 600) -- 60% of screen height, max 600
+
+        -- Estimate info box height (assume max 10 lines for a Legendary item with 6 slots)
+        local maxInfoBoxLines = 10 -- Rarity, Item, Slot Type, Damage, Slots label, 6 slots, Crafter
+        local infoBoxHeight = (maxInfoBoxLines * TOOLTIP_LINE_HEIGHT) + (TOOLTIP_PADDING_Y * 2)
+        local frameHeight = baseFrameHeight + infoBoxHeight + 20 -- Add space for info box and padding
+
+        -- Ensure frame fits within screen
+        frameWidth = math.min(frameWidth, screenW - 40) -- 20px padding on each side
+        frameHeight = math.min(frameHeight, screenH - 40) -- 20px padding on top/bottom
+
+        -- Create the frame
         local frame = vgui.Create("DFrame")
-        frame:SetSize(400, 600)
-        frame:SetPos(ScrW()/2 - 200, ScrH()/2 - 300)
+        frame:SetSize(frameWidth, frameHeight)
+        frame:SetPos((screenW - frameWidth) / 2, (screenH - frameHeight) / 2)
         frame:SetTitle("Equipment Loadout")
         frame:SetDraggable(false)
         frame:MakePopup()
         frame.Paint = function(self, w, h) draw.RoundedBox(8, 0, 0, w, h, Color(30, 30, 30, 225)) end
         frame.OnClose = function()
-            if IsValid(currentTooltip) then currentTooltip:Remove() end
+            if IsValid(currentInfoBox) then currentInfoBox:Remove() end
             for _, menu in ipairs(activeMenus) do if IsValid(menu) then menu:Remove() end end
             activeMenus = {}
         end
 
+        -- Calculate layout dimensions
+        local padding = 10
+        local contentHeight = frameHeight - 30 -- Account for title bar
+        local leftPanelWidth = math.floor(frameWidth * 0.5) -- 50% for player model and info box
+        local rightPanelWidth = frameWidth - leftPanelWidth - padding
+        local playerModelHeight = math.floor(contentHeight * 0.65) -- 65% of content height for player model
+        local infoBoxHeightSpace = contentHeight - playerModelHeight - padding
+        local infoBoxWidth = leftPanelWidth - 2 * padding
+
+        -- Store info box position and size for use in RefreshEquipmentSlots
+        frame.InfoBoxWidth = infoBoxWidth
+        frame.InfoBoxX = padding
+        frame.InfoBoxY = 30 + playerModelHeight + padding
+
+        -- Player model
         local playerModel = vgui.Create("DModelPanel", frame)
-        playerModel:SetSize(200, 500)
-        playerModel:SetPos(10, 50)
+        playerModel:SetSize(leftPanelWidth - 2 * padding, playerModelHeight)
+        playerModel:SetPos(padding, 30)
         playerModel:SetModel(LocalPlayer():GetModel())
         playerModel:SetFOV(30)
         playerModel:SetCamPos(Vector(70, 70, 70))
         playerModel:SetLookAt(Vector(0, 0, 40))
 
+        -- Slots panel
         local slotsPanel = vgui.Create("DPanel", frame)
-        slotsPanel:SetSize(180, 500)
-        slotsPanel:SetPos(210, 50)
+        slotsPanel:SetSize(rightPanelWidth, contentHeight)
+        slotsPanel:SetPos(leftPanelWidth + padding, 30)
         slotsPanel.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(40, 40, 40, 200)) end
 
-        RefreshEquipmentSlots(slotsPanel)
+        RefreshEquipmentSlots(frame, slotsPanel)
 
         -- Refresh slots only if panel is still valid
         net.Receive("SyncLoadout", function()
             Loadout = net.ReadTable()
             if IsValid(slotsPanel) then
-                RefreshEquipmentSlots(slotsPanel)
+                RefreshEquipmentSlots(frame, slotsPanel)
             end
         end)
     end
@@ -1042,13 +1239,16 @@ if CLIENT then
             isQKeyHeld = true
             OpenCustomQMenu()
             return true
+        elseif bind == "+menu_context" and pressed then
+            OpenEquipmentMenu()
+            return true
         end
     end)
 
     hook.Add("Think", "CheckQKeyRelease", function()
-        if isQKeyHeld and not input.IsKeyDown(KEY_Q) and isInventoryOpen and IsValid(InventoryFrame) then
-            InventoryFrame:Close()
+        if isQKeyHeld and not input.IsKeyDown(KEY_Q) then
             isQKeyHeld = false
+            if IsValid(InventoryFrame) then InventoryFrame:Close() end
         end
     end)
 
@@ -1056,27 +1256,22 @@ if CLIENT then
         local page = net.ReadUInt(8)
         Inventory = net.ReadTable()
         InventoryPositions = net.ReadTable()
-        currentPage = page
-        if isInventoryOpen and IsValid(InventoryFrame) and IsValid(inventoryTab) then
-            BuildInventoryUI(inventoryTab, currentPage)
-        end
+        if IsValid(inventoryTab) then BuildInventoryUI(inventoryTab, page) end
     end)
 
     net.Receive("SyncResources", function()
         Resources = net.ReadTable()
-        if isInventoryOpen and IsValid(InventoryFrame) and IsValid(resourcesTab) then
-            BuildResourcesMenu(resourcesTab)
-        end
+        if IsValid(resourcesTab) then BuildResourcesMenu(resourcesTab) end
+    end)
+
+    net.Receive("InventoryMessage", function()
+        local message = net.ReadString()
+        chat.AddText(Color(255, 215, 0), "[Inventory] ", Color(255, 255, 255), message)
     end)
 
     net.Receive("SyncLoadout", function()
         Loadout = net.ReadTable()
     end)
 
-    net.Receive("InventoryMessage", function()
-        chat.AddText(Color(255, 215, 0), "[Inventory] ", Color(255, 255, 255), net.ReadString())
-    end)
-
-    concommand.Add("open_inventory_menu", OpenCustomQMenu)
     concommand.Add("rp_loadout", OpenEquipmentMenu)
 end
