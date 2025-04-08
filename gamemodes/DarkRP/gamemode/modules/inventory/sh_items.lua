@@ -339,4 +339,19 @@ InventoryItems["healthkit3"] = {
     end
 }
 
+-- Define props for the admin panel
+AdminProps = AdminProps or {}
+AdminProps = {
+    { model = "models/props_combine/weaponstripper.mdl" },
+    { model = "models/props_doors/door03_slotted_left.mdl" },
+    { model = "models/props_c17/FurnitureTable001a.mdl" },
+    { model = "models/props_junk/wood_crate001a.mdl" },
+    { model = "models/props_junk/wood_pallet001a.mdl" },
+    { model = "models/props_junk/TrashBin01a.mdl" },
+    { model = "models/props_vehicles/tire001c_car.mdl" },
+    { model = "models/props_junk/TrafficCone001a.mdl" },
+    { model = "models/props_debris/metal_panel01a.mdl" },
+    { model = "models/props_junk/sawblade001a.mdl" }
+}
+
 print("[Inventory Module] sh_items.lua loaded successfully")

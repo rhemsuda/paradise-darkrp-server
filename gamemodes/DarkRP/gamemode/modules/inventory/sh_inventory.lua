@@ -63,12 +63,30 @@ local function GenerateUUID()
         math.random(0, 0xffffffffffff))
 end
 
--- Inventory Management
+-- Weapon Type Definitions for Damage Assignment
+local WeaponTypes = {
+    -- Pistols
+    ["weapon_pistol"] = "pistol",
+    ["deagle"] = "pistol",
+    ["fiveseven"] = "pistol",
+    -- Assault Rifles
+    ["ak47"] = "assault_rifle",
+    ["m4a1"] = "assault_rifle",
+    ["sg552"] = "assault_rifle",
+    ["aug"] = "assault_rifle",
+    ["m249"] = "assault_rifle",
+    -- Shotguns
+    ["weapon_shotgun"] = "shotgun",
+    ["spas12"] = "shotgun",
+    -- Snipers
+    ["awp"] = "sniper",
+    ["scout"] = "sniper",
+    ["g3sg1"] = "sniper"
+}
+
+-- Inventory Management Functions
 function AddResourceToInventory(ply, resourceID, amount, silent)
-    if not IsValid(ply) or not ResourceItems[resourceID] then 
-        print("[Debug] AddResourceToInventory failed: Invalid ply or resourceID " .. tostring(resourceID))
-        return 
-    end
+    if not IsValid(ply) or not ResourceItems[resourceID] then return end
     local steamID = ply:SteamID()
     local inv = PlayerInventories[steamID] or { items = { [1] = {} }, resources = {}, positions = { [1] = {} }, maxPages = 1, loadout = {} }
     inv.resources[resourceID] = (inv.resources[resourceID] or 0) + (amount or 1)
@@ -82,59 +100,67 @@ function AddResourceToInventory(ply, resourceID, amount, silent)
     end
 end
 
-function AddItemToInventory(ply, itemID, amount, stats, page)
+function AddItemToInventory(ply, itemID, amount, stats, page, silent)
     if not IsValid(ply) or not InventoryItems[itemID] then return end
     local steamID = ply:SteamID()
     local inv = PlayerInventories[steamID] or { items = { [1] = {} }, resources = {}, positions = { [1] = {} }, maxPages = 1, loadout = {} }
     page = tonumber(page) or 1
     inv.maxPages = inv.maxPages or 1
-    if page < 1 or page > inv.maxPages then 
-        print("[Debug] Invalid page " .. page .. " for " .. steamID .. ", maxPages: " .. inv.maxPages)
-        return 
-    end
+    if page < 1 or page > inv.maxPages then return end
     inv.items[page] = inv.items[page] or {}
     inv.positions[page] = inv.positions[page] or {}
     for i = 1, (amount or 1) do
         local uniqueID = stats and stats.id or GenerateUUID()
         local isWeaponOrArmor = InventoryItems[itemID].category == "Weapons" or InventoryItems[itemID].category == "Armor"
         stats = stats or {
-            damage = isWeaponOrArmor and math.random(10, 80) or 0,
-            slots = 0, -- Will be set based on rarity
-            rarity = nil, -- Will be set below
-            slotType = nil, -- Will be set for weapons
+            damage = 0, -- Will be set below for weapons
+            slots = 0,
+            rarity = nil,
+            slotType = nil,
             crafter = ply:Nick()
         }
 
         if isWeaponOrArmor then
-            -- Determine rarity with weighted probabilities
             local rarityRoll = math.random(1, 500)
-            if rarityRoll == 1 then
-                stats.rarity = "Legendary" -- 1/500 chance (0.2%)
-            elseif rarityRoll <= 3 then
-                stats.rarity = "Epic" -- 1/200 chance (0.5%)
-            elseif rarityRoll <= 10 then
-                stats.rarity = "Rare" -- 1/50 chance (2%)
-            elseif rarityRoll <= 50 then
-                stats.rarity = "Uncommon" -- 1/10 chance (10%)
-            else
-                stats.rarity = "Common" -- Default (88.8%)
-            end
-
-            -- Set slot count based on rarity
-            local slotCaps = {
-                Common = 2,
-                Uncommon = 3,
-                Rare = 4,
-                Epic = 5,
-                Legendary = 6
-            }
-            local maxSlots = slotCaps[stats.rarity] or 2
-            stats.slots = math.random(0, maxSlots)
-
-            -- For weapons, determine slot type (Primary or Sidearm)
+            stats.rarity = rarityRoll == 1 and "Legendary" or rarityRoll <= 3 and "Epic" or rarityRoll <= 10 and "Rare" or rarityRoll <= 50 and "Uncommon" or "Common"
+            local slotCaps = { Common = 2, Uncommon = 3, Rare = 4, Epic = 5, Legendary = 6 }
+            stats.slots = math.random(0, slotCaps[stats.rarity] or 2)
             if InventoryItems[itemID].category == "Weapons" then
-                local slotTypeRoll = math.random(1, 100)
-                stats.slotType = (slotTypeRoll <= 10) and "Sidearm" or "Primary" -- 10% chance for Sidearm
+                stats.slotType = math.random(1, 500) == 1 and "Sidearm" or "Primary"
+
+                -- Assign damage based on weapon type and rarity
+                local weaponType = WeaponTypes[itemID] or "unknown"
+                if weaponType == "pistol" then
+                    if stats.rarity == "Legendary" then
+                        stats.damage = math.random(6, 20)
+                    else
+                        stats.damage = math.random(6, 15)
+                    end
+                elseif weaponType == "assault_rifle" then
+                    if stats.rarity == "Legendary" then
+                        stats.damage = math.random(15, 25)
+                    else
+                        stats.damage = math.random(12, 20)
+                    end
+                elseif weaponType == "shotgun" then
+                    if stats.rarity == "Legendary" then
+                        stats.damage = math.random(5, 15)
+                    else
+                        stats.damage = math.random(5, 10)
+                    end
+                elseif weaponType == "sniper" then
+                    if stats.rarity == "Legendary" then
+                        stats.damage = math.random(50, 100)
+                    else
+                        stats.damage = math.random(25, 50)
+                    end
+                else
+                    -- Default damage for unknown weapon types
+                    stats.damage = math.random(10, 80)
+                end
+            else
+                -- Default damage for armor (if any)
+                stats.damage = 0
             end
         end
 
@@ -156,7 +182,6 @@ function AddItemToInventory(ply, itemID, amount, stats, page)
                 end
                 if not slotTaken then
                     inv.positions[page][uniqueID] = {row, col}
-                    print("[Debug] Assigned " .. uniqueID .. " (" .. itemID .. ") to " .. row .. "," .. col .. " on page " .. page)
                     break
                 end
             end
@@ -171,16 +196,16 @@ function AddItemToInventory(ply, itemID, amount, stats, page)
         net.WriteTable(inv.positions[page])
         net.Send(ply)
         SavePlayerInventory(ply)
-        SendInventoryMessage(ply, "Added " .. (amount or 1) .. " " .. InventoryItems[itemID].name .. "(s) to your inventory on page " .. page .. ".")
+        if not silent then
+            SendInventoryMessage(ply, "Added " .. (amount or 1) .. " " .. InventoryItems[itemID].name .. "(s) to your inventory on page " .. page .. ".")
+        end
     end
 end
 
 -- Server-Side Logic
 if SERVER then
-    local PickupCooldown = {}
     local allowedTools = { "button", "fading_door", "keypad_willox", "camera", "nocollide", "remover", "stacker" }
 
-    -- Initialize or update the database schema
     hook.Add("DarkRPDBInitialized", "InitCustomInventoryTable", function()
         MySQLite.begin()
         MySQLite.queueQuery([[
@@ -195,7 +220,6 @@ if SERVER then
         ]])
         MySQLite.commit(function()
             print("[Custom Inventory] Table 'darkrp_custom_inventory' initialized or updated successfully!")
-            -- Attempt to add the loadout column if it doesn't exist
             MySQLite.query("ALTER TABLE darkrp_custom_inventory ADD COLUMN loadout TEXT NOT NULL DEFAULT '{}'", function()
                 print("[Custom Inventory] Added loadout column to darkrp_custom_inventory (or it already exists)")
             end, function(err)
@@ -211,7 +235,6 @@ if SERVER then
         net.Start("InventoryMessage")
         net.WriteString(message)
         net.Send(ply)
-        print("[Inventory Log] " .. ply:Nick() .. " (" .. ply:SteamID() .. "): " .. message)
     end
 
     local function LoadPlayerInventory(ply)
@@ -226,8 +249,6 @@ if SERVER then
                 inv.maxPages = tonumber(data[1].maxPages) or 1
                 inv.loadout = util.JSONToTable(data[1].loadout or '{}') or {}
             end
-            inv.items[1] = inv.items[1] or {}
-            inv.positions[1] = inv.positions[1] or {}
             PlayerInventories[steamID] = inv
             net.Start("SyncInventory")
             net.WriteUInt(1, 8)
@@ -242,19 +263,6 @@ if SERVER then
             net.Send(ply)
         end, function(err)
             print("[Custom Inventory] Error loading inventory for " .. steamID .. ": " .. err)
-            local inv = { items = { [1] = {} }, resources = {}, positions = { [1] = {} }, maxPages = 1, loadout = {} }
-            PlayerInventories[steamID] = inv
-            net.Start("SyncInventory")
-            net.WriteUInt(1, 8)
-            net.WriteTable(inv.items[1])
-            net.WriteTable(inv.positions[1])
-            net.Send(ply)
-            net.Start("SyncResources")
-            net.WriteTable(inv.resources)
-            net.Send(ply)
-            net.Start("SyncLoadout")
-            net.WriteTable(inv.loadout)
-            net.Send(ply)
         end)
     end
 
@@ -276,15 +284,13 @@ if SERVER then
         MySQLite.query("SELECT items, positions FROM darkrp_custom_inventory WHERE steamid = " .. MySQLite.SQLStr(steamID), function(data)
             if data and data[1] then
                 local inv = PlayerInventories[steamID] or { items = { [1] = {} }, resources = {}, positions = { [1] = {} }, maxPages = 1, loadout = {} }
-                local items = util.JSONToTable(data[1].items or '{"1":[]}') or { [1] = {} }
-                local positions = util.JSONToTable(data[1].positions or '{"1":{}}') or { [1] = {} }
-                inv.items = items
-                inv.positions = positions
+                inv.items = util.JSONToTable(data[1].items or '{"1":[]}') or { [1] = {} }
+                inv.positions = util.JSONToTable(data[1].positions or '{"1":{}}') or { [1] = {} }
                 PlayerInventories[steamID] = inv
                 net.Start("SyncInventory")
                 net.WriteUInt(page, 8)
-                net.WriteTable(items[page] or {})
-                net.WriteTable(positions[page] or {})
+                net.WriteTable(inv.items[page] or {})
+                net.WriteTable(inv.positions[page] or {})
                 net.Send(ply)
             end
         end, function(err)
@@ -321,7 +327,6 @@ if SERVER then
         PlayerInventories[steamID] = inv
         SavePlayerInventory(ply)
         SyncInventoryFromSQL(ply, page)
-        print("[Debug] Updated positions for " .. steamID .. " on page " .. page .. ": " .. table.ToString(newPositions))
     end)
 
     net.Receive("DropItem", function(len, ply)
@@ -401,7 +406,6 @@ if SERVER then
         local inv = PlayerInventories[steamID] or { items = { [1] = {} }, resources = {}, positions = { [1] = {} }, maxPages = 1, loadout = {} }
         local item, itemData
 
-        -- Find and remove the item from inventory
         for i, it in ipairs(inv.items[page] or {}) do
             if it.id == uniqueID then
                 item = it
@@ -413,41 +417,35 @@ if SERVER then
         end
         if not item or not itemData then return end
 
-        -- Validate the slot
         local validSlots = {["Armor"] = true, ["Weapon"] = true, ["Sidearm"] = true, ["Boots"] = true, ["Utility"] = true}
-        if not validSlots[slot] then return end
+        local canEquip = true
+        local failMessage = "You cannot equip this item to this slot!"
 
-        -- Check category compatibility
-        if (slot == "Weapon" or slot == "Sidearm") and itemData.category ~= "Weapons" then
-            SendInventoryMessage(ply, "Only weapons can be equipped to " .. slot .. "!")
-            AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, slots = item.slots, rarity = item.rarity, slotType = item.slotType, crafter = item.crafter }, page)
-            return
-        end
-        if slot == "Utility" and itemData.category ~= "Utility" then
-            SendInventoryMessage(ply, "Only utility items can be equipped to Utility!")
-            AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, slots = item.slots, rarity = item.rarity, slotType = item.slotType, crafter = item.crafter }, page)
-            return
-        end
-
-        -- Check slot type compatibility for weapons
-        if slot == "Weapon" or slot == "Sidearm" then
+        if not validSlots[slot] then
+            canEquip = false
+        elseif (slot == "Weapon" or slot == "Sidearm") and itemData.category != "Weapons" then
+            canEquip = false
+        elseif slot == "Utility" and itemData.category != "Utility" then
+            canEquip = false
+        elseif slot == "Weapon" or slot == "Sidearm" then
             local requiredSlotType = (slot == "Weapon") and "Primary" or "Sidearm"
-            if item.slotType and item.slotType ~= requiredSlotType then
-                SendInventoryMessage(ply, "This weapon is a " .. item.slotType .. " and cannot be equipped to " .. slot .. "!")
-                AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, slots = item.slots, rarity = item.rarity, slotType = item.slotType, crafter = item.crafter }, page)
-                return
+            if item.slotType and item.slotType != requiredSlotType then
+                canEquip = false
             end
         end
 
-        -- Check if the target slot is already occupied
+        if not canEquip then
+            SendInventoryMessage(ply, failMessage)
+            AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, slots = item.slots, rarity = item.rarity, slotType = item.slotType, crafter = item.crafter }, page, true)
+            return
+        end
+
         local existingItem = inv.loadout[slot]
         if existingItem and InventoryItems[existingItem.itemID] then
-            -- Unequip the existing item in the slot
             local existingItemData = InventoryItems[existingItem.itemID]
             if existingItemData.category == "Weapons" then
                 local weaponClass = existingItemData.entityClass or existingItem.itemID
                 ply:StripWeapon(weaponClass)
-                print("[Debug] Stripped " .. ply:Nick() .. " of weapon " .. weaponClass .. " from " .. slot)
             end
             AddItemToInventory(ply, existingItem.itemID, 1, { 
                 id = existingItem.id, 
@@ -456,12 +454,11 @@ if SERVER then
                 rarity = existingItem.rarity, 
                 slotType = existingItem.slotType, 
                 crafter = existingItem.crafter 
-            }, 1)
+            }, 1, true)
             inv.loadout[slot] = nil
             SendInventoryMessage(ply, "Unequipped " .. existingItemData.name .. " from " .. slot .. " to equip new item.")
         end
 
-        -- Equip the new item
         inv.loadout[slot] = item
         PlayerInventories[steamID] = inv
         SavePlayerInventory(ply)
@@ -475,11 +472,16 @@ if SERVER then
         net.Send(ply)
         SendInventoryMessage(ply, "Equipped " .. itemData.name .. " to " .. slot .. ".")
         if itemData.category == "Weapons" then
-            local weaponClass = itemData.entityClass or item.itemID -- Fallback to itemID if entityClass not defined
-            local slotNum = (slot == "Weapon") and 1 or (slot == "Sidearm") and 2 or 1
+            local weaponClass = itemData.entityClass or item.itemID
             ply:Give(weaponClass)
             ply:SelectWeapon(weaponClass)
-            print("[Debug] Gave " .. ply:Nick() .. " weapon " .. weaponClass .. " in slot " .. slotNum)
+            -- Store the custom damage on the player's weapon
+            local weapon = ply:GetWeapon(weaponClass)
+            if IsValid(weapon) then
+                weapon:SetNWInt("CustomDamage", item.damage)
+                weapon:SetNWString("WeaponType", WeaponTypes[item.itemID] or "unknown")
+                weapon:SetNWString("Rarity", item.rarity or "Common")
+            end
         end
     end)
 
@@ -491,7 +493,7 @@ if SERVER then
         if not item or not InventoryItems[item.itemID] then return end
         local itemData = InventoryItems[item.itemID]
         inv.loadout[slot] = nil
-        AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, slots = item.slots, rarity = item.rarity, slotType = item.slotType, crafter = item.crafter }, 1)
+        AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, slots = item.slots, rarity = item.rarity, slotType = item.slotType, crafter = item.crafter }, 1, true)
         PlayerInventories[steamID] = inv
         SavePlayerInventory(ply)
         net.Start("SyncLoadout")
@@ -501,7 +503,6 @@ if SERVER then
         if itemData.category == "Weapons" then
             local weaponClass = itemData.entityClass or item.itemID
             ply:StripWeapon(weaponClass)
-            print("[Debug] Stripped " .. ply:Nick() .. " of weapon " .. weaponClass)
         end
     end)
 
@@ -520,11 +521,65 @@ if SERVER then
             slotType = ent:GetNWString("SlotType", ""),
             crafter = ent:GetNWString("Crafter", "Unknown")
         }
-        if InventoryThrows[itemID].category == "Weapons" or InventoryItems[itemID].category == "Armor" then return end
+        if InventoryItems[itemID].category == "Weapons" or InventoryItems[itemID].category == "Armor" then return end
         AddItemToInventory(ply, itemID, 1, stats, 1)
         ent:Remove()
         SendInventoryMessage(ply, "Picked up 1 " .. InventoryItems[itemID].name .. ".")
         return true
+    end)
+
+    -- Hook to apply custom damage from inventory weapons
+    hook.Add("EntityTakeDamage", "ApplyCustomWeaponDamage", function(target, dmginfo)
+        local attacker = dmginfo:GetAttacker()
+        if not IsValid(attacker) or not attacker:IsPlayer() then return end
+
+        local weapon = attacker:GetActiveWeapon()
+        if not IsValid(weapon) then return end
+
+        local customDamage = weapon:GetNWInt("CustomDamage", -1)
+        if customDamage == -1 then return end -- No custom damage set
+
+        local weaponType = weapon:GetNWString("WeaponType", "unknown")
+        local rarity = weapon:GetNWString("Rarity", "Common")
+        local damageToApply = customDamage
+
+        -- For shotguns, multiply damage by the number of pellets (assuming 6 pellets)
+        if weaponType == "shotgun" then
+            local numPellets = 6 -- Adjust this if your shotguns fire a different number of pellets
+            damageToApply = customDamage * numPellets
+            -- Since shotguns fire multiple pellets, we only want to apply the total damage once
+            -- Garry's Mod applies damage per pellet, so we'll override the damage for this hit
+            dmginfo:SetDamage(damageToApply / numPellets) -- Spread the total damage across pellets for display
+        else
+            dmginfo:SetDamage(damageToApply)
+        end
+
+        -- Debug output to console
+        print(string.format("[Weapon Damage Test] %s (%s, %s) dealt %d damage to %s with %s (Base Damage: %d)",
+            attacker:Nick(), weaponType, rarity, damageToApply, target:GetClass(), weapon:GetClass(), customDamage))
+    end)
+
+    -- Console command to spawn a test NPC for damage testing
+    concommand.Add("test_weapon_damage", function(ply)
+        if not IsValid(ply) then return end
+        if not ply:IsSuperAdmin() then
+            SendInventoryMessage(ply, "Superadmin only.")
+            return
+        end
+
+        -- Spawn an NPC in front of the player
+        local npc = ents.Create("npc_zombie")
+        if not IsValid(npc) then
+            SendInventoryMessage(ply, "Failed to spawn test NPC (npc_zombie).")
+            return
+        end
+
+        local pos = ply:GetEyeTrace().HitPos + Vector(0, 0, 50)
+        npc:SetPos(pos)
+        npc:Spawn()
+        npc:SetHealth(1000) -- Give the NPC high health so it doesn't die immediately
+
+        SendInventoryMessage(ply, "Spawned a test NPC (npc_zombie) with 1000 health. Shoot it to test damage.")
     end)
 
     concommand.Add("addresource", function(ply, _, args)
@@ -548,7 +603,7 @@ end
 -- Client-Side Logic
 if CLIENT then
     local Resources, Inventory, InventoryPositions, Loadout = {}, {}, {}, {}
-    local InventoryFrame, ToolSelectorFrame, inventoryTab, resourcesTab
+    local InventoryFrame, ToolSelectorFrame, inventoryTab, resourcesTab, adminTab
     local isInventoryOpen, isToolSelectorOpen, isQKeyHeld = false, false, false
     local currentTooltip, currentInfoBox
     local activeMenus = {}
@@ -568,75 +623,55 @@ if CLIENT then
         diamond = { material = "models/shiny", color = Color(240, 248, 255, 200) }
     }
 
-    -- Define a custom font for tooltips
-    surface.CreateFont("TooltipFont", {
-        font = "DermaDefault",
-        size = 14,
-        weight = 500
-    })
-
-    -- Shared tooltip constants
+    -- Tooltip Configuration
+    surface.CreateFont("TooltipFont", { font = "DermaDefault", size = 14, weight = 500 })
     local TOOLTIP_LINE_HEIGHT = 18
     local TOOLTIP_PADDING_X = 10
     local TOOLTIP_PADDING_Y = 10
-    local TOOLTIP_ZPOS = 32767 -- Maximum ZPos to ensure tooltip renders on top
-    local TOOLTIP_SPACING = 2 -- Spacing between icon and tooltip
-    local TOOLTIP_FADEOUT_DELAY = 0.2 -- Delay before removing tooltip after cursor exits
+    local TOOLTIP_ZPOS = 1000
+    local TOOLTIP_SPACING = 2
+    local TOOLTIP_FADEOUT_DELAY = 0.2
     local RARITY_COLORS = {
-        common = Color(200, 200, 200),    -- Light gray for Common
-        uncommon = Color(0, 255, 0),      -- Green for Uncommon
-        rare = Color(0, 0, 139),          -- Dark blue for Rare
-        epic = Color(255, 245, 200),      -- Yellowish white for Epic
-        legendary = Color(139, 0, 0)      -- Dark red for Legendary
+        common = Color(200, 200, 200),
+        uncommon = Color(0, 255, 0),
+        rare = Color(0, 0, 139),
+        epic = Color(255, 245, 200),
+        legendary = Color(139, 0, 0)
     }
 
-    -- Shared function to calculate slot counts for an item
     local function CalculateSlotCounts(item, itemData)
         local isWeaponOrArmor = itemData.category == "Weapons" or itemData.category == "Armor"
         local slotCount = item.slots or 0
-
-        -- Determine base slot count for weapons
         local baseSlotCount = 0
         if isWeaponOrArmor then
             if itemData.category == "Weapons" then
-                local weaponSlots = {
-                    ak47 = 2,
-                    m4a1 = 2,
-                    sg552 = 2,
-                    aug = 2,
-                    m249 = 2
-                }
+                local weaponSlots = { ak47 = 2, m4a1 = 2, sg552 = 2, aug = 2, m249 = 2 }
                 baseSlotCount = weaponSlots[item.itemID] or 1
             else
                 baseSlotCount = 1
             end
         end
-
         local displaySlotCount = isWeaponOrArmor and math.max(slotCount, baseSlotCount) or slotCount
         return slotCount, baseSlotCount, displaySlotCount
     end
 
-    -- Shared function to create tooltip content
     local function CreateTooltipContent(item, itemData)
         local isWeaponOrArmor = itemData.category == "Weapons" or itemData.category == "Armor"
         local isUtility = itemData.category == "Utility"
         local rarity = isWeaponOrArmor and (item.rarity or itemData.baseRarity or "Common") or nil
         local rarityColor = rarity and RARITY_COLORS[rarity:lower()] or Color(255, 255, 255)
         local damage = item.damage or "N/A"
-        local slotCount, baseSlotCount, displaySlotCount = CalculateSlotCounts(item, itemData)
         local slotType = item.slotType or "N/A"
+        local slotTypeColor = (slotType == "Sidearm") and RARITY_COLORS.epic or Color(255, 255, 255)
         local crafter = item.crafter or "Unknown"
+        local slotCount, baseSlotCount, displaySlotCount = CalculateSlotCounts(item, itemData)
 
-        -- Debug slot counts
-        print("[Debug] Item " .. item.itemID .. " (uniqueID: " .. (item.id or "loadout") .. ") - slotCount: " .. slotCount .. ", baseSlotCount: " .. baseSlotCount .. ", displaySlotCount: " .. displaySlotCount)
-
-        -- Prepare tooltip lines
         local lines = {}
         if isWeaponOrArmor then
             table.insert(lines, { text = rarity, color = rarityColor })
-            table.insert(lines, { text = "Item: " .. itemData.name, color = Color(255, 255, 255) })
+            table.insert(lines, { text = itemData.name, color = Color(255, 255, 255) })
             if itemData.category == "Weapons" then
-                table.insert(lines, { text = "Slot Type: " .. slotType, color = Color(255, 255, 255) })
+                table.insert(lines, { text = slotType, color = slotTypeColor })
             end
             table.insert(lines, { text = "Damage: " .. damage, color = Color(255, 255, 255) })
             if displaySlotCount > 0 then
@@ -658,9 +693,7 @@ if CLIENT then
         return lines
     end
 
-    -- Shared function to create and position a tooltip
-    local function CreateTooltip(parent, tooltipParent, lines, posX, posY, adjustX, adjustY)
-        -- Calculate tooltip size
+    local function CreateTooltip(parent, lines, posX, posY, row, col)
         local maxWidth = 0
         for _, line in ipairs(lines) do
             surface.SetFont("TooltipFont")
@@ -670,69 +703,50 @@ if CLIENT then
         local tooltipWidth = maxWidth + TOOLTIP_PADDING_X * 2
         local tooltipHeight = (#lines * TOOLTIP_LINE_HEIGHT) + (TOOLTIP_PADDING_Y * 2)
 
-        -- Create tooltip with the specified parent
-        currentTooltip = vgui.Create("DPanel", tooltipParent or parent)
+        currentTooltip = vgui.Create("DPanel", parent)
         currentTooltip:SetSize(tooltipWidth, tooltipHeight)
-
-        -- Convert position if tooltipParent is different from parent
-        local finalPosX, finalPosY = posX, posY
-        if tooltipParent and tooltipParent ~= parent then
-            local screenX, screenY = parent:LocalToScreen(posX, posY)
-            finalPosX, finalPosY = tooltipParent:ScreenToLocal(screenX, screenY)
-        end
-
-        -- Prefer right side, check screen bounds instead of parent bounds
-        local preferredX = finalPosX + adjustX -- Right side
-        local screenX, screenY = (tooltipParent or parent):LocalToScreen(preferredX, finalPosY)
-        local screenW, screenH = ScrW(), ScrH()
-        if screenX + tooltipWidth > screenW then
-            preferredX = finalPosX - tooltipWidth - TOOLTIP_SPACING -- Fall back to left side
-        end
-
-        -- Ensure the tooltip doesn't go off the left edge of the screen
-        screenX, screenY = (tooltipParent or parent):LocalToScreen(preferredX, finalPosY)
-        if screenX < 0 then
-            preferredX = preferredX - screenX -- Adjust to keep tooltip on screen
-        end
-
-        -- Adjust Y position to prevent going off the bottom of the parent
-        local parentHeight = (tooltipParent or parent):GetTall()
-        local adjustedY = finalPosY
-        if finalPosY + tooltipHeight > parentHeight then
-            adjustedY = finalPosY - tooltipHeight + adjustY
-        end
-
-        currentTooltip:SetPos(preferredX, adjustedY)
         currentTooltip:SetZPos(TOOLTIP_ZPOS)
-        currentTooltip:SetVisible(true)
         currentTooltip.Lines = lines
 
-        -- Paint the tooltip
+        -- Grid dimensions
+        local slotWidth, slotHeight = 97, 97
+        local isRightmost = col == 10
+        local isBottomRow = row == 6
+        local localX, localY
+
+        -- Default: position to the right, aligned with the top of the slot
+        localX = posX + slotWidth + TOOLTIP_SPACING
+        localY = posY -- Align with the top of the slot
+
+        -- Adjust positioning based on grid position
+        if isRightmost then
+            if isBottomRow then
+                -- Rightmost column and bottom row: position above the item
+                localX = posX - (tooltipWidth - slotWidth) / 2 -- Center horizontally
+                localY = posY - tooltipHeight - TOOLTIP_SPACING
+            else
+                -- Rightmost column but not bottom row: position below the item
+                localX = posX - (tooltipWidth - slotWidth) / 2 -- Center horizontally
+                localY = posY + slotHeight + TOOLTIP_SPACING
+            end
+        elseif isBottomRow then
+            -- Bottom row but not rightmost column: position above the item
+            localX = posX + slotWidth + TOOLTIP_SPACING
+            localY = posY - tooltipHeight - TOOLTIP_SPACING
+        end
+
+        -- Ensure tooltip stays within gridPanel bounds
+        local gridWidth, gridHeight = parent:GetSize()
+        localX = math.max(0, math.min(localX, gridWidth - tooltipWidth))
+        localY = math.max(0, math.min(localY, gridHeight - tooltipHeight))
+
+        currentTooltip:SetPos(localX, localY)
         currentTooltip.Paint = function(self, w, h)
             draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 200))
             for i, line in ipairs(self.Lines) do
                 draw.SimpleText(line.text, "TooltipFont", TOOLTIP_PADDING_X, TOOLTIP_PADDING_Y + (i - 1) * TOOLTIP_LINE_HEIGHT, line.color, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
             end
         end
-
-        -- Debug tooltip visibility with throttling
-        currentTooltip.LastDebugTime = 0
-        currentTooltip.Think = function(self)
-            if not IsValid(self) then return end
-            local currentTime = CurTime()
-            if currentTime - self.LastDebugTime >= 1 then -- Print every 1 second
-                local screenX, screenY = self:LocalToScreen(0, 0)
-                print("[Debug] Tooltip visibility check for " .. lines[1].text .. " at " .. preferredX .. "," .. adjustedY .. " (screen: " .. screenX .. "," .. screenY .. "), visible: " .. tostring(self:IsVisible()))
-                self.LastDebugTime = currentTime
-            end
-        end
-
-        -- Debug tooltip creation
-        local parentName = (tooltipParent or parent):GetName() or "unnamed"
-        screenX, screenY = (tooltipParent or parent):LocalToScreen(preferredX, adjustedY)
-        print("[Debug] Tooltip created for " .. lines[1].text .. " at " .. preferredX .. "," .. adjustedY .. " (screen: " .. (screenX or 0) .. "," .. (screenY or 0) .. "), size: " .. tooltipWidth .. "x" .. tooltipHeight .. ", adjustX: " .. adjustX .. ", parent: " .. parentName .. ", visible: " .. tostring(currentTooltip:IsVisible()))
-
-        return currentTooltip, preferredX, adjustedY, tooltipWidth, tooltipHeight
     end
 
     local function OpenToolSelector()
@@ -827,7 +841,7 @@ if CLIENT then
                     local newPos = {row, col}
                     local occupiedItem
                     for uniqueID, pos in pairs(InventoryPositions) do
-                        if pos[1] == row and pos[2] == col and uniqueID ~= draggedUniqueID then
+                        if pos[1] == row and pos[2] == col and uniqueID != draggedUniqueID then
                             occupiedItem = uniqueID
                             break
                         end
@@ -873,23 +887,18 @@ if CLIENT then
         
             model.OnCursorEntered = function(self)
                 if IsValid(currentTooltip) then currentTooltip:Remove() end
-                print("[Debug] OnCursorEntered triggered for " .. itemID .. " (uniqueID: " .. uniqueID .. ")")
                 local itemData = InventoryItems[itemID]
                 local lines = CreateTooltipContent(item, itemData)
                 local slotPanel = slots[row][col]
-                local slotX, slotY = IsValid(slotPanel) and slotPanel:GetPos() or 0, 0
-                -- Icon is 75x75, centered in 97x97 slot. Right edge of icon: (97-75)/2 + 75 = 86. Add spacing.
-                local adjustX = 86 + TOOLTIP_SPACING
-                CreateTooltip(gridPanel, nil, lines, slotX, slotY, adjustX, slotHeight)
+                local slotX, slotY = slotPanel:GetPos()
+                CreateTooltip(gridPanel, lines, slotX, slotY, row, col)
             end
 
             model.OnCursorExited = function(self)
-                print("[Debug] OnCursorExited triggered for " .. itemID .. " (uniqueID: " .. uniqueID .. ")")
                 if IsValid(currentTooltip) then
                     timer.Simple(TOOLTIP_FADEOUT_DELAY, function()
                         if IsValid(currentTooltip) and not self:IsHovered() then
                             currentTooltip:Remove()
-                            print("[Debug] Tooltip removed after delay")
                         end
                     end)
                 end
@@ -899,22 +908,34 @@ if CLIENT then
                 if not isInventoryOpen then return end
                 local menu = DermaMenu()
                 table.insert(activeMenus, menu)
-                if InventoryItems[itemID].category == "Utility" then
-                    if InventoryItems[itemID].useFunction then
-                        menu:AddOption("Use", function()
-                            net.Start("UseItem")
-                            net.WriteString(uniqueID)
-                            net.WriteUInt(currentPage, 8)
-                            net.SendToServer()
-                        end)
-                    end
+
+                local isEquipable = false
+                if InventoryItems[itemID].category == "Utility" and itemID ~= "medkit" then
+                    isEquipable = true
+                elseif InventoryItems[itemID].category == "Weapons" then
+                    isEquipable = true
+                end
+
+                if not isEquipable and InventoryItems[itemID].useFunction then
+                    menu:AddOption("Use", function()
+                        net.Start("UseItem")
+                        net.WriteString(uniqueID)
+                        net.WriteUInt(currentPage, 8)
+                        net.SendToServer()
+                    end)
+                end
+
+                if not (InventoryItems[itemID].category == "Weapons" or InventoryItems[itemID].category == "Armor") then
                     menu:AddOption("Drop", function()
                         net.Start("DropItem")
                         net.WriteString(uniqueID)
                         net.WriteUInt(currentPage, 8)
                         net.SendToServer()
                     end)
-                    menu:AddOption("Equip to Utility", function()
+                end
+
+                if InventoryItems[itemID].category == "Utility" and itemID ~= "medkit" then
+                    menu:AddOption("Equip", function()
                         net.Start("EquipItem")
                         net.WriteString(uniqueID)
                         net.WriteUInt(currentPage, 8)
@@ -922,27 +943,23 @@ if CLIENT then
                         net.SendToServer()
                     end)
                 elseif InventoryItems[itemID].category == "Weapons" then
-                    menu:AddOption("Equip to Weapon", function()
+                    local equipSlot = (item.slotType == "Sidearm") and "Sidearm" or "Weapon"
+                    menu:AddOption("Equip", function()
                         net.Start("EquipItem")
                         net.WriteString(uniqueID)
                         net.WriteUInt(currentPage, 8)
-                        net.WriteString("Weapon")
-                        net.SendToServer()
-                    end)
-                    menu:AddOption("Equip to Sidearm", function()
-                        net.Start("EquipItem")
-                        net.WriteString(uniqueID)
-                        net.WriteUInt(currentPage, 8)
-                        net.WriteString("Sidearm")
+                        net.WriteString(equipSlot)
                         net.SendToServer()
                     end)
                 end
+
                 menu:AddOption("Delete", function()
                     net.Start("DeleteItem")
                     net.WriteString(uniqueID)
                     net.WriteUInt(currentPage, 8)
                     net.SendToServer()
                 end)
+
                 menu:Open(self:LocalToScreen(10, 75))
                 menu.OnRemove = function()
                     for i, m in ipairs(activeMenus) do
@@ -1040,6 +1057,87 @@ if CLIENT then
         end
     end
 
+    local function BuildAdminPanel(parent)
+        if not IsValid(parent) then return end
+        for _, child in pairs(parent:GetChildren()) do child:Remove() end
+
+        -- Create a dropdown for admin options
+        local dropdown = vgui.Create("DComboBox", parent)
+        dropdown:SetPos(10, 10)
+        dropdown:SetSize(200, 30)
+        dropdown:SetValue("Select an Option")
+        dropdown:AddChoice("Item Edit")
+        dropdown:AddChoice("Inventory Edit")
+        dropdown:AddChoice("Props")
+        dropdown:AddChoice("Events Panel")
+
+        -- Create panels for each option (hidden by default)
+        local panels = {}
+
+        -- Item Edit Panel
+        panels["Item Edit"] = vgui.Create("DPanel", parent)
+        panels["Item Edit"]:SetPos(10, 50)
+        panels["Item Edit"]:SetSize(970, 620)
+        panels["Item Edit"]:SetVisible(false)
+        panels["Item Edit"].Paint = function(self, w, h)
+            draw.RoundedBox(4, 0, 0, w, h, Color(40, 40, 40, 200))
+        end
+        local itemEditLabel = vgui.Create("DLabel", panels["Item Edit"])
+        itemEditLabel:SetPos(10, 10)
+        itemEditLabel:SetSize(950, 30)
+        itemEditLabel:SetText("Item Edit Panel - Add functionality here")
+        itemEditLabel:SetColor(Color(255, 255, 255))
+
+        -- Inventory Edit Panel
+        panels["Inventory Edit"] = vgui.Create("DPanel", parent)
+        panels["Inventory Edit"]:SetPos(10, 50)
+        panels["Inventory Edit"]:SetSize(970, 620)
+        panels["Inventory Edit"]:SetVisible(false)
+        panels["Inventory Edit"].Paint = function(self, w, h)
+            draw.RoundedBox(4, 0, 0, w, h, Color(40, 40, 40, 200))
+        end
+        local invEditLabel = vgui.Create("DLabel", panels["Inventory Edit"])
+        invEditLabel:SetPos(10, 10)
+        invEditLabel:SetSize(950, 30)
+        invEditLabel:SetText("Inventory Edit Panel - Add functionality here")
+        invEditLabel:SetColor(Color(255, 255, 255))
+
+        -- Props Panel
+        panels["Props"] = vgui.Create("DPanel", parent)
+        panels["Props"]:SetPos(10, 50)
+        panels["Props"]:SetSize(970, 620)
+        panels["Props"]:SetVisible(false)
+        panels["Props"].Paint = function(self, w, h)
+            draw.RoundedBox(4, 0, 0, w, h, Color(40, 40, 40, 200))
+        end
+        local propsLabel = vgui.Create("DLabel", panels["Props"])
+        propsLabel:SetPos(10, 10)
+        propsLabel:SetSize(950, 30)
+        propsLabel:SetText("Props Panel - Add functionality here")
+        propsLabel:SetColor(Color(255, 255, 255))
+
+        -- Events Panel
+        panels["Events Panel"] = vgui.Create("DPanel", parent)
+        panels["Events Panel"]:SetPos(10, 50)
+        panels["Events Panel"]:SetSize(970, 620)
+        panels["Events Panel"]:SetVisible(false)
+        panels["Events Panel"].Paint = function(self, w, h)
+            draw.RoundedBox(4, 0, 0, w, h, Color(40, 40, 40, 200))
+        end
+        local eventsLabel = vgui.Create("DLabel", panels["Events Panel"])
+        eventsLabel:SetPos(10, 10)
+        eventsLabel:SetSize(950, 30)
+        eventsLabel:SetText("Events Panel - Add functionality here")
+        eventsLabel:SetColor(Color(255, 255, 255))
+
+        -- Show the selected panel when an option is chosen
+        dropdown.OnSelect = function(self, index, value)
+            for panelName, panel in pairs(panels) do
+                panel:SetVisible(panelName == value)
+            end
+        end
+    end
+
     local function OpenCustomQMenu()
         if isInventoryOpen and IsValid(InventoryFrame) then return end
         gui.EnableScreenClicker(true)
@@ -1054,12 +1152,13 @@ if CLIENT then
         InventoryFrame.OnClose = function()
             gui.EnableScreenClicker(false)
             isInventoryOpen = false
-            if IsValid(currentTooltip) then currentTooltip:Remove() end
             for _, menu in ipairs(activeMenus) do if IsValid(menu) then menu:Remove() end end
             activeMenus = {}
+            if IsValid(currentTooltip) then currentTooltip:Remove() end
             InventoryFrame = nil
             inventoryTab = nil
             resourcesTab = nil
+            adminTab = nil
             if isToolSelectorOpen and IsValid(ToolSelectorFrame) then ToolSelectorFrame:Close() end
         end
 
@@ -1073,6 +1172,15 @@ if CLIENT then
         resourcesTab.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240)) end
         BuildResourcesMenu(resourcesTab)
         tabPanel:AddSheet("Resources", resourcesTab, "icon16/box.png")
+
+        -- Add Admin Panel tab for superadmins only
+        if LocalPlayer():IsSuperAdmin() then
+            adminTab = vgui.Create("DPanel", tabPanel)
+            adminTab.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240)) end
+            BuildAdminPanel(adminTab)
+            tabPanel:AddSheet("Admin Panel", adminTab, "icon16/shield.png")
+        end
+
         isInventoryOpen = true
         OpenToolSelector()
     end
@@ -1081,16 +1189,14 @@ if CLIENT then
         if not IsValid(slotsPanel) or not IsValid(frame) then return end
         for _, child in pairs(slotsPanel:GetChildren()) do child:Remove() end
 
-        -- Get frame dimensions
         local frameW, frameH = frame:GetSize()
         local slotOrder = {"Armor", "Weapon", "Sidearm", "Boots", "Utility"}
         local slotLabels = {Armor = "Armor", Weapon = "Primary Weapon", Sidearm = "Sidearm", Boots = "Boots", Utility = "Utility"}
 
-        -- Calculate slot dimensions based on slotsPanel size
         local slotsPanelW, slotsPanelH = slotsPanel:GetSize()
-        local slotHeight = math.floor((slotsPanelH - 10 * (#slotOrder + 1)) / #slotOrder) -- 10px padding between slots
-        local slotWidth = slotsPanelW - 20 -- 10px padding on each side
-        local iconSize = math.min(slotWidth - 20, slotHeight - 20) -- Ensure icon fits within slot
+        local slotHeight = math.floor((slotsPanelH - 10 * (#slotOrder + 1)) / #slotOrder)
+        local slotWidth = slotsPanelW - 20
+        local iconSize = math.min(slotWidth - 20, slotHeight - 20)
 
         for i, slot in ipairs(slotOrder) do
             local slotPanel = vgui.Create("DPanel", slotsPanel)
@@ -1118,13 +1224,13 @@ if CLIENT then
 
                 model.OnCursorEntered = function(self)
                     if IsValid(currentInfoBox) then currentInfoBox:Remove() end
-                    print("[Debug] OnCursorEntered triggered for " .. item.itemID .. " in loadout slot " .. slot)
                     local itemData = InventoryItems[item.itemID]
                     local lines = CreateTooltipContent(item, itemData)
                     local infoBoxHeight = (#lines * TOOLTIP_LINE_HEIGHT) + (TOOLTIP_PADDING_Y * 2)
                     currentInfoBox = vgui.Create("DPanel", frame)
                     currentInfoBox:SetSize(frame.InfoBoxWidth, infoBoxHeight)
                     currentInfoBox:SetPos(frame.InfoBoxX, frame.InfoBoxY)
+                    currentInfoBox:SetZPos(TOOLTIP_ZPOS)
                     currentInfoBox.Lines = lines
                     currentInfoBox.Paint = function(self, w, h)
                         draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 200))
@@ -1135,12 +1241,10 @@ if CLIENT then
                 end
 
                 model.OnCursorExited = function(self)
-                    print("[Debug] OnCursorExited triggered for " .. item.itemID .. " in loadout slot " .. slot)
                     if IsValid(currentInfoBox) then
                         timer.Simple(TOOLTIP_FADEOUT_DELAY, function()
                             if IsValid(currentInfoBox) and not self:IsHovered() then
                                 currentInfoBox:Remove()
-                                print("[Debug] Info box removed after delay")
                             end
                         end)
                     end
@@ -1166,21 +1270,15 @@ if CLIENT then
     end
 
     local function OpenEquipmentMenu()
-        -- Calculate frame size based on screen resolution
         local screenW, screenH = ScrW(), ScrH()
-        local frameWidth = math.min(screenW * 0.4, 500) -- 40% of screen width, max 500
-        local baseFrameHeight = math.min(screenH * 0.6, 600) -- 60% of screen height, max 600
-
-        -- Estimate info box height (assume max 10 lines for a Legendary item with 6 slots)
-        local maxInfoBoxLines = 10 -- Rarity, Item, Slot Type, Damage, Slots label, 6 slots, Crafter
+        local frameWidth = math.min(screenW * 0.4, 500)
+        local baseFrameHeight = math.min(screenH * 0.6, 600)
+        local maxInfoBoxLines = 10
         local infoBoxHeight = (maxInfoBoxLines * TOOLTIP_LINE_HEIGHT) + (TOOLTIP_PADDING_Y * 2)
-        local frameHeight = baseFrameHeight + infoBoxHeight + 20 -- Add space for info box and padding
+        local frameHeight = baseFrameHeight + infoBoxHeight + 20
+        frameWidth = math.min(frameWidth, screenW - 40)
+        frameHeight = math.min(frameHeight, screenH - 40)
 
-        -- Ensure frame fits within screen
-        frameWidth = math.min(frameWidth, screenW - 40) -- 20px padding on each side
-        frameHeight = math.min(frameHeight, screenH - 40) -- 20px padding on top/bottom
-
-        -- Create the frame
         local frame = vgui.Create("DFrame")
         frame:SetSize(frameWidth, frameHeight)
         frame:SetPos((screenW - frameWidth) / 2, (screenH - frameHeight) / 2)
@@ -1194,21 +1292,17 @@ if CLIENT then
             activeMenus = {}
         end
 
-        -- Calculate layout dimensions
         local padding = 10
-        local contentHeight = frameHeight - 30 -- Account for title bar
-        local leftPanelWidth = math.floor(frameWidth * 0.5) -- 50% for player model and info box
+        local contentHeight = frameHeight - 30
+        local leftPanelWidth = math.floor(frameWidth * 0.5)
         local rightPanelWidth = frameWidth - leftPanelWidth - padding
-        local playerModelHeight = math.floor(contentHeight * 0.65) -- 65% of content height for player model
-        local infoBoxHeightSpace = contentHeight - playerModelHeight - padding
+        local playerModelHeight = math.floor(contentHeight * 0.65)
         local infoBoxWidth = leftPanelWidth - 2 * padding
 
-        -- Store info box position and size for use in RefreshEquipmentSlots
         frame.InfoBoxWidth = infoBoxWidth
         frame.InfoBoxX = padding
         frame.InfoBoxY = 30 + playerModelHeight + padding
 
-        -- Player model
         local playerModel = vgui.Create("DModelPanel", frame)
         playerModel:SetSize(leftPanelWidth - 2 * padding, playerModelHeight)
         playerModel:SetPos(padding, 30)
@@ -1217,7 +1311,6 @@ if CLIENT then
         playerModel:SetCamPos(Vector(70, 70, 70))
         playerModel:SetLookAt(Vector(0, 0, 40))
 
-        -- Slots panel
         local slotsPanel = vgui.Create("DPanel", frame)
         slotsPanel:SetSize(rightPanelWidth, contentHeight)
         slotsPanel:SetPos(leftPanelWidth + padding, 30)
@@ -1225,7 +1318,6 @@ if CLIENT then
 
         RefreshEquipmentSlots(frame, slotsPanel)
 
-        -- Refresh slots only if panel is still valid
         net.Receive("SyncLoadout", function()
             Loadout = net.ReadTable()
             if IsValid(slotsPanel) then
