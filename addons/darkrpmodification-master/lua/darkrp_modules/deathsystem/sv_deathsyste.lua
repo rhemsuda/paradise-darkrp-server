@@ -1,7 +1,17 @@
--- Debug print to confirm the file is loading
+-- Debug print to confirm the file is loading (this one will always print for initial load confirmation)
 print("[Death System] sv_deathsystem.lua is loading...")
 
 if not SERVER then return end
+
+-- Create the rp_debug ConVar (default to 0, replicate to clients)
+CreateConVar("rp_debug", "0", FCVAR_REPLICATED + FCVAR_NOTIFY + FCVAR_ARCHIVE, "Enable debug prints for RP systems (0 = off, 1 = on)")
+
+-- Helper function to print debug messages conditionally
+local function DebugPrint(...)
+    if GetConVar("rp_debug"):GetInt() == 1 then
+        print(...)
+    end
+end
 
 -- Initialize network strings
 util.AddNetworkString("GhostTimerSync")
@@ -34,7 +44,7 @@ local spawnCoordinates = {
 hook.Add("PlayerDeath", "CustomDeathSystem", function(ply, inflictor, attacker)
     if not IsValid(ply) then return end
 
-    print("[Death System] Player " .. ply:Nick() .. " died, initiating ghost mode.")
+    DebugPrint("[Death System] Player " .. ply:Nick() .. " died, initiating ghost mode.")
 
     -- Store the player's death position and angles
     local deathPos = ply:GetPos()
@@ -43,7 +53,7 @@ hook.Add("PlayerDeath", "CustomDeathSystem", function(ply, inflictor, attacker)
     -- Create a ragdoll at the player's death position
     local ragdoll = ents.Create("prop_ragdoll")
     if not IsValid(ragdoll) then
-        print("[Death System] Failed to create ragdoll for " .. ply:Nick())
+        DebugPrint("[Death System] Failed to create ragdoll for " .. ply:Nick())
         return
     end
 
@@ -87,7 +97,7 @@ function MakePlayerGhost(ply)
     local deathData = playerDeathData[ply]
     if not deathData then return end
 
-    print("[Death System] Making " .. ply:Nick() .. " a ghost.")
+    DebugPrint("[Death System] Making " .. ply:Nick() .. " a ghost.")
 
     -- Set the player's position to their death position
     ply:SetPos(deathData.deathPos + Vector(0, 0, 50)) -- Slightly above the ragdoll to avoid clipping
@@ -120,14 +130,14 @@ function MakePlayerGhost(ply)
     end
 
     -- Start the ghost timer
-    print("[Death System] Starting ghost timer for " .. ply:Nick()) -- Added debug print
+    DebugPrint("[Death System] Starting ghost timer for " .. ply:Nick())
     timer.Create(deathData.timerName, deathData.duration, 1, function()
         if not IsValid(ply) then return end
         EndGhostMode(ply)
     end)
 
     -- Send the timer data to the client
-    print("[Death System] Sending GhostTimerSync to " .. ply:Nick())
+    DebugPrint("[Death System] Sending GhostTimerSync to " .. ply:Nick())
     net.Start("GhostTimerSync")
     net.WriteBool(true) -- Indicate the player is in ghost mode
     net.WriteFloat(deathData.startTime)
@@ -146,12 +156,12 @@ function EndGhostMode(ply)
     local deathData = playerDeathData[ply]
     if not deathData then return end
 
-    print("[Death System] Ending ghost mode for " .. ply:Nick())
+    DebugPrint("[Death System] Ending ghost mode for " .. ply:Nick())
 
     -- Stop any ongoing interaction
     if deathData.isInteracting then
         deathData.isInteracting = false
-        print("[Death System] Sending StopSphereInteraction to " .. ply:Nick() .. " (EndGhostMode)")
+        DebugPrint("[Death System] Sending StopSphereInteraction to " .. ply:Nick() .. " (EndGhostMode)")
         net.Start("StopSphereInteraction")
         net.Send(ply)
     end
@@ -232,7 +242,7 @@ net.Receive("RequestSphereInteraction", function(len, ply)
     local sphereEntIndex = net.ReadInt(32)
 
     if not playerDeathData[ply] or not playerDeathData[ply].isDead then
-        print("[Death System] Player " .. ply:Nick() .. " is not in ghost mode or not dead")
+        DebugPrint("[Death System] Player " .. ply:Nick() .. " is not in ghost mode or not dead")
         return
     end
 
@@ -240,26 +250,26 @@ net.Receive("RequestSphereInteraction", function(len, ply)
 
     if startInteraction then
         if deathData.isInteracting then
-            print("[Death System] Player " .. ply:Nick() .. " is already interacting with a sphere")
+            DebugPrint("[Death System] Player " .. ply:Nick() .. " is already interacting with a sphere")
             return
         end
 
         local ent = Entity(sphereEntIndex)
         if not IsValid(ent) or ent:GetClass() ~= "light_sphere" then
-            print("[Death System] Invalid light sphere entity (EntIndex=" .. sphereEntIndex .. ")")
+            DebugPrint("[Death System] Invalid light sphere entity (EntIndex=" .. sphereEntIndex .. ")")
             return
         end
 
         -- Check distance (must be within 100 units)
         local distance = ply:GetPos():Distance(ent:GetPos())
         if distance > 100 then
-            print("[Death System] Player " .. ply:Nick() .. " is too far from the light sphere (distance=" .. distance .. ")")
+            DebugPrint("[Death System] Player " .. ply:Nick() .. " is too far from the light sphere (distance=" .. distance .. ")")
             return
         end
 
         deathData.isInteracting = true
 
-        print("[Death System] " .. ply:Nick() .. " started interacting with light sphere (EntIndex=" .. ent:EntIndex() .. ") at distance " .. distance)
+        DebugPrint("[Death System] " .. ply:Nick() .. " started interacting with light sphere (EntIndex=" .. ent:EntIndex() .. ") at distance " .. distance)
 
         -- Notify the client to start the loading bar and sound
         net.Start("StartSphereInteraction")
@@ -270,7 +280,7 @@ net.Receive("RequestSphereInteraction", function(len, ply)
             if not IsValid(ply) or not IsValid(ent) or not deathData.isDead then
                 if IsValid(ply) then
                     deathData.isInteracting = false
-                    print("[Death System] Sending StopSphereInteraction to " .. ply:Nick() .. " (Timer Invalid)")
+                    DebugPrint("[Death System] Sending StopSphereInteraction to " .. ply:Nick() .. " (Timer Invalid)")
                     net.Start("StopSphereInteraction")
                     net.Send(ply)
                 end
@@ -283,7 +293,7 @@ net.Receive("RequestSphereInteraction", function(len, ply)
             local reduction = ent.TimerReduction or 120
             local newRemaining = math.max(0, remaining - reduction)
 
-            print("[Death System] Interaction complete for " .. ply:Nick() .. ". Timer values: elapsed=" .. elapsed .. ", remaining=" .. remaining .. ", reduction=" .. reduction .. ", newRemaining=" .. newRemaining)
+            DebugPrint("[Death System] Interaction complete for " .. ply:Nick() .. ". Timer values: elapsed=" .. elapsed .. ", remaining=" .. remaining .. ", reduction=" .. reduction .. ", newRemaining=" .. newRemaining)
 
             -- Update the deathData before adjusting the timer
             deathData.startTime = CurTime()
@@ -291,7 +301,7 @@ net.Receive("RequestSphereInteraction", function(len, ply)
             deathData.isInteracting = false
 
             if newRemaining <= 0 then
-                print("[Death System] Timer reduced to 0, ending ghost mode for " .. ply:Nick())
+                DebugPrint("[Death System] Timer reduced to 0, ending ghost mode for " .. ply:Nick())
                 EndGhostMode(ply)
             else
                 if timer.Exists(deathData.timerName) then
@@ -299,9 +309,9 @@ net.Receive("RequestSphereInteraction", function(len, ply)
                         if not IsValid(ply) then return end
                         EndGhostMode(ply)
                     end)
-                    print("[Death System] Adjusted timer for " .. ply:Nick() .. " to " .. newRemaining .. " seconds")
+                    DebugPrint("[Death System] Adjusted timer for " .. ply:Nick() .. " to " .. newRemaining .. " seconds")
                 else
-                    print("[Death System] Timer " .. deathData.timerName .. " no longer exists, ending ghost mode for " .. ply:Nick())
+                    DebugPrint("[Death System] Timer " .. deathData.timerName .. " no longer exists, ending ghost mode for " .. ply:Nick())
                     EndGhostMode(ply)
                 end
 
@@ -328,7 +338,7 @@ net.Receive("RequestSphereInteraction", function(len, ply)
             ply:ChatPrint("You interacted with a light sphere, reducing your ghost timer by 120 seconds!")
 
             -- Ensure the client stops the interaction
-            print("[Death System] Sending StopSphereInteraction to " .. ply:Nick() .. " (Interaction Complete)")
+            DebugPrint("[Death System] Sending StopSphereInteraction to " .. ply:Nick() .. " (Interaction Complete)")
             net.Start("StopSphereInteraction")
             net.Send(ply)
         end)
@@ -338,10 +348,10 @@ net.Receive("RequestSphereInteraction", function(len, ply)
 
         deathData.isInteracting = false
         timer.Remove("SphereInteraction_" .. ply:SteamID64())
-        print("[Death System] Sending StopSphereInteraction to " .. ply:Nick() .. " (Player Released E)")
+        DebugPrint("[Death System] Sending StopSphereInteraction to " .. ply:Nick() .. " (Player Released E)")
         net.Start("StopSphereInteraction")
         net.Send(ply)
-        print("[Death System] " .. ply:Nick() .. " stopped interacting with light sphere (EntIndex=" .. sphereEntIndex .. ")")
+        DebugPrint("[Death System] " .. ply:Nick() .. " stopped interacting with light sphere (EntIndex=" .. sphereEntIndex .. ")")
     end
 end)
 
@@ -377,7 +387,7 @@ end)
 local function SpawnLightSphereAtPos(pos)
     local sphere = ents.Create("light_sphere")
     if not IsValid(sphere) then
-        print("[Death System] Failed to spawn light sphere at " .. tostring(pos))
+        DebugPrint("[Death System] Failed to spawn light sphere at " .. tostring(pos))
         return
     end
 
@@ -387,7 +397,7 @@ local function SpawnLightSphereAtPos(pos)
     -- Store the sphere in the lightSpheres table
     lightSpheres[sphere] = true
 
-    print("[Death System] Added sphere (EntIndex=" .. sphere:EntIndex() .. ") to lightSpheres table at " .. tostring(pos))
+    DebugPrint("[Death System] Added sphere (EntIndex=" .. sphere:EntIndex() .. ") to lightSpheres table at " .. tostring(pos))
 end
 
 -- Function to spawn a light sphere at the player's cursor position
@@ -403,7 +413,7 @@ local function SpawnLightSphere(ply)
     end
 
     -- Debug print for the trace hit position
-    print("[Death System] Trace hit position for " .. ply:Nick() .. ": " .. tostring(trace.HitPos))
+    DebugPrint("[Death System] Trace hit position for " .. ply:Nick() .. ": " .. tostring(trace.HitPos))
 
     -- Calculate the spawn position
     local hitPos = trace.HitPos
@@ -429,7 +439,7 @@ local function SpawnLightSphere(ply)
     local spawnPos = hitPos + Vector(0, 0, 50)
 
     -- Debug print for the final spawn position
-    print("[Death System] Final spawn position for " .. ply:Nick() .. ": " .. tostring(spawnPos))
+    DebugPrint("[Death System] Final spawn position for " .. ply:Nick() .. ": " .. tostring(spawnPos))
 
     SpawnLightSphereAtPos(spawnPos)
 
@@ -448,7 +458,7 @@ timer.Create("RandomLightSphereSpawn", 60, 0, function()
     end
 
     if not hasGhosts then
-        print("[Death System] No ghosts present, skipping random light sphere spawn.")
+        DebugPrint("[Death System] No ghosts present, skipping random light sphere spawn.")
         return
     end
 
@@ -457,15 +467,15 @@ timer.Create("RandomLightSphereSpawn", 60, 0, function()
         -- Select a random coordinate
         local spawnPos = spawnCoordinates[math.random(1, #spawnCoordinates)]
         SpawnLightSphereAtPos(spawnPos)
-        print("[Death System] Randomly spawned a light sphere at " .. tostring(spawnPos))
+        DebugPrint("[Death System] Randomly spawned a light sphere at " .. tostring(spawnPos))
     else
-        print("[Death System] Random light sphere spawn chance failed (1/15).")
+        DebugPrint("[Death System] Random light sphere spawn chance failed (1/15).")
     end
 end)
 
 -- Console command to spawn a sphere of light (for testing)
 concommand.Add("spawn_light_sphere", function(ply)
-    print("[Death System] spawn_light_sphere command executed by " .. (IsValid(ply) and ply:Nick() or "Console"))
+    DebugPrint("[Death System] spawn_light_sphere command executed by " .. (IsValid(ply) and ply:Nick() or "Console"))
     if not IsValid(ply) or not ply:IsAdmin() then
         if IsValid(ply) then ply:ChatPrint("Admin only!") end
         return
@@ -477,7 +487,7 @@ end)
 -- Chat command to spawn a sphere of light (e.g., !spawnlightsphere)
 hook.Add("PlayerSay", "SpawnLightSphereChatCommand", function(ply, text)
     if string.lower(text) == "!spawnlightsphere" then
-        print("[Death System] !spawnlightsphere chat command executed by " .. ply:Nick())
+        DebugPrint("[Death System] !spawnlightsphere chat command executed by " .. ply:Nick())
         if not ply:IsAdmin() then
             ply:ChatPrint("Admin only!")
             return ""
@@ -500,13 +510,13 @@ end)
 
 -- Test command to confirm the file is loaded
 concommand.Add("test_deathsystem", function()
-    print("[Death System] Test command executed successfully.")
+    DebugPrint("[Death System] Test command executed successfully.")
 end)
 
 -- Command to check if a player is dead
 concommand.Add("check_dead", function(ply)
     if not IsValid(ply) then
-        print("[Death System] check_dead command executed by Console")
+        DebugPrint("[Death System] check_dead command executed by Console")
         return
     end
     if playerDeathData[ply] and playerDeathData[ply].isDead then
@@ -516,29 +526,52 @@ concommand.Add("check_dead", function(ply)
     end
 end)
 
--- Command to respawn a dead player
-concommand.Add("respawn_player", function(ply, cmd, args)
+-- Command to respawn a dead player (rp_respawn <name|steamID>)
+concommand.Add("rp_respawn", function(ply, cmd, args)
     if not IsValid(ply) or not ply:IsAdmin() then
         if IsValid(ply) then ply:ChatPrint("Admin only!") end
         return
     end
 
-    local targetSteamID = args[1]
-    if not targetSteamID then
-        ply:ChatPrint("Usage: respawn_player <SteamID>")
+    local identifier = args[1]
+    if not identifier then
+        ply:ChatPrint("Usage: rp_respawn <name|SteamID>")
         return
     end
 
     local target = nil
+    -- First, try to match by SteamID
     for _, p in ipairs(player.GetAll()) do
-        if p:SteamID() == targetSteamID then
+        if p:SteamID() == identifier then
             target = p
             break
         end
     end
 
+    -- If no match by SteamID, try partial name match
+    if not target then
+        local lowerIdentifier = string.lower(identifier)
+        local matches = {}
+        for _, p in ipairs(player.GetAll()) do
+            if string.find(string.lower(p:Nick()), lowerIdentifier, 1, true) then
+                table.insert(matches, p)
+            end
+        end
+
+        if #matches == 1 then
+            target = matches[1]
+        elseif #matches > 1 then
+            ply:ChatPrint("Multiple players found matching '" .. identifier .. "':")
+            for _, p in ipairs(matches) do
+                ply:ChatPrint("- " .. p:Nick() .. " (" .. p:SteamID() .. ")")
+            end
+            ply:ChatPrint("Please use a more specific name or the SteamID.")
+            return
+        end
+    end
+
     if not IsValid(target) then
-        ply:ChatPrint("Player with SteamID " .. targetSteamID .. " not found!")
+        ply:ChatPrint("Player with name or SteamID '" .. identifier .. "' not found!")
         return
     end
 
@@ -547,10 +580,11 @@ concommand.Add("respawn_player", function(ply, cmd, args)
         return
     end
 
-    print("[Death System] Admin " .. ply:Nick() .. " is respawning " .. target:Nick())
+    DebugPrint("[Death System] Admin " .. ply:Nick() .. " is respawning " .. target:Nick())
     EndGhostMode(target)
-    ply:ChatPrint("Successfully respawned " .. target:Nick())
+    ply:ChatPrint("Successfully respawned " .. target:Nick() .. " (" .. target:SteamID() .. ").")
     target:ChatPrint("You have been respawned by an admin.")
 end)
 
+-- This print will always show to confirm successful load
 print("[Death System] Loaded successfully (Server).")

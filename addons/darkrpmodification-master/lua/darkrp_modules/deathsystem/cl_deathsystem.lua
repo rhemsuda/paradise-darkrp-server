@@ -1,7 +1,14 @@
--- Debug print to confirm the file is loading
+-- Debug print to confirm the file is loading (this one will always print for initial load confirmation)
 print("[Death System] cl_deathsystem.lua is loading...")
 
 if not CLIENT then return end
+
+-- Helper function to print debug messages conditionally
+local function DebugPrint(...)
+    if GetConVar("rp_debug"):GetInt() == 1 then
+        print(...)
+    end
+end
 
 local isGhost = false
 local startTime = 0
@@ -33,7 +40,7 @@ net.Receive("GhostTimerSync", function()
     isGhost = net.ReadBool()
     startTime = net.ReadFloat()
     duration = net.ReadFloat()
-    print("[Death System] Client received GhostTimerSync: isGhost=" .. tostring(isGhost) .. ", startTime=" .. startTime .. ", duration=" .. duration)
+    DebugPrint("[Death System] Client received GhostTimerSync: isGhost=" .. tostring(isGhost) .. ", startTime=" .. startTime .. ", duration=" .. duration)
 end)
 
 -- Play the ambient ghost sound
@@ -49,7 +56,7 @@ net.Receive("PlayGhostSound", function()
         ambientSound:SetSoundLevel(0) -- Play for the local player only
         ambientSound:Play()
         ambientSound:ChangeVolume(0.5, 0) -- Adjust volume (0 to 1)
-        print("[Death System] Playing ambient ghost sound.")
+        DebugPrint("[Death System] Playing ambient ghost sound.")
     end
 end)
 
@@ -58,7 +65,7 @@ net.Receive("StopGhostSound", function()
     if ambientSound then
         ambientSound:Stop()
         ambientSound = nil
-        print("[Death System] Stopped ambient ghost sound.")
+        DebugPrint("[Death System] Stopped ambient ghost sound.")
     end
 end)
 
@@ -66,7 +73,7 @@ end)
 net.Receive("StartSphereInteraction", function()
     isInteracting = true
     interactionStartTime = CurTime()
-    print("[Death System] Started sphere interaction")
+    DebugPrint("[Death System] Started sphere interaction")
 
     -- Play a ghostly sound during interaction
     if interactionSound then
@@ -78,7 +85,7 @@ net.Receive("StartSphereInteraction", function()
         interactionSound:SetSoundLevel(0)
         interactionSound:Play()
         interactionSound:ChangeVolume(0.5, 0)
-        print("[Death System] Playing interaction sound")
+        DebugPrint("[Death System] Playing interaction sound")
     end
 end)
 
@@ -88,16 +95,16 @@ net.Receive("StopSphereInteraction", function()
     if interactionSound then
         interactionSound:Stop()
         interactionSound = nil
-        print("[Death System] Stopped interaction sound")
+        DebugPrint("[Death System] Stopped interaction sound")
     end
-    print("[Death System] Stopped sphere interaction (via network message)")
+    DebugPrint("[Death System] Stopped sphere interaction (via network message)")
 end)
 
 -- Play the sphere bang sound when the sphere is removed
 net.Receive("PlaySphereBangSound", function()
     local pos = net.ReadVector()
     sound.Play("ambient/levels/citadel/weapon_disintegrate1.wav", pos, 75, 100, 0.5)
-    print("[Death System] Playing sphere bang sound at " .. tostring(pos))
+    DebugPrint("[Death System] Playing sphere bang sound at " .. tostring(pos))
 
     -- Play a completion sound for the local player
     local completionSound = CreateSound(LocalPlayer(), "ambient/atmosphere/thunder1.wav")
@@ -105,7 +112,7 @@ net.Receive("PlaySphereBangSound", function()
         completionSound:SetSoundLevel(0)
         completionSound:Play()
         completionSound:ChangeVolume(0.5, 0)
-        print("[Death System] Playing interaction completion sound")
+        DebugPrint("[Death System] Playing interaction completion sound")
     end
 end)
 
@@ -119,7 +126,7 @@ net.Receive("SphereSparkEffect", function()
     effectData:SetScale(1)
     util.Effect("Sparks", effectData)
     sound.Play("ambient/energy/spark1.wav", pos, 75, 100, 0.5)
-    print("[Death System] Playing spark effect at " .. tostring(pos))
+    DebugPrint("[Death System] Playing spark effect at " .. tostring(pos))
 end)
 
 -- Draw the timer and loading bar
@@ -133,7 +140,7 @@ hook.Add("HUDPaint", "DrawGhostTimer", function()
 
     -- Debug print only when the remaining time changes
     if math.ceil(remaining) ~= lastRemaining then
-        print("[Death System] Drawing HUD timer: " .. remainingText)
+        DebugPrint("[Death System] Drawing HUD timer: " .. remainingText)
         lastRemaining = math.ceil(remaining)
     end
 
@@ -151,17 +158,17 @@ hook.Add("HUDPaint", "DrawGhostTimer", function()
         if interactionSound then
             interactionSound:Stop()
             interactionSound = nil
-            print("[Death System] Stopped interaction sound (fallback)")
+            DebugPrint("[Death System] Stopped interaction sound (fallback)")
         end
-        print("[Death System] Stopped sphere interaction (fallback timer)")
+        DebugPrint("[Death System] Stopped sphere interaction (fallback timer)")
     end
 
     -- Debug print when the interaction state changes
     if isInteracting ~= wasInteracting then
         if isInteracting then
-            print("[Death System] Drawing HUD: Started drawing power syphoning bar")
+            DebugPrint("[Death System] Drawing HUD: Started drawing power syphoning bar")
         else
-            print("[Death System] Drawing HUD: Stopped drawing power syphoning bar")
+            DebugPrint("[Death System] Drawing HUD: Stopped drawing power syphoning bar")
         end
         wasInteracting = isInteracting
     end
@@ -218,7 +225,7 @@ hook.Add("PreRender", "PreventGhostMenus", function()
         -- Explicitly close the spawn menu if it's open
         if g_SpawnMenu and g_SpawnMenu:IsVisible() then
             g_SpawnMenu:Close()
-            print("[Death System] Closed spawn menu for non-admin ghost player.")
+            DebugPrint("[Death System] Closed spawn menu for non-admin ghost player.")
         end
     end
 end)
@@ -228,12 +235,12 @@ hook.Add("PlayerBindPress", "PreventGhostMenus", function(ply, bind, pressed)
     if isGhost and not ply:IsAdmin() then
         -- Block Q menu (spawnmenu) and other common menu binds
         if bind == "impulse 100" or bind == "+menu" or bind == "+menu_context" then
-            print("[Death System] Blocked menu bind (" .. bind .. ") for non-admin ghost player.")
+            DebugPrint("[Death System] Blocked menu bind (" .. bind .. ") for non-admin ghost player.")
             return true -- Prevent the bind from executing
         end
         -- Block potential binds for rp_loadout (if bound to a key)
         if string.find(string.lower(bind), "rp_loadout") then
-            print("[Death System] Blocked rp_loadout bind (" .. bind .. ") for non-admin ghost player.")
+            DebugPrint("[Death System] Blocked rp_loadout bind (" .. bind .. ") for non-admin ghost player.")
             return true -- Prevent the bind from executing
         end
     end
@@ -252,7 +259,7 @@ hook.Add("PreDrawOpaqueRenderables", "DrawLightSpheresForGhosts", function()
     if currentTime - lastDebugPrint >= 30 then
         knownSpheres = {}
         lastDebugPrint = currentTime
-        print("[Death System] Cleared knownSpheres table to prevent memory buildup")
+        DebugPrint("[Death System] Cleared knownSpheres table to prevent memory buildup")
     end
 
     local sphereCount = 0
@@ -270,19 +277,19 @@ hook.Add("PreDrawOpaqueRenderables", "DrawLightSpheresForGhosts", function()
             sphere:DrawModel()
 
             -- Only print debug info every 0.5 seconds
-            print("[Death System] Drawing light sphere (EntIndex=" .. sphereIndex .. ") at " .. tostring(sphere:GetPos()))
+            DebugPrint("[Death System] Drawing light sphere (EntIndex=" .. sphereIndex .. ") at " .. tostring(sphere:GetPos()))
 
             -- Render the attached light if it exists
             local light = sphere.AttachedLight
             if IsValid(light) then
                 light:DrawModel()
-                print("[Death System] Drawing attached light for sphere (EntIndex=" .. sphereIndex .. ") at " .. tostring(light:GetPos()))
+                DebugPrint("[Death System] Drawing attached light for sphere (EntIndex=" .. sphereIndex .. ") at " .. tostring(light:GetPos()))
             end
         end
     end
 
     if sphereCount > 0 then
-        print("[Death System] Rendering " .. sphereCount .. " light spheres for ghost player.")
+        DebugPrint("[Death System] Rendering " .. sphereCount .. " light spheres for ghost player.")
     end
 end)
 
@@ -291,7 +298,7 @@ hook.Add("Think", "DetectSphereInteraction", function()
     if not isGhost then
         -- Throttle the debug print to once per second
         if CurTime() - lastDebugPrint >= 1 then
-            print("[Death System] Think hook: Not in ghost mode")
+            DebugPrint("[Death System] Think hook: Not in ghost mode")
             lastDebugPrint = CurTime()
         end
         return
@@ -303,13 +310,13 @@ hook.Add("Think", "DetectSphereInteraction", function()
 
     -- Debug print to confirm the hook is running and the key state
     if CurTime() - lastDebugPrint >= 1 then
-        print("[Death System] Think hook: usePressed=" .. tostring(usePressed) .. ", wasUsePressed=" .. tostring(wasUsePressed))
+        DebugPrint("[Death System] Think hook: usePressed=" .. tostring(usePressed) .. ", wasUsePressed=" .. tostring(wasUsePressed))
         lastDebugPrint = CurTime()
     end
 
     -- Check if the use key state has changed
     if usePressed and not wasUsePressed then
-        print("[Death System] Use key pressed, performing trace")
+        DebugPrint("[Death System] Use key pressed, performing trace")
         -- Use key was just pressed, check if we're looking at a light sphere
         local trace = util.TraceLine({
             start = ply:EyePos(),
@@ -322,28 +329,28 @@ hook.Add("Think", "DetectSphereInteraction", function()
             mask = MASK_SHOT -- Use MASK_SHOT to ignore collision groups
         })
         local ent = trace.Entity
-        print("[Death System] Trace result: Entity=" .. tostring(ent) .. (IsValid(ent) and " (Class=" .. ent:GetClass() .. ", Pos=" .. tostring(ent:GetPos()) .. ")" or ""))
+        DebugPrint("[Death System] Trace result: Entity=" .. tostring(ent) .. (IsValid(ent) and " (Class=" .. ent:GetClass() .. ", Pos=" .. tostring(ent:GetPos()) .. ")" or ""))
 
         if IsValid(ent) and ent:GetClass() == "light_sphere" then
             -- Check distance (must be within 100 units)
             local distance = ply:GetPos():Distance(ent:GetPos())
-            print("[Death System] Distance to light sphere (EntIndex=" .. ent:EntIndex() .. "): " .. distance)
+            DebugPrint("[Death System] Distance to light sphere (EntIndex=" .. ent:EntIndex() .. "): " .. distance)
             if distance <= 100 then
-                print("[Death System] Requesting interaction with light sphere (EntIndex=" .. ent:EntIndex() .. ")")
+                DebugPrint("[Death System] Requesting interaction with light sphere (EntIndex=" .. ent:EntIndex() .. ")")
                 net.Start("RequestSphereInteraction")
                 net.WriteBool(true) -- Start interaction
                 net.WriteInt(ent:EntIndex(), 32)
                 net.SendToServer()
             else
-                print("[Death System] Too far from light sphere (distance=" .. distance .. ")")
+                DebugPrint("[Death System] Too far from light sphere (distance=" .. distance .. ")")
             end
         else
-            print("[Death System] No light sphere found in trace")
+            DebugPrint("[Death System] No light sphere found in trace")
         end
     elseif not usePressed and wasUsePressed then
         -- Use key was just released, stop interaction only if still interacting
         if isInteracting then
-            print("[Death System] Stopping interaction with light sphere (E released)")
+            DebugPrint("[Death System] Stopping interaction with light sphere (E released)")
             net.Start("RequestSphereInteraction")
             net.WriteBool(false) -- Stop interaction
             net.WriteInt(-1, 32) -- EntIndex not needed for stopping
@@ -366,4 +373,5 @@ hook.Add("ShutDown", "CleanupGhostSound", function()
     end
 end)
 
+-- This print will always show to confirm successful load
 print("[Death System] Loaded successfully (Client).")
