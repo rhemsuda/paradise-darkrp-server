@@ -1,6 +1,6 @@
 if SERVER then
-    AddCSLuaFile("modules/npc/cl_npc_dialog.lua")
-    include("modules/npc/sh_mission_giver.lua") -- Ensure mission giver is loaded
+--[[     AddCSLuaFile("modules/npc/cl_npc_dialog.lua")
+    include("modules/npc/sh_mission_giver.lua") -- ]] 
 
     local function StartMission(ply, npc, missionId)
         local missions = npc:GetMissions()

@@ -1,9 +1,5 @@
 
--- This is just enough for the entity index. This however is not perfect
--- as the entity at given index may have changed during transport.
--- If this becomes a problem, inclusion of entity's serial will also be necessary
-local MAX_EDICT_BITS = 13
-
+-- TODO: Hack. Move to where color is defined?
 TYPE_COLOR = 255
 
 net.Receivers = {}
@@ -123,7 +119,7 @@ end
 --
 -- Write a whole table to the stream
 -- This is less optimal than writing each
--- item indivdually and in a specific order
+-- item individually and in a specific order
 -- because it adds type information before each var
 --
 function net.WriteTable( tab, seq )

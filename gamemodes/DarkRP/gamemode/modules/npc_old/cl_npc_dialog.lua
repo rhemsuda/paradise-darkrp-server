@@ -8,7 +8,8 @@ if CLIENT then
         local frame = vgui.Create("DFrame")
         frame:SetSize(400, 300)
         frame:Center()
-        frame:SetTitle("NPC: " .. (npc:GetName() or "Unnamed"))
+        frame:SetTitle("NPC: " .. npc:GetNWString("NPCName", "Unnamed"))
+        --frame:SetTitle("NPC: " .. (npc:GetName() or "Unnamed"))
         frame:MakePopup()
 
         if npc:GetClass() == "npc_mission_giver" then

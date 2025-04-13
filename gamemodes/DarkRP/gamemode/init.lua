@@ -24,9 +24,24 @@ AddCSLuaFile("config/jobrelated.lua")
 AddCSLuaFile("config/ammotypes.lua")
 AddCSLuaFile("config/licenseweapons.lua")
 
+AddCSLuaFile("modules/npc_old/sh_npc_base.lua")
+include("modules/npc_old/sh_npc_base.lua")
+AddCSLuaFile("modules/npc_old/sh_mission_giver.lua")
+include("modules/npc_old/sh_mission_giver.lua")
+AddCSLuaFile("modules/npc_old/cl_npc_dialog.lua")
+include("modules/missions/sv_mission_system.lua")
+
+AddCSLuaFile("modules/networking/sh_networking.lua")
+include("modules/networking/sh_networking.lua")
+AddCSLuaFile("modules/npc/sh_npc.lua")
+include("modules/npc/sh_npc.lua")
+AddCSLuaFile("modules/npc/sh_npc_stats.lua")
+include("modules/npc/sh_npc_stats.lua")
 AddCSLuaFile("modules/npc/sh_npc_dialog.lua")
 include("modules/npc/sh_npc_dialog.lua")
-AddCSLuaFile("modules/npc/cl_npc_dialog.lua")
+AddCSLuaFile("modules/npc/cl_npc_ui.lua")
+
+
 
 AddCSLuaFile("cl_init.lua")
 

@@ -41,7 +41,8 @@ include("libraries/disjointset.lua")
 include("config/licenseweapons.lua")
 
 include("libraries/modificationloader.lua")
-include("modules/npc/cl_npc_dialog.lua")
+include("modules/npc_old/cl_npc_dialog.lua")
+include("modules/networking/sh_networking.lua")
 
 hook.Call("DarkRPPreLoadModules", GM)
 

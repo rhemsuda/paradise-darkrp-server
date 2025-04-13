@@ -10,6 +10,8 @@ ENT.ClassName = "npc_base"
 
 if SERVER then
     AddCSLuaFile()
+    util.AddNetworkString("OpenNPCDialog")
+    util.AddNetworkString("StartMission")
     util.PrecacheModel("models/eli.mdl")
 
     function ENT:Initialize()
@@ -27,6 +29,7 @@ if SERVER then
     end
 
     function ENT:Use(activator, caller)
+        print("[DEBUG] Server: Attempting to interact with the NPC")
         if not IsValid(caller) or not caller:IsPlayer() then return end
         net.Start("OpenNPCDialog")
         net.WriteEntity(self)
@@ -52,4 +55,4 @@ if CLIENT then
     end
 end
 
-scripted_ents.Register(ENT, "npc_base")
+scripted_ents.Register(ENT, "npc_base2")

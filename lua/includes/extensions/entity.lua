@@ -4,6 +4,18 @@ local meta = FindMetaTable( "Entity" )
 -- Return if there's nothing to add on to
 if ( !meta ) then return end
 
+function meta:SetSpawnFlags( flags )
+    self:SetKeyValue( "spawnflags", flags )
+end
+
+function meta:AddSpawnFlags( flags )
+    self:SetKeyValue( "spawnflags", bit.bor( self:GetSpawnFlags(), flags ) )
+end
+
+function meta:RemoveSpawnFlags( flags )
+    self:SetKeyValue( "spawnflags", bit.band( self:GetSpawnFlags(), bit.bnot( flags ) ) )
+end
+
 function meta:GetShouldPlayPickupSound()
 	return self.m_bPlayPickupSound or false
 end
@@ -26,7 +38,7 @@ function meta:__index( key )
 	--
 	-- Search the entity table
 	--
-	local tab = self:GetTable()
+	local tab = meta.GetTable( self )
 	if ( tab ) then
 		local tabval = tab[ key ]
 		if ( tabval != nil ) then return tabval end
@@ -444,6 +456,31 @@ function meta:InstallDataTable()
 
 		local v = util.StringToType( value, k.Type )
 		if ( v == nil ) then return end
+
+		k.Set( ent, v )
+		return true
+
+	end
+
+	self.SetNetworkVarsFromMapInput = function( ent, name, data )
+
+		name = name:lower()
+		if ( !string.StartsWith( name, "set" ) ) then return end
+
+		name = string.sub( name, 4 )
+		if ( name == "" ) then return end
+
+		-- Only allow setting variables that were marked as editable!
+		local k = keytable[ name ]
+		if ( !k || !k.Edit ) then return end
+
+		local v = util.StringToType( data, k.Type )
+		if ( v == nil ) then return end
+
+		-- Special case for colors. FGD (maps) use color255 format, while colors in this system use unit vectors.
+		if ( k.Edit.type == "VectorColor" ) then
+			v = v / 255
+		end
 
 		k.Set( ent, v )
 		return true

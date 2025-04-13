@@ -30,7 +30,8 @@ if SERVER then
     function ENT:Initialize()
         BaseClass.Initialize(self) -- Call base init
         self:SetModel("models/eli.mdl") -- Override model if desired
-        self:SetName("MissionGiver")
+        self:SetNWString("NPCName", "Mission Giver Eli")
+        --self:SetName("MissionGiver")
     end
 
     function ENT:GetMissions()

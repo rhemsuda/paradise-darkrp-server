@@ -1,64 +1,94 @@
 print("[DEBUG] sh_npc_dialog.lua loaded")
 
-ENT = {}
-ENT.Type = "ai"
-ENT.Base = "base_ai"
-ENT.PrintName = "Mission NPC"
-ENT.Author = "Kyle"
-ENT.Spawnable = true
-ENT.AdminSpawnable = true
-ENT.ClassName = "sent_mission_npc"
+NPCDialog = NPCDialog or {}
 
 if SERVER then
-    print("[DEBUG] Server: Inside the SERVER if block")
-    util.AddNetworkString("OpenMissionDialog")
-    util.AddNetworkString("StartMission")
-
-    function ENT:Initialize()
-        self:SetModel("models/Humans/Group01/male_07.mdl")
-        self:SetHullType(HULL_HUMAN)
-        self:SetHullSizeNormal()
-        self:SetNPCState(NPC_STATE_SCRIPT)
-        self:SetSolid(SOLID_BBOX)
-        self:SetUseType(SIMPLE_USE)
-        self:CapabilitiesAdd(bit.bor(CAP_ANIMATEDFACE, CAP_TURN_HEAD))
-        self:DropToFloor()
-        print("[DEBUG] Server: NPC " .. self:EntIndex() .. " spawned with model " .. self:GetModel())
-    end
-
-    function ENT:Use(activator, caller)
-        if not IsValid(caller) or not caller:IsPlayer() then return end
-        net.Start("OpenMissionDialog")
-        net.Send(caller)
-    end
-
-    function ENT:UpdateTransmitState()
-        return TRANSMIT_ALWAYS
-    end
+    Networking:RegisterMessage("OpenNPCDialog")
 end
 
-if CLIENT then
-    print("[DEBUG] Client: Inside the CLIENT base if block")
-    ENT.RenderGroup = RENDERGROUP_OPAQUE
+function NPCDialog:New(npc, dialogId, dialogIndex)
+    local dialog = {
+        NPC = npc,
+        NPCID = npc:GetNWInt("NPCID"),
+        DialogID = dialogId,
+        DialogIndex = dialogIndex
+    }
 
-    function ENT:Initialize()
-        self:SetupBones()
-        print("[DEBUG] Client: NPC " .. self:EntIndex() .. " initialized with model " .. (self:GetModel() or "nil"))
+    if not DialogTrees[dialogId] then
+        error("Dialog tree " .. tostring(dialogId) .. " not found")
     end
 
-    function ENT:Draw()
-        self:SetRenderMode(RENDERMODE_NORMAL)
-        self:DrawModel()
-        print("[DEBUG] Client: Drawing NPC " .. self:EntIndex() .. " with model " .. (self:GetModel() or "nil"))
-    end
+    setmetatable(dialog, { __index = NPCDialog })
+    return dialog
 end
+
+--[[ function NPCDialog:FromSerialized(npc, serialized)
+    local dialog = {
+        NPCID = npc:GetNWInt("NPCID"),
+        Dialog = serialized.Dialog or {}
+    }
+
+    if table.IsEmpty(dialog.Dialog) then
+        dialog.Dialog = {
+            [1] = {
+                Text = "I have nothing to say.",
+                Responses = {}
+            }
+        }
+    end
+
+    setmetatable(dialog, { __index = NPCDialog })
+    return dialog
+end
+ ]]
+function NPCDialog:GetDialogTree()
+    return DialogTrees[self.DialogID] or {}
+end
+
+function NPCDialog:GetNode(nodeIndex)
+    local dialogTree = self:GetDialogTree()
+    return dialogTree[nodeIndex] or { Text = "Dialog not found.", Responses = {} }
+end
+
+function NPCDialog:GetResponses(nodeIndex)
+    local node = self:GetNode(nodeIndex)
+    return node.Responses or {}
+end
+
 
 if SERVER then
-    scripted_ents.Register(ENT, "sent_mission_npc")
-    print("[DEBUG] Server: Registered sent_mission_npc")
-end
+    function NPCDialog:Open(caller, nodeIndex)
+        local node = self:GetNode(nodeIndex)
+        if not node or not node.Text then
+            print("[DEBUG] Server: Node " .. nodeIndex .. " not found in dialog " .. self.DialogIndex .. " for NPC " .. self.NPC:EntIndex())
+            return false
+        end
 
-if CLIENT then
-    scripted_ents.Register(ENT, "sent_mission_npc")
-    print("[DEBUG] Client: Registered sent_mission_npc")
+        Networking:SendToClient("OpenNPCDialog", caller, function()
+            net.WriteEntity(self.NPC)
+            net.WriteString(self.DialogID)
+            net.WriteInt(self.DialogIndex, 32)
+            net.WriteInt(nodeIndex, 32)
+        end)
+        return true
+    end
+
+    -- Register the server-side receiver for OpenNPCDialog
+    Networking:RegisterReceiver("OpenNPCDialog", function(ply)
+        local npc = net.ReadEntity()
+        if not IsValid(npc) or npc:GetClass() != "npc_base" then return end
+        local dialogId = net.ReadString()
+        local dialogIndex = net.ReadInt(32)
+        local nodeIndex = net.ReadInt(32)
+        print("[DEBUG] Server: Received OpenNPCDialog for NPC " .. npc:EntIndex() .. " (ID: " .. npc:GetNWInt("NPCID") .. ") from " .. ply:Nick() .. " - DialogID: " .. dialogId .. ", Dialog: " .. dialogIndex .. ", Node: " .. nodeIndex)
+
+        local dialogs = npc:GetNPCDialogs()
+        local dialog = dialogs[dialogIndex]
+        if not dialog or dialog.DialogID != dialogId then
+            print("[DEBUG] Server: Dialog " .. dialogIndex .. " (ID: " .. dialogId .. ") not found for NPC " .. npc:EntIndex())
+            return
+        end
+
+        dialog:Open(ply, nodeIndex)
+    end)
 end
