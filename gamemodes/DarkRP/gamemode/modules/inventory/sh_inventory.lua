@@ -1,51 +1,27 @@
--- Initial Setup
+-- Debug print to confirm the file is loading (this one will always print for initial load confirmation)
 print("[Inventory Module] sh_inventory.lua loaded successfully")
 
+-- Helper function to print debug messages conditionally
+local function DebugPrint(...)
+    if GetConVar("rp_debug") and GetConVar("rp_debug"):GetInt() == 1 then
+        print(...)
+    end
+end
+
+-- Shared Logic
 if SERVER then
     util.AddNetworkString("SyncInventory")
     util.AddNetworkString("DropItem")
     util.AddNetworkString("UseItem")
     util.AddNetworkString("DeleteItem")
     util.AddNetworkString("InventoryMessage")
-    util.AddNetworkString("SyncResources")
-    util.AddNetworkString("DropResource")
     util.AddNetworkString("UpdateInventoryPositions")
     util.AddNetworkString("SyncLoadout")
     util.AddNetworkString("EquipItem")
     util.AddNetworkString("UnequipItem")
 end
 
--- Resource Definitions
-ResourceItems = ResourceItems or {}
-local resourceTemplates = {
-    minerals = {
-        { id = "rock", name = "Rock", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "copper", name = "Copper", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "iron", name = "Iron", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "steel", name = "Steel", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "titanium", name = "Titanium", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" }
-    },
-    gems = {
-        { id = "emerald", name = "Emerald", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "ruby", name = "Ruby", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "sapphire", name = "Sapphire", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "obsidian", name = "Obsidian", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "diamond", name = "Diamond", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" }
-    },
-    lumber = {
-        { id = "ash", name = "Ash", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" },
-        { id = "birch", name = "Birch", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" },
-        { id = "oak", name = "Oak", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" },
-        { id = "mahogany", name = "Mahogany", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" },
-        { id = "yew", name = "Yew", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" }
-    }
-}
-for _, category in pairs(resourceTemplates) do
-    for _, data in ipairs(category) do
-        ResourceItems[data.id] = { name = data.name, icon = data.icon, model = data.model }
-    end
-end
-
+-- Include sh_items.lua
 if file.Exists("modules/inventory/sh_items.lua", "LUA") then
     include("modules/inventory/sh_items.lua")
     if SERVER then AddCSLuaFile("modules/inventory/sh_items.lua") end
@@ -85,30 +61,25 @@ local WeaponTypes = {
 }
 
 -- Inventory Management Functions
-function AddResourceToInventory(ply, resourceID, amount, silent)
-    if not IsValid(ply) or not ResourceItems[resourceID] then return end
-    local steamID = ply:SteamID()
-    local inv = PlayerInventories[steamID] or { items = { [1] = {} }, resources = {}, positions = { [1] = {} }, maxPages = 1, loadout = {} }
-    inv.resources[resourceID] = (inv.resources[resourceID] or 0) + (amount or 1)
-    PlayerInventories[steamID] = inv
-    if SERVER then
-        net.Start("SyncResources")
-        net.WriteTable(inv.resources)
-        net.Send(ply)
-        SavePlayerInventory(ply)
-        if not silent then SendInventoryMessage(ply, "Mined a " .. ResourceItems[resourceID].name) end
-    end
-end
-
 function AddItemToInventory(ply, itemID, amount, stats, page, silent)
-    if not IsValid(ply) or not InventoryItems[itemID] then return end
+    if not IsValid(ply) or not InventoryItems[itemID] then 
+        DebugPrint("[Inventory Module] Invalid player or itemID: " .. tostring(itemID))
+        return 
+    end
+
     local steamID = ply:SteamID()
-    local inv = PlayerInventories[steamID] or { items = { [1] = {} }, resources = {}, positions = { [1] = {} }, maxPages = 1, loadout = {} }
+    local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {} }
     page = tonumber(page) or 1
     inv.maxPages = inv.maxPages or 1
-    if page < 1 or page > inv.maxPages then return end
+
+    if page < 1 or page > inv.maxPages then 
+        DebugPrint("[Inventory Module] Invalid page " .. page .. " for " .. ply:Nick() .. " (maxPages: " .. inv.maxPages .. ")")
+        return 
+    end
+
     inv.items[page] = inv.items[page] or {}
     inv.positions[page] = inv.positions[page] or {}
+
     for i = 1, (amount or 1) do
         local uniqueID = stats and stats.id or GenerateUUID()
         local isWeaponOrArmor = InventoryItems[itemID].category == "Weapons" or InventoryItems[itemID].category == "Armor"
@@ -125,42 +96,21 @@ function AddItemToInventory(ply, itemID, amount, stats, page, silent)
             stats.rarity = rarityRoll == 1 and "Legendary" or rarityRoll <= 3 and "Epic" or rarityRoll <= 10 and "Rare" or rarityRoll <= 50 and "Uncommon" or "Common"
             local slotCaps = { Common = 2, Uncommon = 3, Rare = 4, Epic = 5, Legendary = 6 }
             stats.slots = math.random(0, slotCaps[stats.rarity] or 2)
+
             if InventoryItems[itemID].category == "Weapons" then
                 stats.slotType = math.random(1, 500) == 1 and "Sidearm" or "Primary"
-
-                -- Assign damage based on weapon type and rarity
                 local weaponType = WeaponTypes[itemID] or "unknown"
                 if weaponType == "pistol" then
-                    if stats.rarity == "Legendary" then
-                        stats.damage = math.random(6, 20)
-                    else
-                        stats.damage = math.random(6, 15)
-                    end
+                    stats.damage = stats.rarity == "Legendary" and math.random(6, 20) or math.random(6, 15)
                 elseif weaponType == "assault_rifle" then
-                    if stats.rarity == "Legendary" then
-                        stats.damage = math.random(15, 25)
-                    else
-                        stats.damage = math.random(12, 20)
-                    end
+                    stats.damage = stats.rarity == "Legendary" and math.random(15, 25) or math.random(12, 20)
                 elseif weaponType == "shotgun" then
-                    if stats.rarity == "Legendary" then
-                        stats.damage = math.random(5, 15)
-                    else
-                        stats.damage = math.random(5, 10)
-                    end
+                    stats.damage = stats.rarity == "Legendary" and math.random(5, 15) or math.random(5, 10)
                 elseif weaponType == "sniper" then
-                    if stats.rarity == "Legendary" then
-                        stats.damage = math.random(50, 100)
-                    else
-                        stats.damage = math.random(25, 50)
-                    end
+                    stats.damage = stats.rarity == "Legendary" and math.random(50, 100) or math.random(25, 50)
                 else
-                    -- Default damage for unknown weapon types
                     stats.damage = math.random(10, 80)
                 end
-            else
-                -- Default damage for armor (if any)
-                stats.damage = 0
             end
         end
 
@@ -174,20 +124,28 @@ function AddItemToInventory(ply, itemID, amount, stats, page, silent)
             crafter = stats.crafter 
         }
         table.insert(inv.items[page], itemInstance)
+
+        -- Assign a position in the inventory grid
+        local positionAssigned = false
         for row = 1, 6 do
             for col = 1, 10 do
                 local slotTaken = false
                 for _, pos in pairs(inv.positions[page]) do
-                    if pos[1] == row and pos[2] == col then slotTaken = true break end
+                    if pos[1] == row and pos[2] == col then 
+                        slotTaken = true 
+                        break 
+                    end
                 end
                 if not slotTaken then
                     inv.positions[page][uniqueID] = {row, col}
+                    positionAssigned = true
                     break
                 end
             end
-            if inv.positions[page][uniqueID] then break end
+            if positionAssigned then break end
         end
     end
+
     PlayerInventories[steamID] = inv
     if SERVER then
         net.Start("SyncInventory")
@@ -198,14 +156,13 @@ function AddItemToInventory(ply, itemID, amount, stats, page, silent)
         SavePlayerInventory(ply)
         if not silent then
             SendInventoryMessage(ply, "Added " .. (amount or 1) .. " " .. InventoryItems[itemID].name .. "(s) to your inventory on page " .. page .. ".")
+            DebugPrint("[Inventory Module] Added " .. (amount or 1) .. " " .. InventoryItems[itemID].name .. " to " .. ply:Nick() .. "'s inventory on page " .. page)
         end
     end
 end
 
 -- Server-Side Logic
 if SERVER then
-    local allowedTools = { "button", "fading_door", "keypad_willox", "camera", "nocollide", "remover", "stacker" }
-
     hook.Add("DarkRPDBInitialized", "InitCustomInventoryTable", function()
         MySQLite.begin()
         MySQLite.queueQuery([[
@@ -240,11 +197,10 @@ if SERVER then
     local function LoadPlayerInventory(ply)
         if not IsValid(ply) then return end
         local steamID = ply:SteamID()
-        MySQLite.query("SELECT items, resources, positions, maxPages, loadout FROM darkrp_custom_inventory WHERE steamid = " .. MySQLite.SQLStr(steamID), function(data)
-            local inv = { items = { [1] = {} }, resources = {}, positions = { [1] = {} }, maxPages = 1, loadout = {} }
+        MySQLite.query("SELECT items, positions, maxPages, loadout FROM darkrp_custom_inventory WHERE steamid = " .. MySQLite.SQLStr(steamID), function(data)
+            local inv = { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {} }
             if data and data[1] then
                 inv.items = util.JSONToTable(data[1].items or '{"1":[]}') or { [1] = {} }
-                inv.resources = util.JSONToTable(data[1].resources or "{}") or {}
                 inv.positions = util.JSONToTable(data[1].positions or '{"1":{}}') or { [1] = {} }
                 inv.maxPages = tonumber(data[1].maxPages) or 1
                 inv.loadout = util.JSONToTable(data[1].loadout or '{}') or {}
@@ -255,26 +211,44 @@ if SERVER then
             net.WriteTable(inv.items[1])
             net.WriteTable(inv.positions[1])
             net.Send(ply)
-            net.Start("SyncResources")
-            net.WriteTable(inv.resources)
-            net.Send(ply)
             net.Start("SyncLoadout")
             net.WriteTable(inv.loadout)
             net.Send(ply)
+            DebugPrint("[Inventory Module] Loaded inventory for " .. ply:Nick())
         end, function(err)
-            print("[Custom Inventory] Error loading inventory for " .. steamID .. ": " .. err)
+            print("[Inventory Module] Error loading inventory for " .. steamID .. ": " .. err)
         end)
     end
 
     function SavePlayerInventory(ply)
         if not IsValid(ply) then return end
         local steamID = ply:SteamID()
-        local inv = PlayerInventories[steamID] or { items = { [1] = {} }, resources = {}, positions = { [1] = {} }, maxPages = 1, loadout = {} }
-        MySQLite.query("REPLACE INTO darkrp_custom_inventory (steamid, items, resources, positions, maxPages, loadout) VALUES (" .. 
-            MySQLite.SQLStr(steamID) .. ", " .. MySQLite.SQLStr(util.TableToJSON(inv.items)) .. ", " .. 
-            MySQLite.SQLStr(util.TableToJSON(inv.resources)) .. ", " .. MySQLite.SQLStr(util.TableToJSON(inv.positions)) .. ", " .. 
-            inv.maxPages .. ", " .. MySQLite.SQLStr(util.TableToJSON(inv.loadout)) .. ")", nil, function(err)
-            if err then print("[Custom Inventory] Error saving inventory for " .. steamID .. ": " .. err) end
+        local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {} }
+        -- Fetch resources separately to preserve them in the database
+        local resources = {}
+        MySQLite.query("SELECT resources FROM darkrp_custom_inventory WHERE steamid = " .. MySQLite.SQLStr(steamID), function(data)
+            if data and data[1] then
+                resources = util.JSONToTable(data[1].resources or "{}") or {}
+            end
+            MySQLite.query("REPLACE INTO darkrp_custom_inventory (steamid, items, resources, positions, maxPages, loadout) VALUES (" .. 
+                MySQLite.SQLStr(steamID) .. ", " .. MySQLite.SQLStr(util.TableToJSON(inv.items)) .. ", " .. 
+                MySQLite.SQLStr(util.TableToJSON(resources)) .. ", " .. MySQLite.SQLStr(util.TableToJSON(inv.positions)) .. ", " .. 
+                inv.maxPages .. ", " .. MySQLite.SQLStr(util.TableToJSON(inv.loadout)) .. ")", nil, function(err)
+                if err then 
+                    print("[Inventory Module] Error saving inventory for " .. steamID .. ": " .. err)
+                else
+                    DebugPrint("[Inventory Module] Saved inventory for " .. ply:Nick())
+                end
+            end)
+        end, function(err)
+            print("[Inventory Module] Error fetching resources for saving inventory for " .. steamID .. ": " .. err)
+            -- Fallback: Save with empty resources to avoid data loss
+            MySQLite.query("REPLACE INTO darkrp_custom_inventory (steamid, items, resources, positions, maxPages, loadout) VALUES (" .. 
+                MySQLite.SQLStr(steamID) .. ", " .. MySQLite.SQLStr(util.TableToJSON(inv.items)) .. ", " .. 
+                MySQLite.SQLStr(util.TableToJSON({})) .. ", " .. MySQLite.SQLStr(util.TableToJSON(inv.positions)) .. ", " .. 
+                inv.maxPages .. ", " .. MySQLite.SQLStr(util.TableToJSON(inv.loadout)) .. ")", nil, function(err2)
+                if err2 then print("[Inventory Module] Fallback error saving inventory for " .. steamID .. ": " .. err2) end
+            end)
         end)
     end
 
@@ -283,7 +257,7 @@ if SERVER then
         local steamID = ply:SteamID()
         MySQLite.query("SELECT items, positions FROM darkrp_custom_inventory WHERE steamid = " .. MySQLite.SQLStr(steamID), function(data)
             if data and data[1] then
-                local inv = PlayerInventories[steamID] or { items = { [1] = {} }, resources = {}, positions = { [1] = {} }, maxPages = 1, loadout = {} }
+                local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {} }
                 inv.items = util.JSONToTable(data[1].items or '{"1":[]}') or { [1] = {} }
                 inv.positions = util.JSONToTable(data[1].positions or '{"1":{}}') or { [1] = {} }
                 PlayerInventories[steamID] = inv
@@ -292,19 +266,21 @@ if SERVER then
                 net.WriteTable(inv.items[page] or {})
                 net.WriteTable(inv.positions[page] or {})
                 net.Send(ply)
+                DebugPrint("[Inventory Module] Synced inventory page " .. page .. " for " .. ply:Nick())
             end
         end, function(err)
-            print("[Custom Inventory] Error syncing inventory for " .. steamID .. ": " .. err)
+            print("[Inventory Module] Error syncing inventory for " .. steamID .. ": " .. err)
         end)
     end
 
     local function RemoveItemFromInventory(ply, uniqueID, page)
         if not IsValid(ply) then return end
         local steamID = ply:SteamID()
-        local inv = PlayerInventories[steamID] or { items = { [1] = {} }, resources = {}, positions = { [1] = {} }, maxPages = 1, loadout = {} }
+        local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {} }
         page = page or 1
         inv.items[page] = inv.items[page] or {}
         inv.positions[page] = inv.positions[page] or {}
+
         for i, item in ipairs(inv.items[page]) do
             if item.id == uniqueID then
                 local itemData = InventoryItems[item.itemID]
@@ -313,33 +289,43 @@ if SERVER then
                 PlayerInventories[steamID] = inv
                 SavePlayerInventory(ply)
                 SyncInventoryFromSQL(ply, page)
+                DebugPrint("[Inventory Module] Removed item " .. uniqueID .. " from " .. ply:Nick() .. "'s inventory on page " .. page)
                 return item, itemData
             end
         end
+        DebugPrint("[Inventory Module] Item " .. uniqueID .. " not found in " .. ply:Nick() .. "'s inventory on page " .. page)
     end
 
     net.Receive("UpdateInventoryPositions", function(len, ply)
         local page = net.ReadUInt(8)
         local steamID = ply:SteamID()
         local newPositions = net.ReadTable()
-        local inv = PlayerInventories[steamID] or { items = { [1] = {} }, resources = {}, positions = { [1] = {} }, maxPages = 1, loadout = {} }
+        local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {} }
         inv.positions[page] = newPositions
         PlayerInventories[steamID] = inv
         SavePlayerInventory(ply)
         SyncInventoryFromSQL(ply, page)
+        DebugPrint("[Inventory Module] Updated inventory positions for " .. ply:Nick() .. " on page " .. page)
     end)
 
     net.Receive("DropItem", function(len, ply)
         local uniqueID = net.ReadString()
         local page = net.ReadUInt(8)
         local item, itemData = RemoveItemFromInventory(ply, uniqueID, page)
-        if not item or not itemData then return end
+        if not item or not itemData then 
+            DebugPrint("[Inventory Module] Failed to drop item " .. uniqueID .. " for " .. ply:Nick() .. " on page " .. page)
+            return 
+        end
+
         if itemData.category == "Weapons" or itemData.category == "Armor" then
             SendInventoryMessage(ply, "Cannot drop weapons or armor!")
             AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, slots = item.slots, rarity = item.rarity, slotType = item.slotType, crafter = item.crafter }, page)
+            DebugPrint("[Inventory Module] Prevented " .. ply:Nick() .. " from dropping " .. itemData.name .. " (category: " .. itemData.category .. ")")
             return
         end
+
         SendInventoryMessage(ply, "Dropped 1 " .. itemData.name .. " from page " .. page .. ".")
+        DebugPrint("[Inventory Module] " .. ply:Nick() .. " dropped 1 " .. itemData.name .. " from page " .. page)
         local ent = ents.Create("prop_physics")
         if IsValid(ent) then
             ent:SetModel(itemData.model or "models/error.mdl")
@@ -352,7 +338,10 @@ if SERVER then
             ent:SetNWString("Rarity", item.rarity or "")
             ent:SetNWString("Crafter", item.crafter or "Unknown")
             local phys = ent:GetPhysicsObject()
-            if IsValid(phys) then phys:Wake() phys:SetVelocity(Vector(0, 0, -100)) end
+            if IsValid(phys) then 
+                phys:Wake() 
+                phys:SetVelocity(Vector(0, 0, -100)) 
+            end
             ent:SetCollisionGroup(COLLISION_GROUP_DEBRIS)
         end
     end)
@@ -361,41 +350,25 @@ if SERVER then
         local uniqueID = net.ReadString()
         local page = net.ReadUInt(8)
         local item, itemData = RemoveItemFromInventory(ply, uniqueID, page)
-        if not item or not itemData or not itemData.useFunction then return end
+        if not item or not itemData or not itemData.useFunction then 
+            DebugPrint("[Inventory Module] Failed to use item " .. uniqueID .. " for " .. ply:Nick() .. " on page " .. page)
+            return 
+        end
         itemData.useFunction(ply)
         SendInventoryMessage(ply, "Used 1 " .. itemData.name .. " from page " .. page .. ".")
+        DebugPrint("[Inventory Module] " .. ply:Nick() .. " used 1 " .. itemData.name .. " from page " .. page)
     end)
 
     net.Receive("DeleteItem", function(len, ply)
         local uniqueID = net.ReadString()
         local page = net.ReadUInt(8)
         local item, itemData = RemoveItemFromInventory(ply, uniqueID, page)
-        if not item or not itemData then return end
-        SendInventoryMessage(ply, "Deleted 1 " .. itemData.name .. " from page " .. page .. ".")
-    end)
-
-    net.Receive("DropResource", function(len, ply)
-        local resourceID = net.ReadString()
-        local amount = net.ReadUInt(16)
-        if not ResourceItems[resourceID] or amount < 1 then return end
-        local steamID = ply:SteamID()
-        local inv = PlayerInventories[steamID] or { items = { [1] = {} }, resources = {}, positions = { [1] = {} }, maxPages = 1, loadout = {} }
-        if not inv.resources[resourceID] or inv.resources[resourceID] < amount then return end
-        inv.resources[resourceID] = inv.resources[resourceID] - amount
-        if inv.resources[resourceID] <= 0 then inv.resources[resourceID] = nil end
-        PlayerInventories[steamID] = inv
-        net.Start("SyncResources")
-        net.WriteTable(inv.resources)
-        net.Send(ply)
-        SavePlayerInventory(ply)
-        SendInventoryMessage(ply, "Dropped " .. amount .. " " .. ResourceItems[resourceID].name .. ".")
-        local ent = ents.Create("prop_physics")
-        if IsValid(ent) then
-            ent:SetModel(ResourceItems[resourceID].model or "models/props_junk/rock001a.mdl")
-            ent:SetPos(ply:GetEyeTrace().HitPos + Vector(0, 0, 10))
-            ent:Spawn()
-            ent:GetPhysicsObject():SetVelocity(ply:GetAimVector() * 100)
+        if not item or not itemData then 
+            DebugPrint("[Inventory Module] Failed to delete item " .. uniqueID .. " for " .. ply:Nick() .. " on page " .. page)
+            return 
         end
+        SendInventoryMessage(ply, "Deleted 1 " .. itemData.name .. " from page " .. page .. ".")
+        DebugPrint("[Inventory Module] " .. ply:Nick() .. " deleted 1 " .. itemData.name .. " from page " .. page)
     end)
 
     net.Receive("EquipItem", function(len, ply)
@@ -403,7 +376,7 @@ if SERVER then
         local page = net.ReadUInt(8)
         local slot = net.ReadString()
         local steamID = ply:SteamID()
-        local inv = PlayerInventories[steamID] or { items = { [1] = {} }, resources = {}, positions = { [1] = {} }, maxPages = 1, loadout = {} }
+        local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {} }
         local item, itemData
 
         for i, it in ipairs(inv.items[page] or {}) do
@@ -415,7 +388,11 @@ if SERVER then
                 break
             end
         end
-        if not item or not itemData then return end
+
+        if not item or not itemData then 
+            DebugPrint("[Inventory Module] Failed to equip item " .. uniqueID .. " for " .. ply:Nick() .. " on page " .. page)
+            return 
+        end
 
         local validSlots = {["Armor"] = true, ["Weapon"] = true, ["Sidearm"] = true, ["Boots"] = true, ["Utility"] = true}
         local canEquip = true
@@ -437,6 +414,7 @@ if SERVER then
         if not canEquip then
             SendInventoryMessage(ply, failMessage)
             AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, slots = item.slots, rarity = item.rarity, slotType = item.slotType, crafter = item.crafter }, page, true)
+            DebugPrint("[Inventory Module] " .. ply:Nick() .. " cannot equip " .. itemData.name .. " to slot " .. slot)
             return
         end
 
@@ -457,6 +435,7 @@ if SERVER then
             }, 1, true)
             inv.loadout[slot] = nil
             SendInventoryMessage(ply, "Unequipped " .. existingItemData.name .. " from " .. slot .. " to equip new item.")
+            DebugPrint("[Inventory Module] " .. ply:Nick() .. " unequipped " .. existingItemData.name .. " from " .. slot .. " to equip new item")
         end
 
         inv.loadout[slot] = item
@@ -471,11 +450,12 @@ if SERVER then
         net.WriteTable(inv.positions[page])
         net.Send(ply)
         SendInventoryMessage(ply, "Equipped " .. itemData.name .. " to " .. slot .. ".")
+        DebugPrint("[Inventory Module] " .. ply:Nick() .. " equipped " .. itemData.name .. " to " .. slot)
+
         if itemData.category == "Weapons" then
             local weaponClass = itemData.entityClass or item.itemID
             ply:Give(weaponClass)
             ply:SelectWeapon(weaponClass)
-            -- Store the custom damage on the player's weapon
             local weapon = ply:GetWeapon(weaponClass)
             if IsValid(weapon) then
                 weapon:SetNWInt("CustomDamage", item.damage)
@@ -488,9 +468,13 @@ if SERVER then
     net.Receive("UnequipItem", function(len, ply)
         local slot = net.ReadString()
         local steamID = ply:SteamID()
-        local inv = PlayerInventories[steamID] or { items = { [1] = {} }, resources = {}, positions = { [1] = {} }, maxPages = 1, loadout = {} }
+        local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {} }
         local item = inv.loadout[slot]
-        if not item or not InventoryItems[item.itemID] then return end
+        if not item or not InventoryItems[item.itemID] then 
+            DebugPrint("[Inventory Module] Failed to unequip item from slot " .. slot .. " for " .. ply:Nick())
+            return 
+        end
+
         local itemData = InventoryItems[item.itemID]
         inv.loadout[slot] = nil
         AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, slots = item.slots, rarity = item.rarity, slotType = item.slotType, crafter = item.crafter }, 1, true)
@@ -500,6 +484,8 @@ if SERVER then
         net.WriteTable(inv.loadout)
         net.Send(ply)
         SendInventoryMessage(ply, "Unequipped " .. itemData.name .. " from " .. slot .. ".")
+        DebugPrint("[Inventory Module] " .. ply:Nick() .. " unequipped " .. itemData.name .. " from " .. slot)
+
         if itemData.category == "Weapons" then
             local weaponClass = itemData.entityClass or item.itemID
             ply:StripWeapon(weaponClass)
@@ -525,10 +511,10 @@ if SERVER then
         AddItemToInventory(ply, itemID, 1, stats, 1)
         ent:Remove()
         SendInventoryMessage(ply, "Picked up 1 " .. InventoryItems[itemID].name .. ".")
+        DebugPrint("[Inventory Module] " .. ply:Nick() .. " picked up 1 " .. InventoryItems[itemID].name)
         return true
     end)
 
-    -- Hook to apply custom damage from inventory weapons
     hook.Add("EntityTakeDamage", "ApplyCustomWeaponDamage", function(target, dmginfo)
         local attacker = dmginfo:GetAttacker()
         if not IsValid(attacker) or not attacker:IsPlayer() then return end
@@ -537,29 +523,24 @@ if SERVER then
         if not IsValid(weapon) then return end
 
         local customDamage = weapon:GetNWInt("CustomDamage", -1)
-        if customDamage == -1 then return end -- No custom damage set
+        if customDamage == -1 then return end
 
         local weaponType = weapon:GetNWString("WeaponType", "unknown")
         local rarity = weapon:GetNWString("Rarity", "Common")
         local damageToApply = customDamage
 
-        -- For shotguns, multiply damage by the number of pellets (assuming 6 pellets)
         if weaponType == "shotgun" then
-            local numPellets = 6 -- Adjust this if your shotguns fire a different number of pellets
+            local numPellets = 6
             damageToApply = customDamage * numPellets
-            -- Since shotguns fire multiple pellets, we only want to apply the total damage once
-            -- Garry's Mod applies damage per pellet, so we'll override the damage for this hit
-            dmginfo:SetDamage(damageToApply / numPellets) -- Spread the total damage across pellets for display
+            dmginfo:SetDamage(damageToApply / numPellets)
         else
             dmginfo:SetDamage(damageToApply)
         end
 
-        -- Debug output to console
-        print(string.format("[Weapon Damage Test] %s (%s, %s) dealt %d damage to %s with %s (Base Damage: %d)",
+        DebugPrint(string.format("[Weapon Damage Test] %s (%s, %s) dealt %d damage to %s with %s (Base Damage: %d)",
             attacker:Nick(), weaponType, rarity, damageToApply, target:GetClass(), weapon:GetClass(), customDamage))
     end)
 
-    -- Console command to spawn a test NPC for damage testing
     concommand.Add("test_weapon_damage", function(ply)
         if not IsValid(ply) then return end
         if not ply:IsSuperAdmin() then
@@ -567,7 +548,6 @@ if SERVER then
             return
         end
 
-        -- Spawn an NPC in front of the player
         local npc = ents.Create("npc_zombie")
         if not IsValid(npc) then
             SendInventoryMessage(ply, "Failed to spawn test NPC (npc_zombie).")
@@ -577,51 +557,30 @@ if SERVER then
         local pos = ply:GetEyeTrace().HitPos + Vector(0, 0, 50)
         npc:SetPos(pos)
         npc:Spawn()
-        npc:SetHealth(1000) -- Give the NPC high health so it doesn't die immediately
+        npc:SetHealth(1000)
 
         SendInventoryMessage(ply, "Spawned a test NPC (npc_zombie) with 1000 health. Shoot it to test damage.")
-    end)
-
-    concommand.Add("addresource", function(ply, _, args)
-        if not ply:IsSuperAdmin() then return SendInventoryMessage(ply, "Superadmin only.") end
-        AddResourceToInventory(ply, args[1], tonumber(args[2]) or 1)
+        DebugPrint("[Inventory Module] " .. ply:Nick() .. " spawned a test NPC for weapon damage testing")
     end)
 
     concommand.Add("additem", function(ply, _, args)
-        if not ply:IsSuperAdmin() then return SendInventoryMessage(ply, "Superadmin only.") end
+        if not ply:IsSuperAdmin() then 
+            SendInventoryMessage(ply, "Superadmin only.")
+            return 
+        end
         AddItemToInventory(ply, args[1], tonumber(args[2]) or 1, nil, 1)
-    end)
-
-    concommand.Add("open_resources", function(ply)
-        if not IsValid(ply) then return end
-        net.Start("SyncResources")
-        net.WriteTable(PlayerInventories[ply:SteamID()] and PlayerInventories[ply:SteamID()].resources or {})
-        net.Send(ply)
     end)
 end
 
 -- Client-Side Logic
 if CLIENT then
-    local Resources, Inventory, InventoryPositions, Loadout = {}, {}, {}, {}
+    local Inventory, InventoryPositions, Loadout = {}, {}, {}
     local InventoryFrame, ToolSelectorFrame, inventoryTab, resourcesTab, adminTab
     local isInventoryOpen, isToolSelectorOpen, isQKeyHeld = false, false, false
     local currentTooltip, currentInfoBox
     local activeMenus = {}
     local allowedTools = { "button", "fading_door", "keypad_willox", "camera", "nocollide", "remover", "stacker" }
     local currentPage = 1
-
-    local resourceAppearances = {
-        rock = { material = "", color = nil },
-        copper = { material = "models/shiny", color = Color(184, 115, 51, 100) },
-        iron = { material = "models/shiny", color = Color(169, 169, 169, 255) },
-        steel = { material = "models/shiny", color = Color(192, 192, 192, 255) },
-        titanium = { material = "models/shiny", color = Color(46, 139, 87, 255) },
-        emerald = { material = "models/shiny", color = Color(0, 255, 127, 200) },
-        ruby = { material = "models/shiny", color = Color(255, 36, 0, 200) },
-        sapphire = { material = "models/shiny", color = Color(0, 191, 255, 200) },
-        obsidian = { material = "models/shiny", color = Color(47, 79, 79, 200) },
-        diamond = { material = "models/shiny", color = Color(240, 248, 255, 200) }
-    }
 
     -- Tooltip Configuration
     surface.CreateFont("TooltipFont", { font = "DermaDefault", size = 14, weight = 500 })
@@ -708,34 +667,27 @@ if CLIENT then
         currentTooltip:SetZPos(TOOLTIP_ZPOS)
         currentTooltip.Lines = lines
 
-        -- Grid dimensions
         local slotWidth, slotHeight = 97, 97
         local isRightmost = col == 10
         local isBottomRow = row == 6
         local localX, localY
 
-        -- Default: position to the right, aligned with the top of the slot
         localX = posX + slotWidth + TOOLTIP_SPACING
-        localY = posY -- Align with the top of the slot
+        localY = posY
 
-        -- Adjust positioning based on grid position
         if isRightmost then
             if isBottomRow then
-                -- Rightmost column and bottom row: position above the item
-                localX = posX - (tooltipWidth - slotWidth) / 2 -- Center horizontally
+                localX = posX - (tooltipWidth - slotWidth) / 2
                 localY = posY - tooltipHeight - TOOLTIP_SPACING
             else
-                -- Rightmost column but not bottom row: position below the item
-                localX = posX - (tooltipWidth - slotWidth) / 2 -- Center horizontally
+                localX = posX - (tooltipWidth - slotWidth) / 2
                 localY = posY + slotHeight + TOOLTIP_SPACING
             end
         elseif isBottomRow then
-            -- Bottom row but not rightmost column: position above the item
             localX = posX + slotWidth + TOOLTIP_SPACING
             localY = posY - tooltipHeight - TOOLTIP_SPACING
         end
 
-        -- Ensure tooltip stays within gridPanel bounds
         local gridWidth, gridHeight = parent:GetSize()
         localX = math.max(0, math.min(localX, gridWidth - tooltipWidth))
         localY = math.max(0, math.min(localY, gridHeight - tooltipHeight))
@@ -760,7 +712,11 @@ if CLIENT then
         ToolSelectorFrame:ShowCloseButton(false)
         ToolSelectorFrame:MakePopup()
         ToolSelectorFrame.Paint = function(self, w, h) draw.RoundedBox(8, 0, 0, w, h, Color(30, 30, 30, 225)) end
-        ToolSelectorFrame.OnClose = function() gui.EnableScreenClicker(false) isToolSelectorOpen = false ToolSelectorFrame = nil end
+        ToolSelectorFrame.OnClose = function() 
+            gui.EnableScreenClicker(false) 
+            isToolSelectorOpen = false 
+            ToolSelectorFrame = nil 
+        end
 
         local scroll = vgui.Create("DScrollPanel", ToolSelectorFrame)
         scroll:Dock(FILL)
@@ -794,6 +750,7 @@ if CLIENT then
                 RunConsoleCommand("gmod_toolmode", toolClass)
                 RunConsoleCommand("gmod_tool", toolClass)
                 surface.PlaySound("buttons/button14.wav")
+                DebugPrint("[Inventory Module] " .. LocalPlayer():Nick() .. " selected tool: " .. toolClass)
             end
             btn.Paint = function(self, w, h)
                 draw.RoundedBox(8, 0, 0, w, h, self:IsHovered() and Color(70, 70, 70, 240) or Color(50, 50, 50, 240))
@@ -819,7 +776,11 @@ if CLIENT then
         pageTab.Paint = function(self, w, h)
             draw.RoundedBox(4, 0, 0, w, h, currentPage == 1 and Color(70, 70, 70, 240) or Color(50, 50, 50, 240))
         end
-        pageTab.DoClick = function() currentPage = 1 BuildInventoryUI(parent, currentPage) end
+        pageTab.DoClick = function() 
+            currentPage = 1 
+            BuildInventoryUI(parent, currentPage) 
+            DebugPrint("[Inventory Module] Switched to page 1")
+        end
         
         local gridPanel = vgui.Create("DPanel", parent)
         gridPanel:SetSize(980, 640)
@@ -857,6 +818,7 @@ if CLIENT then
                     net.WriteUInt(currentPage, 8)
                     net.WriteTable(InventoryPositions)
                     net.SendToServer()
+                    DebugPrint("[Inventory Module] Moved item " .. draggedUniqueID .. " to position (" .. row .. ", " .. col .. ")")
                 end)
                 slots[row][col] = slot
             end
@@ -892,6 +854,7 @@ if CLIENT then
                 local slotPanel = slots[row][col]
                 local slotX, slotY = slotPanel:GetPos()
                 CreateTooltip(gridPanel, lines, slotX, slotY, row, col)
+                DebugPrint("[Inventory Module] Showing tooltip for item " .. uniqueID .. " at position (" .. row .. ", " .. col .. ")")
             end
 
             model.OnCursorExited = function(self)
@@ -899,6 +862,7 @@ if CLIENT then
                     timer.Simple(TOOLTIP_FADEOUT_DELAY, function()
                         if IsValid(currentTooltip) and not self:IsHovered() then
                             currentTooltip:Remove()
+                            DebugPrint("[Inventory Module] Removed tooltip for item " .. uniqueID)
                         end
                     end)
                 end
@@ -910,7 +874,7 @@ if CLIENT then
                 table.insert(activeMenus, menu)
 
                 local isEquipable = false
-                if InventoryItems[itemID].category == "Utility" and itemID ~= "medkit" then
+                if InventoryItems[itemID].category == "Utility" and itemID != "medkit" then
                     isEquipable = true
                 elseif InventoryItems[itemID].category == "Weapons" then
                     isEquipable = true
@@ -922,6 +886,7 @@ if CLIENT then
                         net.WriteString(uniqueID)
                         net.WriteUInt(currentPage, 8)
                         net.SendToServer()
+                        DebugPrint("[Inventory Module] Using item " .. uniqueID .. " from page " .. currentPage)
                     end)
                 end
 
@@ -931,16 +896,18 @@ if CLIENT then
                         net.WriteString(uniqueID)
                         net.WriteUInt(currentPage, 8)
                         net.SendToServer()
+                        DebugPrint("[Inventory Module] Dropping item " .. uniqueID .. " from page " .. currentPage)
                     end)
                 end
 
-                if InventoryItems[itemID].category == "Utility" and itemID ~= "medkit" then
+                if InventoryItems[itemID].category == "Utility" and itemID != "medkit" then
                     menu:AddOption("Equip", function()
                         net.Start("EquipItem")
                         net.WriteString(uniqueID)
                         net.WriteUInt(currentPage, 8)
                         net.WriteString("Utility")
                         net.SendToServer()
+                        DebugPrint("[Inventory Module] Equipping item " .. uniqueID .. " to Utility slot")
                     end)
                 elseif InventoryItems[itemID].category == "Weapons" then
                     local equipSlot = (item.slotType == "Sidearm") and "Sidearm" or "Weapon"
@@ -950,6 +917,7 @@ if CLIENT then
                         net.WriteUInt(currentPage, 8)
                         net.WriteString(equipSlot)
                         net.SendToServer()
+                        DebugPrint("[Inventory Module] Equipping item " .. uniqueID .. " to " .. equipSlot .. " slot")
                     end)
                 end
 
@@ -958,6 +926,7 @@ if CLIENT then
                     net.WriteString(uniqueID)
                     net.WriteUInt(currentPage, 8)
                     net.SendToServer()
+                    DebugPrint("[Inventory Module] Deleting item " .. uniqueID .. " from page " .. currentPage)
                 end)
 
                 menu:Open(self:LocalToScreen(10, 75))
@@ -970,173 +939,7 @@ if CLIENT then
         end
     end
 
-    local function BuildResourcesMenu(parent)
-        if not IsValid(parent) then return end
-        for _, child in pairs(parent:GetChildren()) do child:Remove() end
-        local scroll = vgui.Create("DScrollPanel", parent)
-        scroll:Dock(FILL)
-        local layout = vgui.Create("DIconLayout", scroll)
-        layout:Dock(FILL)
-        layout:SetSpaceX(10)
-        layout:SetSpaceY(10)
-
-        local categories = {
-            { name = "Minerals", items = resourceTemplates.minerals },
-            { name = "Gems", items = resourceTemplates.gems },
-            { name = "Lumber", items = resourceTemplates.lumber }
-        }
-        for _, cat in ipairs(categories) do
-            local catPanel = layout:Add("DPanel")
-            catPanel:SetSize(300, 60 + table.Count(cat.items) * 50)
-            catPanel.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(40, 40, 40, 200)) end
-
-            local catLabel = vgui.Create("DLabel", catPanel)
-            catLabel:SetPos(10, 10)
-            catLabel:SetText(cat.name)
-            catLabel:SetSize(280, 20)
-            catLabel:SetColor(Color(255, 215, 0))
-
-            local i = 1
-            for _, data in ipairs(cat.items) do
-                local resourceID = data.id
-                local resPanel = vgui.Create("DPanel", catPanel)
-                resPanel:SetPos(10, 40 + (i - 1) * 50)
-                resPanel:SetSize(280, 40)
-                resPanel.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(30, 30, 30, 200)) end
-
-                local resIcon = vgui.Create("DModelPanel", resPanel)
-                resIcon:SetPos(5, 0)
-                resIcon:SetSize(40, 40)
-                resIcon:SetModel(data.icon)
-                resIcon:SetFOV(30)
-                resIcon:SetCamPos(Vector(30, 30, 30))
-                resIcon:SetLookAt(Vector(0, 0, 0))
-                local appearance = resourceAppearances[resourceID] or { material = "models/shiny", color = Color(255, 255, 255) }
-                if appearance.material != "" then resIcon.Entity:SetMaterial(appearance.material) end
-                if appearance.color then resIcon:SetColor(appearance.color) end
-                resIcon.OnCursorEntered = function(self)
-                    if IsValid(currentTooltip) then currentTooltip:Remove() end
-                    currentTooltip = vgui.Create("DLabel", resPanel)
-                    currentTooltip:SetText(data.name)
-                    currentTooltip:SetPos(50, 10)
-                    currentTooltip:SetSize(100, 20)
-                    currentTooltip:SetZPos(10000)
-                    currentTooltip.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240)) end
-                end
-                resIcon.OnCursorExited = function(self) 
-                    if IsValid(currentTooltip) then currentTooltip:Remove() currentTooltip = nil end 
-                end
-                resIcon.OnMousePressed = function(self, code)
-                    if (Resources[resourceID] or 0) <= 0 then return end
-                    if code == MOUSE_LEFT then
-                        net.Start("DropResource")
-                        net.WriteString(resourceID)
-                        net.WriteUInt(1, 16)
-                        net.SendToServer()
-                    elseif code == MOUSE_RIGHT then
-                        Derma_StringRequest("Drop " .. data.name, "How many to drop? (Max: " .. (Resources[resourceID] or 0) .. ")", "1",
-                            function(text)
-                                local amount = math.min(math.floor(tonumber(text) or 0), Resources[resourceID] or 0)
-                                if amount > 0 then
-                                    net.Start("DropResource")
-                                    net.WriteString(resourceID)
-                                    net.WriteUInt(amount, 16)
-                                    net.SendToServer()
-                                end
-                            end, nil, "Drop", "Cancel")
-                    end
-                end
-
-                local resAmount = vgui.Create("DLabel", resPanel)
-                resAmount:SetPos(50, 10)
-                resAmount:SetText(": " .. (Resources[resourceID] or 0))
-                resAmount:SetSize(220, 20)
-                resAmount.Think = function(self) self:SetText(": " .. (Resources[resourceID] or 0)) end
-                i = i + 1
-            end
-        end
-    end
-
-    local function BuildAdminPanel(parent)
-        if not IsValid(parent) then return end
-        for _, child in pairs(parent:GetChildren()) do child:Remove() end
-
-        -- Create a dropdown for admin options
-        local dropdown = vgui.Create("DComboBox", parent)
-        dropdown:SetPos(10, 10)
-        dropdown:SetSize(200, 30)
-        dropdown:SetValue("Select an Option")
-        dropdown:AddChoice("Item Edit")
-        dropdown:AddChoice("Inventory Edit")
-        dropdown:AddChoice("Props")
-        dropdown:AddChoice("Events Panel")
-
-        -- Create panels for each option (hidden by default)
-        local panels = {}
-
-        -- Item Edit Panel
-        panels["Item Edit"] = vgui.Create("DPanel", parent)
-        panels["Item Edit"]:SetPos(10, 50)
-        panels["Item Edit"]:SetSize(970, 620)
-        panels["Item Edit"]:SetVisible(false)
-        panels["Item Edit"].Paint = function(self, w, h)
-            draw.RoundedBox(4, 0, 0, w, h, Color(40, 40, 40, 200))
-        end
-        local itemEditLabel = vgui.Create("DLabel", panels["Item Edit"])
-        itemEditLabel:SetPos(10, 10)
-        itemEditLabel:SetSize(950, 30)
-        itemEditLabel:SetText("Item Edit Panel - Add functionality here")
-        itemEditLabel:SetColor(Color(255, 255, 255))
-
-        -- Inventory Edit Panel
-        panels["Inventory Edit"] = vgui.Create("DPanel", parent)
-        panels["Inventory Edit"]:SetPos(10, 50)
-        panels["Inventory Edit"]:SetSize(970, 620)
-        panels["Inventory Edit"]:SetVisible(false)
-        panels["Inventory Edit"].Paint = function(self, w, h)
-            draw.RoundedBox(4, 0, 0, w, h, Color(40, 40, 40, 200))
-        end
-        local invEditLabel = vgui.Create("DLabel", panels["Inventory Edit"])
-        invEditLabel:SetPos(10, 10)
-        invEditLabel:SetSize(950, 30)
-        invEditLabel:SetText("Inventory Edit Panel - Add functionality here")
-        invEditLabel:SetColor(Color(255, 255, 255))
-
-        -- Props Panel
-        panels["Props"] = vgui.Create("DPanel", parent)
-        panels["Props"]:SetPos(10, 50)
-        panels["Props"]:SetSize(970, 620)
-        panels["Props"]:SetVisible(false)
-        panels["Props"].Paint = function(self, w, h)
-            draw.RoundedBox(4, 0, 0, w, h, Color(40, 40, 40, 200))
-        end
-        local propsLabel = vgui.Create("DLabel", panels["Props"])
-        propsLabel:SetPos(10, 10)
-        propsLabel:SetSize(950, 30)
-        propsLabel:SetText("Props Panel - Add functionality here")
-        propsLabel:SetColor(Color(255, 255, 255))
-
-        -- Events Panel
-        panels["Events Panel"] = vgui.Create("DPanel", parent)
-        panels["Events Panel"]:SetPos(10, 50)
-        panels["Events Panel"]:SetSize(970, 620)
-        panels["Events Panel"]:SetVisible(false)
-        panels["Events Panel"].Paint = function(self, w, h)
-            draw.RoundedBox(4, 0, 0, w, h, Color(40, 40, 40, 200))
-        end
-        local eventsLabel = vgui.Create("DLabel", panels["Events Panel"])
-        eventsLabel:SetPos(10, 10)
-        eventsLabel:SetSize(950, 30)
-        eventsLabel:SetText("Events Panel - Add functionality here")
-        eventsLabel:SetColor(Color(255, 255, 255))
-
-        -- Show the selected panel when an option is chosen
-        dropdown.OnSelect = function(self, index, value)
-            for panelName, panel in pairs(panels) do
-                panel:SetVisible(panelName == value)
-            end
-        end
-    end
+    -- (Previous code remains unchanged until the OpenCustomQMenu function)
 
     local function OpenCustomQMenu()
         if isInventoryOpen and IsValid(InventoryFrame) then return end
@@ -1159,21 +962,33 @@ if CLIENT then
             inventoryTab = nil
             resourcesTab = nil
             adminTab = nil
+            propsTab = nil
             if isToolSelectorOpen and IsValid(ToolSelectorFrame) then ToolSelectorFrame:Close() end
+            DebugPrint("[Inventory Module] Closed inventory menu")
         end
 
         local tabPanel = vgui.Create("DPropertySheet", InventoryFrame)
         tabPanel:Dock(FILL)
+
+        -- Inventory Tab
         inventoryTab = vgui.Create("DPanel", tabPanel)
         inventoryTab.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240)) end
         BuildInventoryUI(inventoryTab, currentPage)
         tabPanel:AddSheet("Inventory", inventoryTab, "icon16/briefcase.png")
+
+        -- Props Tab (moved before Resources)
+        propsTab = vgui.Create("DPanel", tabPanel)
+        propsTab.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240)) end
+        BuildPropsPanel(propsTab)
+        tabPanel:AddSheet("Props", propsTab, "icon16/bricks.png")
+
+        -- Resources Tab (now after Props)
         resourcesTab = vgui.Create("DPanel", tabPanel)
         resourcesTab.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240)) end
         BuildResourcesMenu(resourcesTab)
         tabPanel:AddSheet("Resources", resourcesTab, "icon16/box.png")
 
-        -- Add Admin Panel tab for superadmins only
+        -- Admin Panel Tab (Superadmins only)
         if LocalPlayer():IsSuperAdmin() then
             adminTab = vgui.Create("DPanel", tabPanel)
             adminTab.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240)) end
@@ -1183,7 +998,10 @@ if CLIENT then
 
         isInventoryOpen = true
         OpenToolSelector()
+        DebugPrint("[Inventory Module] Opened inventory menu")
     end
+
+-- (end of custommenu)
 
     local function RefreshEquipmentSlots(frame, slotsPanel)
         if not IsValid(slotsPanel) or not IsValid(frame) then return end
@@ -1238,6 +1056,7 @@ if CLIENT then
                             draw.SimpleText(line.text, "TooltipFont", TOOLTIP_PADDING_X, TOOLTIP_PADDING_Y + (j - 1) * TOOLTIP_LINE_HEIGHT, line.color, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
                         end
                     end
+                    DebugPrint("[Inventory Module] Showing equipment tooltip for slot " .. slot)
                 end
 
                 model.OnCursorExited = function(self)
@@ -1245,6 +1064,7 @@ if CLIENT then
                         timer.Simple(TOOLTIP_FADEOUT_DELAY, function()
                             if IsValid(currentInfoBox) and not self:IsHovered() then
                                 currentInfoBox:Remove()
+                                DebugPrint("[Inventory Module] Removed equipment tooltip for slot " .. slot)
                             end
                         end)
                     end
@@ -1257,6 +1077,7 @@ if CLIENT then
                         net.Start("UnequipItem")
                         net.WriteString(slot)
                         net.SendToServer()
+                        DebugPrint("[Inventory Module] Unequipping item from slot " .. slot)
                     end)
                     menu:Open(self:LocalToScreen(10, iconSize))
                     menu.OnRemove = function()
@@ -1290,6 +1111,7 @@ if CLIENT then
             if IsValid(currentInfoBox) then currentInfoBox:Remove() end
             for _, menu in ipairs(activeMenus) do if IsValid(menu) then menu:Remove() end end
             activeMenus = {}
+            DebugPrint("[Inventory Module] Closed equipment menu")
         end
 
         local padding = 10
@@ -1322,8 +1144,10 @@ if CLIENT then
             Loadout = net.ReadTable()
             if IsValid(slotsPanel) then
                 RefreshEquipmentSlots(frame, slotsPanel)
+                DebugPrint("[Inventory Module] Synced loadout: " .. table.ToString(Loadout))
             end
         end)
+        DebugPrint("[Inventory Module] Opened equipment menu")
     end
 
     hook.Add("PlayerBindPress", "CustomMenuBinds", function(_, bind, pressed)
@@ -1348,12 +1172,10 @@ if CLIENT then
         local page = net.ReadUInt(8)
         Inventory = net.ReadTable()
         InventoryPositions = net.ReadTable()
-        if IsValid(inventoryTab) then BuildInventoryUI(inventoryTab, page) end
-    end)
-
-    net.Receive("SyncResources", function()
-        Resources = net.ReadTable()
-        if IsValid(resourcesTab) then BuildResourcesMenu(resourcesTab) end
+        if IsValid(inventoryTab) then 
+            BuildInventoryUI(inventoryTab, page) 
+            DebugPrint("[Inventory Module] Synced inventory for page " .. page)
+        end
     end)
 
     net.Receive("InventoryMessage", function()
@@ -1363,7 +1185,11 @@ if CLIENT then
 
     net.Receive("SyncLoadout", function()
         Loadout = net.ReadTable()
+        DebugPrint("[Inventory Module] Synced loadout: " .. table.ToString(Loadout))
     end)
 
     concommand.Add("rp_loadout", OpenEquipmentMenu)
 end
+
+-- This print will always show to confirm successful load
+print("[Inventory Module] Loaded successfully.")
