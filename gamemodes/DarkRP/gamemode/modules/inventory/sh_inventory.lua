@@ -14,7 +14,8 @@ if SERVER then
     util.AddNetworkString("DropItem")
     util.AddNetworkString("UseItem")
     util.AddNetworkString("DeleteItem")
-    util.AddNetworkString("InventoryMessage")
+    util.AddNetworkString("InventoryMessage") -- We'll keep this for backwards compatibility but won't use it
+    util.AddNetworkString("InventoryNotification") -- New network string for tooltip notifications
     util.AddNetworkString("UpdateInventoryPositions")
     util.AddNetworkString("SyncLoadout")
     util.AddNetworkString("EquipItem")
@@ -83,33 +84,35 @@ function AddItemToInventory(ply, itemID, amount, stats, page, silent)
     for i = 1, (amount or 1) do
         local uniqueID = stats and stats.id or GenerateUUID()
         local isWeaponOrArmor = InventoryItems[itemID].category == "Weapons" or InventoryItems[itemID].category == "Armor"
-        stats = stats or {
-            damage = 0, -- Will be set below for weapons
-            slots = 0,
-            rarity = nil,
-            slotType = nil,
-            crafter = ply:Nick()
-        }
+        -- Only generate stats if none are provided (i.e., new item)
+        if not stats then
+            stats = {
+                damage = 0, -- Will be set below for weapons
+                slots = 0,
+                rarity = nil,
+                slotType = nil,
+                crafter = ply:Nick()
+            }
+            if isWeaponOrArmor then
+                local rarityRoll = math.random(1, 500)
+                stats.rarity = rarityRoll == 1 and "Legendary" or rarityRoll <= 3 and "Epic" or rarityRoll <= 10 and "Rare" or rarityRoll <= 50 and "Uncommon" or "Common"
+                local slotCaps = { Common = 2, Uncommon = 3, Rare = 4, Epic = 5, Legendary = 6 }
+                stats.slots = math.random(0, slotCaps[stats.rarity] or 2)
 
-        if isWeaponOrArmor then
-            local rarityRoll = math.random(1, 500)
-            stats.rarity = rarityRoll == 1 and "Legendary" or rarityRoll <= 3 and "Epic" or rarityRoll <= 10 and "Rare" or rarityRoll <= 50 and "Uncommon" or "Common"
-            local slotCaps = { Common = 2, Uncommon = 3, Rare = 4, Epic = 5, Legendary = 6 }
-            stats.slots = math.random(0, slotCaps[stats.rarity] or 2)
-
-            if InventoryItems[itemID].category == "Weapons" then
-                stats.slotType = math.random(1, 500) == 1 and "Sidearm" or "Primary"
-                local weaponType = WeaponTypes[itemID] or "unknown"
-                if weaponType == "pistol" then
-                    stats.damage = stats.rarity == "Legendary" and math.random(6, 20) or math.random(6, 15)
-                elseif weaponType == "assault_rifle" then
-                    stats.damage = stats.rarity == "Legendary" and math.random(15, 25) or math.random(12, 20)
-                elseif weaponType == "shotgun" then
-                    stats.damage = stats.rarity == "Legendary" and math.random(5, 15) or math.random(5, 10)
-                elseif weaponType == "sniper" then
-                    stats.damage = stats.rarity == "Legendary" and math.random(50, 100) or math.random(25, 50)
-                else
-                    stats.damage = math.random(10, 80)
+                if InventoryItems[itemID].category == "Weapons" then
+                    stats.slotType = math.random(1, 500) == 1 and "Sidearm" or "Primary"
+                    local weaponType = WeaponTypes[itemID] or "unknown"
+                    if weaponType == "pistol" then
+                        stats.damage = stats.rarity == "Legendary" and math.random(6, 20) or math.random(6, 15)
+                    elseif weaponType == "assault_rifle" then
+                        stats.damage = stats.rarity == "Legendary" and math.random(15, 25) or math.random(12, 20)
+                    elseif weaponType == "shotgun" then
+                        stats.damage = stats.rarity == "Legendary" and math.random(5, 15) or math.random(5, 10)
+                    elseif weaponType == "sniper" then
+                        stats.damage = stats.rarity == "Legendary" and math.random(50, 100) or math.random(25, 50)
+                    else
+                        stats.damage = math.random(10, 80)
+                    end
                 end
             end
         end
@@ -155,7 +158,9 @@ function AddItemToInventory(ply, itemID, amount, stats, page, silent)
         net.Send(ply)
         SavePlayerInventory(ply)
         if not silent then
-            SendInventoryMessage(ply, "Added " .. (amount or 1) .. " " .. InventoryItems[itemID].name .. "(s) to your inventory on page " .. page .. ".")
+            net.Start("InventoryNotification")
+            net.WriteString("Added " .. (amount or 1) .. " " .. InventoryItems[itemID].name .. "(s) to your inventory on page " .. page .. ".")
+            net.Send(ply)
             DebugPrint("[Inventory Module] Added " .. (amount or 1) .. " " .. InventoryItems[itemID].name .. " to " .. ply:Nick() .. "'s inventory on page " .. page)
         end
     end
@@ -189,7 +194,7 @@ if SERVER then
 
     function SendInventoryMessage(ply, message)
         if not IsValid(ply) then return end
-        net.Start("InventoryMessage")
+        net.Start("InventoryNotification")
         net.WriteString(message)
         net.Send(ply)
     end
@@ -214,7 +219,22 @@ if SERVER then
             net.Start("SyncLoadout")
             net.WriteTable(inv.loadout)
             net.Send(ply)
-            DebugPrint("[Inventory Module] Loaded inventory for " .. ply:Nick())
+            -- Debug print to show loaded loadout
+            DebugPrint("[Inventory Module] Loaded inventory for " .. ply:Nick() .. " with loadout: " .. table.ToString(inv.loadout, "Loadout", true))
+            -- Auto-equip loadout items
+            for slot, item in pairs(inv.loadout) do
+                if item and InventoryItems[item.itemID] and InventoryItems[item.itemID].category == "Weapons" then
+                    local weaponClass = InventoryItems[item.itemID].entityClass or item.itemID
+                    ply:Give(weaponClass)
+                    local weapon = ply:GetWeapon(weaponClass)
+                    if IsValid(weapon) then
+                        weapon:SetNWInt("CustomDamage", item.damage or 0)
+                        weapon:SetNWString("WeaponType", WeaponTypes[item.itemID] or "unknown")
+                        weapon:SetNWString("Rarity", item.rarity or "Common")
+                        DebugPrint("[Inventory Module] Auto-equipped " .. weaponClass .. " for " .. ply:Nick() .. " with damage: " .. (item.damage or 0))
+                    end
+                end
+            end
         end, function(err)
             print("[Inventory Module] Error loading inventory for " .. steamID .. ": " .. err)
         end)
@@ -224,6 +244,8 @@ if SERVER then
         if not IsValid(ply) then return end
         local steamID = ply:SteamID()
         local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {} }
+        -- Debug print to show what's being saved
+        DebugPrint("[Inventory Module] Saving inventory for " .. ply:Nick() .. " with loadout: " .. table.ToString(inv.loadout, "Loadout", true))
         -- Fetch resources separately to preserve them in the database
         local resources = {}
         MySQLite.query("SELECT resources FROM darkrp_custom_inventory WHERE steamid = " .. MySQLite.SQLStr(steamID), function(data)
@@ -474,9 +496,10 @@ if SERVER then
             DebugPrint("[Inventory Module] Failed to unequip item from slot " .. slot .. " for " .. ply:Nick())
             return 
         end
-
+    
         local itemData = InventoryItems[item.itemID]
         inv.loadout[slot] = nil
+        -- Add the item back to the inventory while preserving all stats
         AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, slots = item.slots, rarity = item.rarity, slotType = item.slotType, crafter = item.crafter }, 1, true)
         PlayerInventories[steamID] = inv
         SavePlayerInventory(ply)
@@ -485,7 +508,7 @@ if SERVER then
         net.Send(ply)
         SendInventoryMessage(ply, "Unequipped " .. itemData.name .. " from " .. slot .. ".")
         DebugPrint("[Inventory Module] " .. ply:Nick() .. " unequipped " .. itemData.name .. " from " .. slot)
-
+    
         if itemData.category == "Weapons" then
             local weaponClass = itemData.entityClass or item.itemID
             ply:StripWeapon(weaponClass)
@@ -494,6 +517,29 @@ if SERVER then
 
     hook.Add("PlayerInitialSpawn", "Inventory_InitInventory", LoadPlayerInventory)
     hook.Add("PlayerDisconnected", "SaveInventoryOnDisconnect", SavePlayerInventory)
+
+    hook.Add("PlayerSpawn", "Inventory_EquipLoadoutOnSpawn", function(ply)
+        if not IsValid(ply) then return end
+        local steamID = ply:SteamID()
+        local inv = PlayerInventories[steamID]
+        if not inv or not inv.loadout then return end
+
+        DebugPrint("[Inventory Module] Equipping loadout items for " .. ply:Nick() .. " on spawn.")
+
+        for slot, item in pairs(inv.loadout) do
+            if item and InventoryItems[item.itemID] and InventoryItems[item.itemID].category == "Weapons" then
+                local weaponClass = InventoryItems[item.itemID].entityClass or item.itemID
+                ply:Give(weaponClass)
+                local weapon = ply:GetWeapon(weaponClass)
+                if IsValid(weapon) then
+                    weapon:SetNWInt("CustomDamage", item.damage or 0)
+                    weapon:SetNWString("WeaponType", WeaponTypes[item.itemID] or "unknown")
+                    weapon:SetNWString("Rarity", item.rarity or "Common")
+                    DebugPrint("[Inventory Module] Equipped " .. weaponClass .. " for " .. ply:Nick() .. " with damage: " .. (item.damage or 0))
+                end
+            end
+        end
+    end)
 
     hook.Add("PlayerUse", "PickupInventoryItem", function(ply, ent)
         local uniqueID = ent:GetNWString("UniqueID")
@@ -939,8 +985,6 @@ if CLIENT then
         end
     end
 
-    -- (Previous code remains unchanged until the OpenCustomQMenu function)
-
     local function OpenCustomQMenu()
         if isInventoryOpen and IsValid(InventoryFrame) then return end
         gui.EnableScreenClicker(true)
@@ -1000,8 +1044,6 @@ if CLIENT then
         OpenToolSelector()
         DebugPrint("[Inventory Module] Opened inventory menu")
     end
-
--- (end of custommenu)
 
     local function RefreshEquipmentSlots(frame, slotsPanel)
         if not IsValid(slotsPanel) or not IsValid(frame) then return end
@@ -1155,7 +1197,7 @@ if CLIENT then
             isQKeyHeld = true
             OpenCustomQMenu()
             return true
-        elseif bind == "+menu_context" and pressed then
+        elseif bind == "impulse 100" and pressed then -- "B" key for rp_loadout
             OpenEquipmentMenu()
             return true
         end
@@ -1181,6 +1223,30 @@ if CLIENT then
     net.Receive("InventoryMessage", function()
         local message = net.ReadString()
         chat.AddText(Color(255, 215, 0), "[Inventory] ", Color(255, 255, 255), message)
+    end)
+
+    net.Receive("InventoryNotification", function()
+        local message = net.ReadString()
+        local screenW, screenH = ScrW(), ScrH()
+
+        -- Create a temporary panel for the notification
+        local notification = vgui.Create("DPanel")
+        notification:SetSize(300, 50)
+        notification:SetPos(screenW - 320, 20) -- Top-right corner
+        notification:SetZPos(1000)
+        notification.Think = function(self)
+            if self.StartTime and (CurTime() - self.StartTime) > 3 then
+                self:Remove()
+            end
+        end
+        notification.StartTime = CurTime()
+        notification.Paint = function(self, w, h)
+            draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 200))
+            draw.SimpleText(message, "DermaDefaultBold", w / 2, h / 2, Color(255, 255, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        end
+
+        -- Play DarkRP-style notification sound
+        surface.PlaySound("ui/buttonclick.wav")
     end)
 
     net.Receive("SyncLoadout", function()
