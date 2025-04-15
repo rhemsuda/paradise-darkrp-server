@@ -22,6 +22,38 @@ local TOOLTIP_FADEOUT_DELAY = 0.2
 -- Global variable to track the active tooltip
 local ActiveTooltip = nil
 
+-- Client-side buy mode (true = Buy, false = Craft)
+local BuyMode = false
+
+-- List of prop itemIDs (in order, to match server-side PropItemIDs)
+local PropItemIDs = {
+    "weapon_stripper",
+    "slotted_door",
+    "metal_plate_1x1",
+    "metal_plate_1x2",
+    "metal_plate_2x2",
+    "metal_plate_2x4",
+    "metal_plate_4x4",
+    "metal_tube",
+    "metal_tube_2x",
+    "i_beam_2x8",
+    "i_beam_2x16",
+    "i_beam_2x32",
+    "billboard",
+    "wooden_shelves",
+    "gear_60t1",
+    "blast_door_c",
+    "blast_door_b",
+    "storefront_bars",
+    "interior_fence_002d",
+    "fence_03a",
+    "interior_fence_001g",
+    "concrete_barrier",
+    "vending_machine",
+    "kitchen_fridge",
+    "covered_bridge_bottom"
+}
+
 local function CreatePropTooltip(parent, prop, posX, posY, row, col)
     -- Remove any existing tooltip
     if IsValid(ActiveTooltip) then
@@ -32,10 +64,19 @@ local function CreatePropTooltip(parent, prop, posX, posY, row, col)
     local lines = {
         { text = prop.name, color = Color(255, 255, 255) },
         { text = "Health: " .. prop.health, color = Color(255, 255, 255) },
-        { text = "Wood: " .. prop.resources.wood, color = Color(255, 255, 255) },
-        { text = "Metal: " .. prop.resources.metal, color = Color(255, 255, 255) },
-        { text = "Stone: " .. prop.resources.stone, color = Color(255, 255, 255) },
     }
+
+    -- Show cost based on buy mode
+    if BuyMode then
+        table.insert(lines, { text = "Cost: $" .. prop.price, color = Color(255, 255, 255) })
+    else
+        -- Only show materials with a cost greater than 0
+        for resource, cost in pairs(prop.resources) do
+            if cost > 0 then
+                table.insert(lines, { text = resource:gsub("^%l", string.upper) .. ": " .. cost, color = Color(255, 255, 255) })
+            end
+        end
+    end
 
     local maxWidth = 0
     for _, line in ipairs(lines) do
@@ -52,7 +93,7 @@ local function CreatePropTooltip(parent, prop, posX, posY, row, col)
     tooltip.Lines = lines
 
     -- Grid dimensions (based on the DIconLayout spacing and size)
-    local slotWidth, slotHeight = 120, 120 -- Size of each prop icon panel
+    local slotWidth, slotHeight = 80, 80 -- Reduced size of each prop icon panel
     local iconsPerRow = math.floor((960 + 5) / (slotWidth + 5)) -- 960 is the width of the gridPanel, 5 is the spacing
     local isRightmost = (col % iconsPerRow) == 0
     local isBottomRow = row == math.ceil(#parent:GetChildren() / iconsPerRow)
@@ -96,47 +137,78 @@ local function CreatePropTooltip(parent, prop, posX, posY, row, col)
     return tooltip
 end
 
+-- Global variable to store the toggle button (temporary for debugging)
+local GlobalToggleButton = nil
+
 -- Function to build the props panel (used by sh_inventory.lua)
 function BuildPropsPanel(parent)
     if not IsValid(parent) then return end
     for _, child in pairs(parent:GetChildren()) do child:Remove() end
 
+    -- Create the top panel for the toggle button
+    local topPanel = vgui.Create("DPanel", parent)
+    topPanel:SetPos(5, 5)
+    topPanel:SetSize(970, 40)
+    topPanel.Paint = function(self, w, h)
+        draw.RoundedBox(4, 0, 0, w, h, Color(40, 40, 40, 200))
+    end
+
+    -- Create the toggle button
+    local toggleButton = vgui.Create("DButton", topPanel)
+    toggleButton:SetPos(10, 5)
+    toggleButton:SetSize(150, 30)
+    toggleButton:SetText(BuyMode and "Mode: Buy" or "Mode: Craft")
+    toggleButton:SetTextColor(Color(255, 255, 255)) -- White text
+    toggleButton.Paint = function(self, w, h)
+        draw.RoundedBox(4, 0, 0, w, h, Color(70, 70, 70)) -- Slightly brighter gray
+        if self:IsHovered() then
+            draw.RoundedBox(4, 0, 0, w, h, Color(255, 255, 255, 50)) -- Slight highlight on hover
+        end
+    end
+    toggleButton.DoClick = function()
+        net.Start("ToggleBuyMode")
+        net.SendToServer()
+    end
+
+    -- Store the toggle button in the parent panel and globally
+    parent.ToggleButton = toggleButton
+    GlobalToggleButton = toggleButton
+
     local scrollPanel = vgui.Create("DScrollPanel", parent)
-    scrollPanel:SetPos(5, 5)
-    scrollPanel:SetSize(970, 680)
+    scrollPanel:SetPos(5, 50)
+    scrollPanel:SetSize(970, 635)
     scrollPanel.Paint = function(self, w, h)
         draw.RoundedBox(4, 0, 0, w, h, Color(40, 40, 40, 200))
     end
 
     local gridPanel = vgui.Create("DIconLayout", scrollPanel)
     gridPanel:SetPos(5, 5)
-    gridPanel:SetSize(960, 670)
+    gridPanel:SetSize(960, 625)
     gridPanel:SetSpaceX(5)
     gridPanel:SetSpaceY(5)
 
-    -- Get the prop list (for now, we'll define it locally; ideally, fetch from server if needed)
-    local PropList = {
-        { model = "models/props_c17/oildrum001.mdl", name = "Oil Drum", resources = { wood = 0, metal = 0, stone = 0 }, health = 100 },
-        { model = "models/props_junk/wood_crate001a.mdl", name = "Wooden Crate", resources = { wood = 0, metal = 0, stone = 0 }, health = 100 },
-        { model = "models/props_junk/metal_paintcan001a.mdl", name = "Paint Can", resources = { wood = 0, metal = 0, stone = 0 }, health = 100 },
-        { model = "models/props_c17/chair02a.mdl", name = "Chair", resources = { wood = 0, metal = 0, stone = 0 }, health = 100 },
-        { model = "models/props_wasteland/controlroom_desk001b.mdl", name = "Desk", resources = { wood = 0, metal = 0, stone = 0 }, health = 100 },
-    }
+    -- Build PropList from PropItemIDs
+    local PropList = {}
+    for _, itemID in ipairs(PropItemIDs) do
+        if InventoryItems[itemID] then
+            table.insert(PropList, InventoryItems[itemID])
+        end
+    end
 
     -- Create a grid of prop icons
     for index, prop in ipairs(PropList) do
         local propPanel = gridPanel:Add("DPanel")
-        propPanel:SetSize(120, 120)
+        propPanel:SetSize(80, 80) -- Reduced size
         propPanel.Paint = function(self, w, h)
             draw.RoundedBox(4, 0, 0, w, h, Color(30, 30, 30, 200))
         end
 
         local modelPanel = vgui.Create("DModelPanel", propPanel)
-        modelPanel:SetSize(100, 100)
+        modelPanel:SetSize(60, 60) -- Reduced size
         modelPanel:SetPos(10, 10)
         modelPanel:SetModel(prop.model)
-        modelPanel:SetFOV(30)
-        modelPanel:SetCamPos(Vector(70, 70, 70))
+        modelPanel:SetFOV(40) -- Increased FOV for a wider view
+        modelPanel:SetCamPos(Vector(100, 100, 100)) -- Zoomed out
         modelPanel:SetLookAt(Vector(0, 0, 0))
         modelPanel:SetMouseInputEnabled(true)
 
@@ -152,7 +224,7 @@ function BuildPropsPanel(parent)
             -- Account for scroll offset
             panelY = panelY - scrollPanel:GetVBar():GetScroll()
             -- Calculate row and column based on index
-            local iconsPerRow = math.floor((960 + 5) / (120 + 5))
+            local iconsPerRow = math.floor((960 + 5) / (80 + 5))
             local row = math.ceil(index / iconsPerRow)
             local col = (index - 1) % iconsPerRow + 1
             self.Tooltip = CreatePropTooltip(scrollPanel, prop, panelX, panelY, row, col)
@@ -216,6 +288,24 @@ net.Receive("PropSpawnNotification", function()
     notification.Paint = function(self, w, h)
         draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 200))
         draw.SimpleText(message, "DermaDefaultBold", w / 2, h / 2, Color(255, 255, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+    end
+end)
+
+-- Handle buy mode sync from server
+net.Receive("SyncBuyMode", function()
+    BuyMode = net.ReadBool()
+    DebugPrint("[Props Module] Buy mode synced: " .. (BuyMode and "Buy" or "Craft"))
+
+    -- Update the toggle button text instantly
+    local parent = vgui.GetControlTable("PropsPanel") and vgui.GetControlTable("PropsPanel").Panel
+    if IsValid(parent) and IsValid(parent.ToggleButton) then
+        parent.ToggleButton:SetText(BuyMode and "Mode: Buy" or "Mode: Craft")
+        DebugPrint("[Props Module] Updated button text via parent panel")
+    elseif IsValid(GlobalToggleButton) then
+        GlobalToggleButton:SetText(BuyMode and "Mode: Buy" or "Mode: Craft")
+        DebugPrint("[Props Module] Updated button text via global reference")
+    else
+        DebugPrint("[Props Module] Failed to update button text: ToggleButton not found")
     end
 end)
 

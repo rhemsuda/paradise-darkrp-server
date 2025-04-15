@@ -376,6 +376,232 @@ InventoryItems["healthkit3"] = {
     end
 }
 
+-- Props (Added for the props panel in sv_props.lua and cl_props.lua)
+InventoryItems["weapon_stripper"] = {
+    name = "Weapon Stripper",
+    model = "models/props_combine/weaponstripper.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150, -- DarkRP money cost for "Buy" mode
+    health = 1500
+}
+
+InventoryItems["slotted_door"] = {
+    name = "Slotted Door",
+    model = "models/props_doors/door03_slotted_left.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 2500
+}
+
+InventoryItems["metal_plate_1x1"] = {
+    name = "Metal Plate 1x1",
+    model = "models/props_phx/construct/metal_plate1.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 1000
+}
+
+InventoryItems["metal_plate_1x2"] = {
+    name = "Metal Plate 1x2",
+    model = "models/props_phx/construct/metal_plate1x2.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 1001
+}
+
+InventoryItems["metal_plate_2x2"] = {
+    name = "Metal Plate 2x2",
+    model = "models/props_phx/construct/metal_plate2x2.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 1001
+}
+
+InventoryItems["metal_plate_2x4"] = {
+    name = "Metal Plate 2x4",
+    model = "models/props_phx/construct/metal_plate2x4.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 1001
+}
+
+InventoryItems["metal_plate_4x4"] = {
+    name = "Metal Plate 4x4",
+    model = "models/props_phx/construct/metal_plate4x4.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 1001
+}
+
+InventoryItems["metal_tube"] = {
+    name = "Metal Tube",
+    model = "models/props_phx/construct/metal_tube.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 1001
+}
+
+InventoryItems["metal_tube_2x"] = {
+    name = "Metal Tube 2x",
+    model = "models/props_phx/construct/metal_tubex2.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 1001
+}
+
+InventoryItems["i_beam_2x8"] = {
+    name = "I-Beam 2x8",
+    model = "models/mechanics/solid_steel/i_beam2_8.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 1001
+}
+
+InventoryItems["i_beam_2x16"] = {
+    name = "I-Beam 2x16",
+    model = "models/mechanics/solid_steel/i_beam2_16.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 1001
+}
+
+InventoryItems["i_beam_2x32"] = {
+    name = "I-Beam 2x32",
+    model = "models/mechanics/solid_steel/i_beam2_32.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 1001
+}
+
+InventoryItems["billboard"] = {
+    name = "Billboard",
+    model = "models/props/cs_assault/billboard.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 5000
+}
+
+InventoryItems["wooden_shelves"] = {
+    name = "Wooden Shelves",
+    model = "models/props/CS_militia/shelves_wood.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 1000
+}
+
+InventoryItems["gear_60t1"] = {
+    name = "Gear 60T1",
+    model = "models/Mechanics/gears2/gear_60t1.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 9000
+}
+
+InventoryItems["blast_door_c"] = {
+    name = "Blast Door C",
+    model = "models/props_lab/blastdoor001c.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 4000
+}
+
+InventoryItems["blast_door_b"] = {
+    name = "Blast Door B",
+    model = "models/props_lab/blastdoor001b.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 4000
+}
+
+InventoryItems["storefront_bars"] = {
+    name = "Storefront Bars",
+    model = "models/props_building_details/Storefront_Template001a_Bars.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 7500
+}
+
+InventoryItems["interior_fence_002d"] = {
+    name = "Interior Fence 002D",
+    model = "models/props_wasteland/interior_fence002d.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 1500
+}
+
+InventoryItems["fence_03a"] = {
+    name = "Fence 03A",
+    model = "models/props_c17/fence03a.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 1500
+}
+
+InventoryItems["interior_fence_001g"] = {
+    name = "Interior Fence 001G",
+    model = "models/props_wasteland/interior_fence001g.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 1500
+}
+
+InventoryItems["concrete_barrier"] = {
+    name = "Concrete Barrier",
+    model = "models/props_c17/concrete_barrier001a.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 10000
+}
+
+InventoryItems["vending_machine"] = {
+    name = "Vending Machine",
+    model = "models/props_interiors/VendingMachineSoda01a.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 3500
+}
+
+InventoryItems["kitchen_fridge"] = {
+    name = "Kitchen Fridge",
+    model = "models/props_wasteland/kitchen_fridge001a.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 3500
+}
+
+InventoryItems["covered_bridge_bottom"] = {
+    name = "Covered Bridge Bottom",
+    model = "models/props/cs_militia/coveredbridge01_bottom.mdl",
+    category = "Props",
+    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
+    price = 150,
+    health = 4500
+}
+
 -- Define props for the admin panel
 AdminProps = AdminProps or {}
 AdminProps = {

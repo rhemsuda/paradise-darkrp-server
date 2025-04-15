@@ -47,3 +47,16 @@ models/mechanics/solid_steel/i_beam2_32.mdl
 models/mechanics/solid_steel/i_beam2_32.mdl
 models/props/cs_assault/billboard.mdl
 models/props/CS_militia/shelves_wood.mdl
+__
+models/Mechanics/gears2/gear_60t1.mdl
+models/props_lab/blastdoor001c.mdl
+models/props_lab/blastdoor001b.mdl
+models/props_building_details/Storefront_Template001a_Bars.mdl
+models/props_wasteland/interior_fence002d.mdl
+models/props_c17/fence03a.mdl
+models/props_wasteland/interior_fence001g.mdl
+models/props_c17/concrete_barrier001a.mdl
+models/props_interiors/VendingMachineSoda01a.mdl
+models/props_wasteland/kitchen_fridge001a.mdl
+models/props/CS_militia/CoveredBridge01_Bottom.mdl
+models/props/CS_militia/shelves_wood.mdl

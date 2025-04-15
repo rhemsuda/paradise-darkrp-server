@@ -19,6 +19,7 @@ util.AddNetworkString("UpdateInventoryPositions")
 util.AddNetworkString("SyncLoadout")
 util.AddNetworkString("EquipItem")
 util.AddNetworkString("UnequipItem")
+util.AddNetworkString("SyncResources") -- Already present in your system, ensuring it's defined
 
 -- Include sh_items.lua
 if file.Exists("modules/inventory/sh_items.lua", "LUA") then
@@ -102,8 +103,18 @@ function AddItemToInventory(ply, itemID, amount, stats, page, silent)
                 crafter = ply:Nick()
             }
             if isWeaponOrArmor then
-                local rarityRoll = math.random(1, 500)
-                stats.rarity = rarityRoll == 1 and "Legendary" or rarityRoll <= 3 and "Epic" or rarityRoll <= 10 and "Rare" or rarityRoll <= 50 and "Uncommon" or "Common"
+                local rarityRoll = math.random(1, 200)
+                if rarityRoll == 1 then
+                    stats.rarity = "Legendary" -- 1/200 or 0.5%
+                elseif rarityRoll <= 6 then
+                    stats.rarity = "Epic" -- 2-6, 5/200 or 2.5%
+                elseif rarityRoll <= 16 then
+                    stats.rarity = "Rare" -- 7-16, 10/200 or 5%
+                elseif rarityRoll <= 36 then
+                    stats.rarity = "Uncommon" -- 17-36, 20/200 or 10%
+                else
+                    stats.rarity = "Common" -- 37-200, 164/200 or 82%
+                end
                 local slotCaps = { Common = 2, Uncommon = 3, Rare = 4, Epic = 5, Legendary = 6 }
                 stats.slots = math.random(0, slotCaps[stats.rarity] or 2)
 
@@ -198,13 +209,14 @@ end)
 local function LoadPlayerInventory(ply)
     if not IsValid(ply) then return end
     local steamID = ply:SteamID()
-    MySQLite.query("SELECT items, positions, maxPages, loadout FROM darkrp_custom_inventory WHERE steamid = " .. MySQLite.SQLStr(steamID), function(data)
-        local inv = { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {} }
+    MySQLite.query("SELECT items, positions, maxPages, loadout, resources FROM darkrp_custom_inventory WHERE steamid = " .. MySQLite.SQLStr(steamID), function(data)
+        local inv = { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {}, resources = { rock = 0, copper = 0, iron = 0, steel = 0 } }
         if data and data[1] then
             inv.items = util.JSONToTable(data[1].items or '{"1":[]}') or { [1] = {} }
             inv.positions = util.JSONToTable(data[1].positions or '{"1":{}}') or { [1] = {} }
             inv.maxPages = tonumber(data[1].maxPages) or 1
             inv.loadout = util.JSONToTable(data[1].loadout or '{}') or {}
+            inv.resources = table.Merge({ rock = 0, copper = 0, iron = 0, steel = 0 }, util.JSONToTable(data[1].resources or '{}') or {})
         end
         PlayerInventories[steamID] = inv
         net.Start("SyncInventory")
@@ -215,6 +227,9 @@ local function LoadPlayerInventory(ply)
         net.Start("SyncLoadout")
         net.WriteTable(inv.loadout)
         net.Send(ply)
+        net.Start("SyncResources")
+        net.WriteTable(inv.resources)
+        net.Send(ply)
         DebugPrint("[Inventory Module] Loaded inventory for " .. ply:Nick() .. " with loadout: " .. table.ToString(inv.loadout, "Loadout", true))
     end, function(err)
         print("[Inventory Module] Error loading inventory for " .. steamID .. ": " .. err)
@@ -224,33 +239,17 @@ end
 function SavePlayerInventory(ply)
     if not IsValid(ply) then return end
     local steamID = ply:SteamID()
-    local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {} }
+    local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {}, resources = { rock = 0, copper = 0, iron = 0, steel = 0 } }
     DebugPrint("[Inventory Module] Saving inventory for " .. ply:Nick() .. " with loadout: " .. table.ToString(inv.loadout, "Loadout", true))
-    -- Fetch resources separately to preserve them in the database
-    local resources = {}
-    MySQLite.query("SELECT resources FROM darkrp_custom_inventory WHERE steamid = " .. MySQLite.SQLStr(steamID), function(data)
-        if data and data[1] then
-            resources = util.JSONToTable(data[1].resources or "{}") or {}
+    MySQLite.query("REPLACE INTO darkrp_custom_inventory (steamid, items, resources, positions, maxPages, loadout) VALUES (" .. 
+        MySQLite.SQLStr(steamID) .. ", " .. MySQLite.SQLStr(util.TableToJSON(inv.items)) .. ", " .. 
+        MySQLite.SQLStr(util.TableToJSON(inv.resources)) .. ", " .. MySQLite.SQLStr(util.TableToJSON(inv.positions)) .. ", " .. 
+        inv.maxPages .. ", " .. MySQLite.SQLStr(util.TableToJSON(inv.loadout)) .. ")", nil, function(err)
+        if err then 
+            print("[Inventory Module] Error saving inventory for " .. steamID .. ": " .. err)
+        else
+            DebugPrint("[Inventory Module] Saved inventory for " .. ply:Nick())
         end
-        MySQLite.query("REPLACE INTO darkrp_custom_inventory (steamid, items, resources, positions, maxPages, loadout) VALUES (" .. 
-            MySQLite.SQLStr(steamID) .. ", " .. MySQLite.SQLStr(util.TableToJSON(inv.items)) .. ", " .. 
-            MySQLite.SQLStr(util.TableToJSON(resources)) .. ", " .. MySQLite.SQLStr(util.TableToJSON(inv.positions)) .. ", " .. 
-            inv.maxPages .. ", " .. MySQLite.SQLStr(util.TableToJSON(inv.loadout)) .. ")", nil, function(err)
-            if err then 
-                print("[Inventory Module] Error saving inventory for " .. steamID .. ": " .. err)
-            else
-                DebugPrint("[Inventory Module] Saved inventory for " .. ply:Nick())
-            end
-        end)
-    end, function(err)
-        print("[Inventory Module] Error fetching resources for saving inventory for " .. steamID .. ": " .. err)
-        -- Fallback: Save with empty resources to avoid data loss
-        MySQLite.query("REPLACE INTO darkrp_custom_inventory (steamid, items, resources, positions, maxPages, loadout) VALUES (" .. 
-            MySQLite.SQLStr(steamID) .. ", " .. MySQLite.SQLStr(util.TableToJSON(inv.items)) .. ", " .. 
-            MySQLite.SQLStr(util.TableToJSON({})) .. ", " .. MySQLite.SQLStr(util.TableToJSON(inv.positions)) .. ", " .. 
-            inv.maxPages .. ", " .. MySQLite.SQLStr(util.TableToJSON(inv.loadout)) .. ")", nil, function(err2)
-            if err2 then print("[Inventory Module] Fallback error saving inventory for " .. steamID .. ": " .. err2) end
-        end)
     end)
 end
 
@@ -259,7 +258,7 @@ local function SyncInventoryFromSQL(ply, page)
     local steamID = ply:SteamID()
     MySQLite.query("SELECT items, positions FROM darkrp_custom_inventory WHERE steamid = " .. MySQLite.SQLStr(steamID), function(data)
         if data and data[1] then
-            local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {} }
+            local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {}, resources = { rock = 0, copper = 0, iron = 0, steel = 0 } }
             inv.items = util.JSONToTable(data[1].items or '{"1":[]}') or { [1] = {} }
             inv.positions = util.JSONToTable(data[1].positions or '{"1":{}}') or { [1] = {} }
             PlayerInventories[steamID] = inv
@@ -278,7 +277,7 @@ end
 local function RemoveItemFromInventory(ply, uniqueID, page)
     if not IsValid(ply) then return end
     local steamID = ply:SteamID()
-    local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {} }
+    local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {}, resources = { rock = 0, copper = 0, iron = 0, steel = 0 } }
     page = page or 1
     inv.items[page] = inv.items[page] or {}
     inv.positions[page] = inv.positions[page] or {}
@@ -302,7 +301,7 @@ net.Receive("UpdateInventoryPositions", function(len, ply)
     local page = net.ReadUInt(8)
     local steamID = ply:SteamID()
     local newPositions = net.ReadTable()
-    local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {} }
+    local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {}, resources = { rock = 0, copper = 0, iron = 0, steel = 0 } }
     inv.positions[page] = newPositions
     PlayerInventories[steamID] = inv
     SavePlayerInventory(ply)
@@ -378,7 +377,7 @@ net.Receive("EquipItem", function(len, ply)
     local page = net.ReadUInt(8)
     local slot = net.ReadString()
     local steamID = ply:SteamID()
-    local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {} }
+    local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {}, resources = { rock = 0, copper = 0, iron = 0, steel = 0 } }
     local item, itemData
 
     for i, it in ipairs(inv.items[page] or {}) do
@@ -456,7 +455,12 @@ net.Receive("EquipItem", function(len, ply)
 
     if itemData.category == "Weapons" then
         local weaponClass = itemData.entityClass or item.itemID
-        ply:Give(weaponClass)
+        if not ply:HasWeapon(weaponClass) then
+            ply:Give(weaponClass)
+            DebugPrint("[Inventory Module] Gave " .. weaponClass .. " to " .. ply:Nick() .. " (did not have weapon)")
+        else
+            DebugPrint("[Inventory Module] " .. ply:Nick() .. " already has " .. weaponClass .. ", skipping ammo give")
+        end
         ply:SelectWeapon(weaponClass)
         local weapon = ply:GetWeapon(weaponClass)
         if IsValid(weapon) then
@@ -470,7 +474,7 @@ end)
 net.Receive("UnequipItem", function(len, ply)
     local slot = net.ReadString()
     local steamID = ply:SteamID()
-    local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {} }
+    local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {}, resources = { rock = 0, copper = 0, iron = 0, steel = 0 } }
     local item = inv.loadout[slot]
     if not item or not InventoryItems[item.itemID] then 
         DebugPrint("[Inventory Module] Failed to unequip item from slot " .. slot .. " for " .. ply:Nick())
@@ -511,7 +515,12 @@ hook.Add("PlayerSetTeam", "Inventory_EquipLoadoutAfterJobSet", function(ply)
     for slot, item in pairs(inv.loadout) do
         if item and InventoryItems[item.itemID] and InventoryItems[item.itemID].category == "Weapons" then
             local weaponClass = InventoryItems[item.itemID].entityClass or item.itemID
-            ply:Give(weaponClass)
+            if not ply:HasWeapon(weaponClass) then
+                ply:Give(weaponClass)
+                DebugPrint("[Inventory Module] Gave " .. weaponClass .. " to " .. ply:Nick() .. " (did not have weapon)")
+            else
+                DebugPrint("[Inventory Module] " .. ply:Nick() .. " already has " .. weaponClass .. ", skipping ammo give")
+            end
             local weapon = ply:GetWeapon(weaponClass)
             if IsValid(weapon) then
                 weapon:SetNWInt("CustomDamage", item.damage or 0)
@@ -534,7 +543,12 @@ hook.Add("PlayerSpawn", "Inventory_EquipLoadoutOnSpawn", function(ply)
     for slot, item in pairs(inv.loadout) do
         if item and InventoryItems[item.itemID] and InventoryItems[item.itemID].category == "Weapons" then
             local weaponClass = InventoryItems[item.itemID].entityClass or item.itemID
-            ply:Give(weaponClass)
+            if not ply:HasWeapon(weaponClass) then
+                ply:Give(weaponClass)
+                DebugPrint("[Inventory Module] Gave " .. weaponClass .. " to " .. ply:Nick() .. " (did not have weapon)")
+            else
+                DebugPrint("[Inventory Module] " .. ply:Nick() .. " already has " .. weaponClass .. ", skipping ammo give")
+            end
             local weapon = ply:GetWeapon(weaponClass)
             if IsValid(weapon) then
                 weapon:SetNWInt("CustomDamage", item.damage or 0)
@@ -568,14 +582,41 @@ hook.Add("PlayerUse", "PickupInventoryItem", function(ply, ent)
     return true
 end)
 
+-- Apply custom weapon damage
 hook.Add("EntityTakeDamage", "ApplyCustomWeaponDamage", function(target, dmginfo)
     local attacker = dmginfo:GetAttacker()
     if not IsValid(attacker) or not attacker:IsPlayer() then return end
 
-    local weapon = attacker:GetActiveWeapon()
-    if not IsValid(weapon) then return end
+    -- Use the weapon from the damage info instead of the active weapon
+    local weapon = dmginfo:GetWeapon()
+    if not IsValid(weapon) then
+        -- Fallback to active weapon if GetWeapon fails (e.g., for melee or physics damage)
+        weapon = attacker:GetActiveWeapon()
+        if not IsValid(weapon) then return end
+    end
 
     local customDamage = weapon:GetNWInt("CustomDamage", -1)
+    if customDamage == -1 then
+        -- Custom damage not set; attempt to reapply from player's loadout
+        local steamID = attacker:SteamID()
+        local inv = PlayerInventories[steamID]
+        if inv and inv.loadout then
+            for slot, item in pairs(inv.loadout) do
+                if item and InventoryItems[item.itemID] and InventoryItems[item.itemID].category == "Weapons" then
+                    local weaponClass = InventoryItems[item.itemID].entityClass or item.itemID
+                    if weapon:GetClass() == weaponClass then
+                        weapon:SetNWInt("CustomDamage", item.damage or 0)
+                        weapon:SetNWString("WeaponType", WeaponTypes[item.itemID] or "unknown")
+                        weapon:SetNWString("Rarity", item.rarity or "Common")
+                        customDamage = item.damage or 0
+                        DebugPrint("[Inventory Module] Reapplied custom damage (" .. customDamage .. ") to " .. weaponClass .. " for " .. attacker:Nick())
+                        break
+                    end
+                end
+            end
+        end
+    end
+
     if customDamage == -1 then return end
 
     local weaponType = weapon:GetNWString("WeaponType", "unknown")
@@ -592,7 +633,7 @@ hook.Add("EntityTakeDamage", "ApplyCustomWeaponDamage", function(target, dmginfo
 
     DebugPrint(string.format("[Weapon Damage Test] %s (%s, %s) dealt %d damage to %s with %s (Base Damage: %d)",
         attacker:Nick(), weaponType, rarity, damageToApply, target:GetClass(), weapon:GetClass(), customDamage))
-end)
+end, 100) -- Added priority to ensure this hook runs late
 
 concommand.Add("test_weapon_damage", function(ply)
     if not IsValid(ply) then return end
@@ -622,6 +663,73 @@ concommand.Add("additem", function(ply, _, args)
         return 
     end
     AddItemToInventory(ply, args[1], tonumber(args[2]) or 1, nil, 1)
+end)
+
+-- Add resource command: addresource <player> <resource> <amount>
+concommand.Add("addresource", function(ply, _, args)
+    -- Restrict to superadmins
+    if not ply:IsSuperAdmin() then
+        SendInventoryMessage(ply, "Superadmin only.")
+        return
+    end
+
+    -- Validate arguments
+    if #args < 3 then
+        SendInventoryMessage(ply, "Usage: addresource <player> <resource> <amount>")
+        return
+    end
+
+    local playerName = args[1]
+    local resourceID = string.lower(args[2])
+    local amount = tonumber(args[3])
+
+    -- Validate amount
+    if not amount or amount < 0 then
+        SendInventoryMessage(ply, "Invalid amount: " .. tostring(args[3]))
+        return
+    end
+
+    -- Validate resourceID
+    local validResources = { "rock", "copper", "iron", "steel" }
+    if not table.HasValue(validResources, resourceID) then
+        SendInventoryMessage(ply, "Invalid resourceID: " .. resourceID)
+        return
+    end
+
+    -- Find the player by partial name (case-insensitive)
+    local targetPlayer
+    for _, p in ipairs(player.GetAll()) do
+        if string.find(string.lower(p:Nick()), string.lower(playerName), 1, true) then
+            targetPlayer = p
+            break
+        end
+    end
+
+    if not IsValid(targetPlayer) then
+        SendInventoryMessage(ply, "Player not found: " .. playerName)
+        return
+    end
+
+    -- Fetch and update resources
+    local steamID = targetPlayer:SteamID()
+    local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {}, resources = { rock = 0, copper = 0, iron = 0, steel = 0 } }
+
+    -- Add the specified resource
+    inv.resources[resourceID] = (inv.resources[resourceID] or 0) + amount
+    PlayerInventories[steamID] = inv
+
+    -- Save updated resources back to the database
+    SavePlayerInventory(targetPlayer)
+
+    -- Sync updated resources to the client
+    net.Start("SyncResources")
+    net.WriteTable(inv.resources)
+    net.Send(targetPlayer)
+
+    -- Notify both the admin and the target player
+    SendInventoryMessage(ply, "Added " .. amount .. " " .. resourceID .. " to " .. targetPlayer:Nick())
+    SendInventoryMessage(targetPlayer, "You received " .. amount .. " " .. resourceID .. " from an admin.")
+    DebugPrint("[Inventory Module] Added " .. amount .. " " .. resourceID .. " to " .. targetPlayer:Nick() .. ": " .. util.TableToJSON(inv.resources))
 end)
 
 -- This print will always show to confirm successful load
