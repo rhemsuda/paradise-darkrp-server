@@ -496,7 +496,7 @@ if SERVER then
             DebugPrint("[Inventory Module] Failed to unequip item from slot " .. slot .. " for " .. ply:Nick())
             return 
         end
-    
+
         local itemData = InventoryItems[item.itemID]
         inv.loadout[slot] = nil
         -- Add the item back to the inventory while preserving all stats
@@ -508,7 +508,7 @@ if SERVER then
         net.Send(ply)
         SendInventoryMessage(ply, "Unequipped " .. itemData.name .. " from " .. slot .. ".")
         DebugPrint("[Inventory Module] " .. ply:Nick() .. " unequipped " .. itemData.name .. " from " .. slot)
-    
+
         if itemData.category == "Weapons" then
             local weaponClass = itemData.entityClass or item.itemID
             ply:StripWeapon(weaponClass)
@@ -1036,7 +1036,7 @@ if CLIENT then
         if LocalPlayer():IsSuperAdmin() then
             adminTab = vgui.Create("DPanel", tabPanel)
             adminTab.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240)) end
-            BuildAdminPanel(adminTab)
+        BuildAdminPanel(adminTab)
             tabPanel:AddSheet("Admin Panel", adminTab, "icon16/shield.png")
         end
 
