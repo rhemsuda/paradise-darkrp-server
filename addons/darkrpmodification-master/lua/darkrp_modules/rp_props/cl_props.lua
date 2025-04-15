@@ -45,9 +45,9 @@ local PropItemIDs = {
     "blast_door_c",
     "blast_door_b",
     "storefront_bars",
-    "interior_fence_002d",
-    "fence_03a",
-    "interior_fence_001g",
+    --"interior_fence_002d",
+    --"fence_03a",
+    --"interior_fence_001g",
     "concrete_barrier",
     "vending_machine",
     "kitchen_fridge",
@@ -137,7 +137,7 @@ local function CreatePropTooltip(parent, prop, posX, posY, row, col)
     return tooltip
 end
 
--- Global variable to store the toggle button (temporary for debugging)
+-- Global variable to store the toggle button
 local GlobalToggleButton = nil
 
 -- Function to build the props panel (used by sh_inventory.lua)
@@ -170,8 +170,7 @@ function BuildPropsPanel(parent)
         net.SendToServer()
     end
 
-    -- Store the toggle button in the parent panel and globally
-    parent.ToggleButton = toggleButton
+    -- Store the toggle button globally
     GlobalToggleButton = toggleButton
 
     local scrollPanel = vgui.Create("DScrollPanel", parent)
@@ -259,8 +258,8 @@ hook.Add("HUDPaint", "DisplayPropHealth", function()
     local ent = trace.Entity
 
     if IsValid(ent) and ent:GetClass() == "prop_physics" and ent:GetNWInt("PropHealth", -1) ~= -1 then
-        local health = ent:GetNWInt("PropHealth", 0)
-        local maxHealth = ent:GetNWInt("PropMaxHealth", 100)
+        local health = math.floor(ent:GetNWInt("PropHealth", 0)) -- Ensure integer with math.floor
+        local maxHealth = math.floor(ent:GetNWInt("PropMaxHealth", 100)) -- Ensure integer for maxHealth too
         local healthText = "Health: " .. health .. " / " .. maxHealth
         local screenW, screenH = ScrW(), ScrH()
 
@@ -297,13 +296,9 @@ net.Receive("SyncBuyMode", function()
     DebugPrint("[Props Module] Buy mode synced: " .. (BuyMode and "Buy" or "Craft"))
 
     -- Update the toggle button text instantly
-    local parent = vgui.GetControlTable("PropsPanel") and vgui.GetControlTable("PropsPanel").Panel
-    if IsValid(parent) and IsValid(parent.ToggleButton) then
-        parent.ToggleButton:SetText(BuyMode and "Mode: Buy" or "Mode: Craft")
-        DebugPrint("[Props Module] Updated button text via parent panel")
-    elseif IsValid(GlobalToggleButton) then
+    if IsValid(GlobalToggleButton) then
         GlobalToggleButton:SetText(BuyMode and "Mode: Buy" or "Mode: Craft")
-        DebugPrint("[Props Module] Updated button text via global reference")
+        DebugPrint("[Props Module] Updated button text")
     else
         DebugPrint("[Props Module] Failed to update button text: ToggleButton not found")
     end

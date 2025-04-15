@@ -41,9 +41,9 @@ local PropItemIDs = {
     "blast_door_c",
     "blast_door_b",
     "storefront_bars",
-    "interior_fence_002d",
-    "fence_03a",
-    "interior_fence_001g",
+    --"interior_fence_002d",
+    --"fence_03a",
+    --"interior_fence_001g",
     "concrete_barrier",
     "vending_machine",
     "kitchen_fridge",
@@ -87,7 +87,7 @@ net.Receive("SpawnProp", function(len, ply)
         local price = prop.price or 0
         if not ply:canAfford(price) then
             net.Start("PropSpawnNotification")
-            net.WriteString("Nope, you're broke!")
+            net.WriteString("Insufficient money to buy " .. prop.name .. " (Cost: $" .. price .. ")!")
             net.Send(ply)
             DebugPrint("[Props Module] " .. ply:Nick() .. " lacks money to buy " .. prop.name)
             return
@@ -187,7 +187,10 @@ function SpawnPropEntity(ply, prop)
         net.Send(ply)
         return
     end
-    ent:SetPos(ply:EyePos() + ply:GetForward() * 50)
+
+    -- Center the prop in front of the player, slightly raised
+    local spawnPos = ply:GetPos() + (ply:GetForward() * 100) + Vector(0, 0, 50)
+    ent:SetPos(spawnPos)
     ent:Spawn()
 
     -- Ensure the prop has physics
@@ -262,7 +265,7 @@ hook.Add("EntityTakeDamage", "PropHealthSystem", function(target, dmginfo)
     -- Apply damage
     local currentHealth = target:GetNWInt("PropHealth", 0)
     local damage = dmginfo:GetDamage()
-    currentHealth = math.max(0, currentHealth - damage)
+    currentHealth = math.max(0, math.floor(currentHealth - damage)) -- Round down to ensure integer
     target:SetNWInt("PropHealth", currentHealth)
 
     -- Log damage

@@ -539,32 +539,32 @@ InventoryItems["storefront_bars"] = {
     health = 7500
 }
 
-InventoryItems["interior_fence_002d"] = {
+--[[InventoryItems["interior_fence_002d"] = {
     name = "Interior Fence 002D",
     model = "models/props_wasteland/interior_fence002d.mdl",
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
     health = 1500
-}
+}--]]
 
-InventoryItems["fence_03a"] = {
+--[[ InventoryItems["fence_03a"] = {
     name = "Fence 03A",
     model = "models/props_c17/fence03a.mdl",
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
     health = 1500
-}
+} ]]--
 
-InventoryItems["interior_fence_001g"] = {
+--[[ InventoryItems["interior_fence_001g"] = {
     name = "Interior Fence 001G",
     model = "models/props_wasteland/interior_fence001g.mdl",
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
     health = 1500
-}
+} ]]--
 
 InventoryItems["concrete_barrier"] = {
     name = "Concrete Barrier",
