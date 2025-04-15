@@ -34,7 +34,8 @@ InventoryItems["shovel"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "weapon_shovel", "Shovel") end,
-    baseRarity = "Common"
+    baseRarity = "Common",
+    ammoType = nil -- Melee weapon, no ammo required
 }
 
 InventoryItems["pistol"] = {
@@ -45,7 +46,8 @@ InventoryItems["pistol"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "weapon_pistol", "Pistol") end,
-    baseRarity = "Common"
+    baseRarity = "Common",
+    ammoType = "Pistol"
 }
 
 InventoryItems["crowbar"] = {
@@ -56,7 +58,8 @@ InventoryItems["crowbar"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "weapon_crowbar", "Crowbar") end,
-    baseRarity = "Common"
+    baseRarity = "Common",
+    ammoType = nil -- Melee weapon, no ammo required
 }
 
 InventoryItems["glock"] = {
@@ -67,7 +70,8 @@ InventoryItems["glock"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_glock", "Glock") end,
-    baseRarity = "Common"
+    baseRarity = "Common",
+    ammoType = "Pistol"
 }
 
 InventoryItems["usp"] = {
@@ -78,7 +82,8 @@ InventoryItems["usp"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_usp", "USP") end,
-    baseRarity = "Uncommon"
+    baseRarity = "Uncommon",
+    ammoType = "Pistol"
 }
 
 InventoryItems["p228"] = {
@@ -89,7 +94,8 @@ InventoryItems["p228"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_p228", "P228") end,
-    baseRarity = "Common"
+    baseRarity = "Common",
+    ammoType = "Pistol"
 }
 
 InventoryItems["deagle"] = {
@@ -100,7 +106,20 @@ InventoryItems["deagle"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_deagle", "Deagle") end,
-    baseRarity = "Rare"
+    baseRarity = "Rare",
+    ammoType = "357" -- Desert Eagle uses a more powerful ammo type
+}
+
+InventoryItems["awp"] = {
+    name = "AWP",
+    description = "A powerful sniper rifle, upgradeable.",
+    model = "models/weapons/w_snip_awp.mdl",
+    entityClass = "bb_awp",
+    maxStack = 1,
+    category = "Weapons",
+    useFunction = function(ply) equipWeapon(ply, "bb_awp", "AWP") end,
+    baseRarity = "Rare",
+    ammoType = "SniperRound" -- Same ammo type as other snipers
 }
 
 InventoryItems["fiveseven"] = {
@@ -111,7 +130,8 @@ InventoryItems["fiveseven"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_fiveseven", "FiveSeven") end,
-    baseRarity = "Uncommon"
+    baseRarity = "Uncommon",
+    ammoType = "Pistol"
 }
 
 InventoryItems["elite"] = {
@@ -122,7 +142,8 @@ InventoryItems["elite"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_elite", "Elite") end,
-    baseRarity = "Rare"
+    baseRarity = "Rare",
+    ammoType = "Pistol"
 }
 
 InventoryItems["m3"] = {
@@ -133,7 +154,8 @@ InventoryItems["m3"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_m3", "M3") end,
-    baseRarity = "Common"
+    baseRarity = "Common",
+    ammoType = "Buckshot"
 }
 
 InventoryItems["xm1014"] = {
@@ -144,7 +166,8 @@ InventoryItems["xm1014"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_xm1014", "XM1014") end,
-    baseRarity = "Uncommon"
+    baseRarity = "Uncommon",
+    ammoType = "Buckshot"
 }
 
 InventoryItems["mac10"] = {
@@ -155,7 +178,8 @@ InventoryItems["mac10"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_mac10", "MAC10") end,
-    baseRarity = "Common"
+    baseRarity = "Common",
+    ammoType = "SMG1"
 }
 
 InventoryItems["tmp"] = {
@@ -166,7 +190,8 @@ InventoryItems["tmp"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_tmp", "TMP") end,
-    baseRarity = "Uncommon"
+    baseRarity = "Uncommon",
+    ammoType = "SMG1"
 }
 
 InventoryItems["mp5navy"] = {
@@ -177,7 +202,8 @@ InventoryItems["mp5navy"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_mp5navy", "MP5") end,
-    baseRarity = "Common"
+    baseRarity = "Common",
+    ammoType = "SMG1"
 }
 
 InventoryItems["ump45"] = {
@@ -188,7 +214,8 @@ InventoryItems["ump45"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_ump45", "UMP45") end,
-    baseRarity = "Common"
+    baseRarity = "Common",
+    ammoType = "SMG1"
 }
 
 InventoryItems["p90"] = {
@@ -199,7 +226,8 @@ InventoryItems["p90"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_p90", "P90") end,
-    baseRarity = "Rare"
+    baseRarity = "Rare",
+    ammoType = "SMG1"
 }
 
 InventoryItems["ak47"] = {
@@ -210,7 +238,8 @@ InventoryItems["ak47"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_ak47", "AK47") end,
-    baseRarity = "Uncommon"
+    baseRarity = "Uncommon",
+    ammoType = "AR2"
 }
 
 InventoryItems["m4a1"] = {
@@ -221,7 +250,8 @@ InventoryItems["m4a1"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_m4a1", "M4A1") end,
-    baseRarity = "Uncommon"
+    baseRarity = "Uncommon",
+    ammoType = "AR2"
 }
 
 InventoryItems["sg552"] = {
@@ -232,7 +262,8 @@ InventoryItems["sg552"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_sg552", "SG552") end,
-    baseRarity = "Rare"
+    baseRarity = "Rare",
+    ammoType = "AR2"
 }
 
 InventoryItems["aug"] = {
@@ -243,7 +274,8 @@ InventoryItems["aug"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_aug", "AUG") end,
-    baseRarity = "Rare"
+    baseRarity = "Rare",
+    ammoType = "AR2"
 }
 
 InventoryItems["scout"] = {
@@ -254,7 +286,8 @@ InventoryItems["scout"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_scout", "Scout") end,
-    baseRarity = "Uncommon"
+    baseRarity = "Uncommon",
+    ammoType = "SniperRound" -- Custom ammo type for snipers (adjust if needed)
 }
 
 InventoryItems["g3sg1"] = {
@@ -265,7 +298,8 @@ InventoryItems["g3sg1"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_g3sg1", "G3SG1") end,
-    baseRarity = "Rare"
+    baseRarity = "Rare",
+    ammoType = "SniperRound" -- Custom ammo type for snipers (adjust if needed)
 }
 
 InventoryItems["sg550"] = {
@@ -276,7 +310,8 @@ InventoryItems["sg550"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_sg550", "SG550") end,
-    baseRarity = "Rare"
+    baseRarity = "Rare",
+    ammoType = "SniperRound" -- Custom ammo type for snipers (adjust if needed)
 }
 
 InventoryItems["m249"] = {
@@ -287,7 +322,8 @@ InventoryItems["m249"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_m249", "M249") end,
-    baseRarity = "Epic"
+    baseRarity = "Epic",
+    ammoType = "AR2" -- Using AR2 for heavy machine gun (adjust if needed)
 }
 
 InventoryItems["knife"] = {
@@ -298,7 +334,8 @@ InventoryItems["knife"] = {
     maxStack = 1,
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_css_knife", "Knife") end,
-    baseRarity = "Common"
+    baseRarity = "Common",
+    ammoType = nil -- Melee weapon, no ammo required
 }
 
 -- Utility (Non-craftable, no rarity or slots)
