@@ -424,6 +424,9 @@ net.Receive("EquipItem", function(len, ply)
         local existingItemData = InventoryItems[existingItem.itemID]
         if existingItemData.category == "Weapons" then
             local weaponClass = existingItemData.entityClass or existingItem.itemID
+            local ammoType = existingItemData.ammoType or "none"
+            local ammoCount = ply:GetAmmoCount(ammoType)
+            DebugPrint("[Inventory Module] Unequipping " .. weaponClass .. " (ammo type: " .. ammoType .. ", current ammo: " .. ammoCount .. ") from slot " .. slot)
             ply:StripWeapon(weaponClass)
         end
         AddItemToInventory(ply, existingItem.itemID, 1, { 
@@ -455,18 +458,51 @@ net.Receive("EquipItem", function(len, ply)
 
     if itemData.category == "Weapons" then
         local weaponClass = itemData.entityClass or item.itemID
-        if not ply:HasWeapon(weaponClass) then
-            ply:Give(weaponClass)
-            DebugPrint("[Inventory Module] Gave " .. weaponClass .. " to " .. ply:Nick() .. " (did not have weapon)")
-        else
-            DebugPrint("[Inventory Module] " .. ply:Nick() .. " already has " .. weaponClass .. ", skipping ammo give")
-        end
-        ply:SelectWeapon(weaponClass)
+        local ammoType
         local weapon = ply:GetWeapon(weaponClass)
+        if IsValid(weapon) then
+            local ammoTypeID = weapon:GetPrimaryAmmoType()
+            ammoType = game.GetAmmoName(ammoTypeID)
+            DebugPrint("[Inventory Module] Weapon " .. weaponClass .. " has ammo type: " .. (ammoType or "none") .. " (ID: " .. ammoTypeID .. ")")
+        else
+            ammoType = itemData.ammoType or "none"
+            DebugPrint("[Inventory Module] Weapon " .. weaponClass .. " not found, using InventoryItems ammo type: " .. ammoType)
+        end
+
+        local ammoBeforeAll = ply:GetAmmoCount(ammoType)
+        DebugPrint("[Inventory Module] Before equipping " .. weaponClass .. " to " .. ply:Nick() .. ": Reserve Ammo = " .. ammoBeforeAll)
+
+        if not ply:HasWeapon(weaponClass) then
+            ply:Give(weaponClass, true) -- true to prevent default ammo
+            weapon = ply:GetWeapon(weaponClass)
+            if not IsValid(weapon) then
+                DebugPrint("[Inventory Module] Failed to give " .. weaponClass .. " to " .. ply:Nick())
+            end
+        else
+            DebugPrint("[Inventory Module] " .. ply:Nick() .. " already has " .. weaponClass)
+        end
+
+        ply:SelectWeapon(weaponClass)
         if IsValid(weapon) then
             weapon:SetNWInt("CustomDamage", item.damage)
             weapon:SetNWString("WeaponType", WeaponTypes[item.itemID] or "unknown")
             weapon:SetNWString("Rarity", item.rarity or "Common")
+
+            -- Ensure no default ammo was added by external hooks
+            local ammoAfterAll = ply:GetAmmoCount(ammoType)
+            DebugPrint("[Inventory Module] After equipping " .. weaponClass .. " to " .. ply:Nick() .. ": Reserve Ammo = " .. ammoAfterAll)
+            if ammoAfterAll > ammoBeforeAll then
+                local defaultAmmoAdded = ammoAfterAll - ammoBeforeAll
+                ply:RemoveAmmo(defaultAmmoAdded, ammoType)
+                DebugPrint("[Inventory Module] Removed " .. defaultAmmoAdded .. " default ammo for " .. weaponClass .. ". Reserve Ammo now: " .. ply:GetAmmoCount(ammoType))
+            else
+                DebugPrint("[Inventory Module] No default ammo added for " .. weaponClass)
+            end
+
+            local clip1 = weapon:Clip1()
+            local clip2 = weapon:Clip2()
+            local reserveAmmo = ply:GetAmmoCount(ammoType)
+            DebugPrint("[Inventory Module] Equipped weapon " .. weaponClass .. ": Clip1 = " .. clip1 .. ", Clip2 = " .. clip2 .. ", Reserve Ammo = " .. reserveAmmo)
         end
     end
 end)

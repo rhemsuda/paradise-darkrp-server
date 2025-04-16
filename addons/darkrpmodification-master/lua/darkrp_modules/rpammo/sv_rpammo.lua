@@ -19,6 +19,12 @@ local function SendRPAammoMessage(ply, message)
     net.Send(ply)
 end
 
+-- Ammo type mapping for known incorrect or placeholder ammo types
+local AmmoTypeMapping = {
+    ["#SniperRound_ammo"] = "357", -- Fallback mapping, may not be needed with dynamic detection
+    -- Add more mappings as needed for other weapons
+}
+
 -- Console command to buy ammo
 concommand.Add("rp_buyammo", function(ply)
     if not IsValid(ply) then return end
@@ -42,18 +48,47 @@ concommand.Add("rp_buyammo", function(ply)
             weaponsFound = true
             local itemData = InventoryItems[item.itemID]
             local weaponClass = itemData.entityClass or item.itemID
-            local ammoType = itemData.ammoType
+            DebugPrint("[RPAammo] Processing weapon: " .. weaponClass .. " in slot: " .. slot)
+
+            -- Check if the player has the weapon in their inventory
+            local weapon = ply:GetWeapon(weaponClass)
+            local ammoType
+            if IsValid(weapon) then
+                -- Dynamically get the weapon's actual ammo type
+                local ammoTypeID = weapon:GetPrimaryAmmoType()
+                ammoType = game.GetAmmoName(ammoTypeID)
+                DebugPrint("[RPAammo] Weapon " .. weaponClass .. " has ammo type: " .. (ammoType or "none") .. " (ID: " .. ammoTypeID .. ")")
+            else
+                -- Fallback to the ammo type defined in InventoryItems
+                ammoType = itemData.ammoType
+                DebugPrint("[RPAammo] Weapon " .. weaponClass .. " not found on player, using InventoryItems ammo type: " .. (ammoType or "none"))
+            end
 
             if not ammoType then
-                DebugPrint("[RPAammo] No ammo type defined for " .. weaponClass .. " in InventoryItems.")
+                DebugPrint("[RPAammo] No ammo type defined for " .. weaponClass .. ".")
                 SendRPAammoMessage(ply, "Error: No ammo type defined for " .. itemData.name .. ".")
                 continue
             end
 
+            -- Check if the ammo type needs mapping
+            local correctedAmmoType = AmmoTypeMapping[ammoType] or ammoType
+            if AmmoTypeMapping[ammoType] then
+                DebugPrint("[RPAammo] Mapped ammo type '" .. ammoType .. "' to '" .. correctedAmmoType .. "' for " .. weaponClass)
+            end
+
+            -- Validate the ammo type
+            if not game.GetAmmoID(correctedAmmoType) or game.GetAmmoID(correctedAmmoType) == -1 then
+                DebugPrint("[RPAammo] Invalid ammo type '" .. correctedAmmoType .. "' for " .. weaponClass .. ".")
+                SendRPAammoMessage(ply, "Error: Invalid ammo type for " .. itemData.name .. " (" .. correctedAmmoType .. ").")
+                continue
+            end
+
             -- Add 300 ammo to the player's reserve for this ammo type
-            ply:GiveAmmo(300, ammoType, false)
+            local ammoBefore = ply:GetAmmoCount(correctedAmmoType)
+            ply:GiveAmmo(300, correctedAmmoType, false)
+            local ammoAfter = ply:GetAmmoCount(correctedAmmoType)
+            DebugPrint("[RPAammo] Added 300 " .. correctedAmmoType .. " ammo for " .. weaponClass .. " to " .. ply:Nick() .. ". Ammo before: " .. ammoBefore .. ", after: " .. ammoAfter)
             table.insert(weaponsProcessed, itemData.name)
-            DebugPrint("[RPAammo] Added 300 " .. ammoType .. " ammo for " .. weaponClass .. " to " .. ply:Nick())
         end
     end
 

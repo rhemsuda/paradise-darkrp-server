@@ -119,7 +119,7 @@ InventoryItems["awp"] = {
     category = "Weapons",
     useFunction = function(ply) equipWeapon(ply, "bb_awp", "AWP") end,
     baseRarity = "Rare",
-    ammoType = "SniperRound" -- Same ammo type as other snipers
+    ammoType = "357" -- Same ammo type as other snipers
 }
 
 InventoryItems["fiveseven"] = {
