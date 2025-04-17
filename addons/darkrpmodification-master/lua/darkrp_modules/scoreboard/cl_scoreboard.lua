@@ -81,13 +81,12 @@ local function CreateScoreboard()
 
         local adminLevel = ply:IsAdmin() and "Admin" or "33"
         local job = ply:getDarkRPVar("job") or "Unknown"
-        local ping = ply:Ping()
         local steamID = ply:SteamID()
         local props = 0 -- Placeholder; requires server-side tracking
 
         -- Determine rank (ULX/FAdmin)
         local rank = "User"
-        local nameColor = Color(255, 255, 108) -- Default white
+        local nameColor = Color(255, 255, 255) -- Default white
         local glowColor = nil
         local icon = nil
         if ply:IsAdmin() then
@@ -132,13 +131,13 @@ local function CreateScoreboard()
 
         -- Content panel inside the category
         local content = vgui.Create("DPanel")
-        content:SetSize(width - 20, 150) -- Reduced height since ping is removed
+        content:SetSize(width - 20, 90) -- Reduced height with two columns
         content.Paint = function(self, w, h)
             draw.RoundedBox(8, 0, 0, w, h, Color(40, 40, 40, 200)) -- Dark gray content area
         end
         category:SetContents(content)
 
-        -- Player details inside the content panel (Job, Rank, Level, Gang, SteamID)
+        -- Player details inside the content panel (two columns)
         local jobLabel = vgui.Create("DLabel", content)
         jobLabel:SetPos(10, 10)
         jobLabel:SetSize(300, 20)
@@ -161,21 +160,21 @@ local function CreateScoreboard()
         levelLabel:SetTextColor(Color(255, 255, 255))
 
         local gangLabel = vgui.Create("DLabel", content)
-        gangLabel:SetPos(10, 100)
+        gangLabel:SetPos(310, 10)
         gangLabel:SetSize(300, 20)
-        gangLabel:SetText("Gang: ")
+        gangLabel:SetText("Gang: " .. gang)
         gangLabel:SetFont("ScoreboardText")
         gangLabel:SetTextColor(Color(255, 255, 255))
 
         local steamIDLabel = vgui.Create("DLabel", content)
-        steamIDLabel:SetPos(10, 130)
+        steamIDLabel:SetPos(310, 40)
         steamIDLabel:SetSize(300, 20)
         steamIDLabel:SetText("SteamID: " .. steamID)
         steamIDLabel:SetFont("ScoreboardText")
         steamIDLabel:SetTextColor(Color(255, 255, 255))
 
         local propsLabel = vgui.Create("DLabel", content)
-        propsLabel:SetPos(310, 10)
+        propsLabel:SetPos(310, 70)
         propsLabel:SetSize(300, 20)
         propsLabel:SetText("Props: " .. tostring(props))
         propsLabel:SetFont("ScoreboardText")
