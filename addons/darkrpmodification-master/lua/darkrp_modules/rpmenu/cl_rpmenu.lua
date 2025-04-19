@@ -3,15 +3,15 @@ print("[RPMenu] cl_rpmenu.lua loaded successfully")
 if not CLIENT then return end
 
 -- Constants for layout
-local FRAME_WIDTH, FRAME_HEIGHT = 880, 700 -- Reduced from 1100 to 880
+local FRAME_WIDTH, FRAME_HEIGHT = 880, 700
 local PADDING = 10
-local QUADRANT_WIDTH = (FRAME_WIDTH - 3 * PADDING) / 2 -- Now (880 - 30) / 2 = 425
+local QUADRANT_WIDTH = (FRAME_WIDTH - 3 * PADDING) / 2 -- 425
 local RIGHT_PANEL_WIDTH = 400 -- Fixed width for right panels (upgradeListPanel and gangItemsPanel)
 local TOP_OFFSET = 40
 local INFO_HEIGHT = 250
 local UPGRADE_HEIGHT = 155 -- 6 upgrades: 6 * 20 + 5 * 5 spacing + 10 padding
 local BUTTON_HEIGHT = 30
-local BUTTON_WIDTH = 150
+local BUTTON_WIDTH = 100 -- Adjusted for 4 buttons in a row
 
 -- Define fonts using built-in Garry's Mod fonts
 local function CreateFonts()
@@ -32,7 +32,7 @@ CreateFonts()
 
 -- Global state
 local RPMenu = nil
-local RPMMenuSheet = nil -- Store the DPropertySheet
+local RPMMenuSheet = nil
 local CurrentGangLevel = 1
 local CurrentGangXP = 0
 local IsDataLoaded = false
@@ -55,14 +55,14 @@ end
 local function CreateLabeledEntry(parent, labelText, x, y, w, placeholder)
     local label = vgui.Create("DLabel", parent)
     label:SetPos(x, y)
-    label:SetSize(100, 20)
+    label:SetSize(150, 20)
     label:SetFont("RPMenuText")
     label:SetText(labelText)
     label:SetTextColor(Color(255, 255, 255))
 
     local entry = vgui.Create("DTextEntry", parent)
-    entry:SetPos(x + 110, y)
-    entry:SetSize(w - 110, 20)
+    entry:SetPos(x + 160, y)
+    entry:SetSize(w - 160, 20)
     entry:SetPlaceholderText(placeholder)
     return entry
 end
@@ -102,7 +102,7 @@ local function CreateRPMenu()
     end
     RPMenu.OnClose = function()
         IsDataLoaded = false
-        RPMMenuSheet = nil -- Clear the sheet reference
+        RPMMenuSheet = nil
         print("[RPMenu] Menu closed, resetting IsDataLoaded")
     end
 
@@ -149,53 +149,30 @@ local function CreateRPMenu()
             local panelWidth, panelHeight = gangsPanel:GetSize()
             print("[RPMenu] Gangs panel size: " .. panelWidth .. "x" .. panelHeight)
 
-            local creationPanel = CreateRoundedPanel(gangsPanel, (panelWidth - 400) / 2, (panelHeight - 400) / 2, 400, 400, Color(70, 70, 70, 150))
+            local creationPanel = CreateRoundedPanel(gangsPanel, 0, 0, panelWidth, panelHeight, Color(70, 70, 70, 150))
 
-            local nameEntry = CreateLabeledEntry(creationPanel, "Gang Name:", PADDING, PADDING, 400 - 2 * PADDING, "Enter gang name")
+            local nameEntry = CreateLabeledEntry(creationPanel, "Gang Name:", PADDING, PADDING, panelWidth - 2 * PADDING, "Enter gang name")
             local colorLabel = vgui.Create("DLabel", creationPanel)
-            colorLabel:SetPos(PADDING, 40)
-            colorLabel:SetSize(100, 20)
+            colorLabel:SetPos(PADDING, PADDING + 40)
+            colorLabel:SetSize(150, 20)
             colorLabel:SetFont("RPMenuText")
             colorLabel:SetText("Clan Color:")
             colorLabel:SetTextColor(Color(255, 255, 255))
 
             local colorMixer = vgui.Create("DColorMixer", creationPanel)
-            colorMixer:SetPos(PADDING + 110, 40)
-            colorMixer:SetSize(400 - 2 * PADDING - 110, 100)
+            colorMixer:SetPos(PADDING + 160, PADDING + 40)
+            colorMixer:SetSize(panelWidth - 2 * PADDING - 160, 100)
             colorMixer:SetPalette(true)
             colorMixer:SetAlphaBar(false)
             colorMixer:SetWangs(true)
             colorMixer:SetColor(Color(255, 255, 255))
 
-            local passwordEntry = CreateLabeledEntry(creationPanel, "Gang Password:", PADDING, 150, 400 - 2 * PADDING, "Enter gang password")
-            local levelEntry = vgui.Create("DNumberWang", creationPanel)
-            levelEntry:SetPos(PADDING + 110, 180)
-            levelEntry:SetSize(400 - 2 * PADDING - 110, 20)
-            levelEntry:SetMin(1)
-            levelEntry:SetMax(20)
-            levelEntry:SetValue(1)
+            local passwordEntry = CreateLabeledEntry(creationPanel, "Gang Password:", PADDING, PADDING + 150, panelWidth - 2 * PADDING, "Enter gang password")
 
-            local levelLabel = vgui.Create("DLabel", creationPanel)
-            levelLabel:SetPos(PADDING, 180)
-            levelLabel:SetSize(100, 20)
-            levelLabel:SetFont("RPMenuText")
-            levelLabel:SetText("Initial Level:")
-            levelLabel:SetTextColor(Color(255, 255, 255))
-
-            local iconLabel = vgui.Create("DLabel", creationPanel)
-            iconLabel:SetPos(PADDING, 210)
-            iconLabel:SetSize(100, 20)
-            iconLabel:SetFont("RPMenuText")
-            iconLabel:SetText("Gang Icon:")
-            iconLabel:SetTextColor(Color(255, 255, 255))
-
-            local iconPlaceholder = CreateRoundedPanel(creationPanel, PADDING + 110, 210, 32, 32, Color(255, 255, 255, 50))
-
-            CreateButton(creationPanel, PADDING, 250, 400 - 2 * PADDING, 40, "Create Gang", function()
+            CreateButton(creationPanel, PADDING, PADDING + 190, panelWidth - 2 * PADDING, 40, "Create Gang", function()
                 local gangName = nameEntry:GetValue()
                 local gangColor = colorMixer:GetColor()
                 local password = passwordEntry:GetValue()
-                local level = levelEntry:GetValue()
                 if gangName == "" or password == "" then
                     LocalPlayer():ChatPrint("Please fill in all fields!")
                     return
@@ -204,19 +181,7 @@ local function CreateRPMenu()
                 net.WriteString(gangName)
                 net.WriteColor(gangColor)
                 net.WriteString(password)
-                net.WriteUInt(level, 8)
                 net.SendToServer()
-            end)
-
-            CreateButton(creationPanel, PADDING, 300, 400 - 2 * PADDING, 40, "Recover Gang", function()
-                Derma_StringRequest("Recover Gang", "Enter the gang name", "", function(gangName)
-                    Derma_StringRequest("Recover Gang", "Enter the gang password", "", function(password)
-                        net.Start("RPMenu_RecoverGang")
-                        net.WriteString(gangName)
-                        net.WriteString(password)
-                        net.SendToServer()
-                    end, function() end, "Submit", "Cancel")
-                end, function() end, "Next", "Cancel")
             end)
         end)
         return
@@ -268,7 +233,7 @@ local function CreateRPMenu()
     local capacityLabel = vgui.Create("DLabel", gangInfoPanel)
     capacityLabel:SetPos(PADDING, 70)
     capacityLabel:SetSize(labelWidth, 20)
-    capacityLabel:SetFont("RPMenuTextSmall")
+    levelLabel:SetFont("RPMenuTextSmall")
     capacityLabel:SetText("Gang Capacity: Loading...")
     capacityLabel:SetTextColor(Color(255, 255, 255))
 
@@ -286,8 +251,17 @@ local function CreateRPMenu()
     pointsLabel:SetText("Upgrade Points: Loading...")
     pointsLabel:SetTextColor(Color(255, 255, 255))
 
-    -- Donate to Bank (bottom of gangInfoPanel, full width, black background)
-    CreateButton(gangInfoPanel, PADDING, INFO_HEIGHT - 2 * BUTTON_HEIGHT - 2 * PADDING, QUADRANT_WIDTH - 3 * PADDING, BUTTON_HEIGHT, "Donate to Bank", function()
+    -- Button row at the bottom
+    local buttonY = INFO_HEIGHT - BUTTON_HEIGHT - PADDING
+
+    -- Refresh Button
+    CreateButton(gangInfoPanel, PADDING, buttonY, BUTTON_WIDTH, BUTTON_HEIGHT, "Refresh", function()
+        net.Start("RPMenu_RequestGangData")
+        net.SendToServer()
+    end, Color(0, 0, 0, 255))
+
+    -- Donate to Bank
+    CreateButton(gangInfoPanel, PADDING + BUTTON_WIDTH + 5, buttonY, BUTTON_WIDTH, BUTTON_HEIGHT, "Donate", function()
         Derma_StringRequest("Donate to Gang Bank", "How much would you like to donate?", "", function(amountText)
             local amount = tonumber(amountText)
             if not amount or amount <= 0 then
@@ -305,8 +279,8 @@ local function CreateRPMenu()
         end, function() end, "Next", "Cancel")
     end, Color(0, 0, 0, 255))
 
-    -- Leave Gang (below Donate to Bank, full width, black background)
-    CreateButton(gangInfoPanel, PADDING, INFO_HEIGHT - BUTTON_HEIGHT - PADDING, QUADRANT_WIDTH - 3 * PADDING, BUTTON_HEIGHT, "Leave Gang", function()
+    -- Leave Gang
+    CreateButton(gangInfoPanel, PADDING + 2 * (BUTTON_WIDTH + 5), buttonY, BUTTON_WIDTH, BUTTON_HEIGHT, "Leave Gang", function()
         Derma_Query("Are you sure you want to leave your gang?", "Leave Gang Confirmation", "Yes", function()
             net.Start("RPMenu_LeaveGang")
             net.SendToServer()
@@ -315,6 +289,31 @@ local function CreateRPMenu()
             end
         end, "No", function() end)
     end, Color(0, 0, 0, 255))
+
+    -- Disband Gang (visible only to Leader, red background)
+    local disbandButton = CreateButton(gangInfoPanel, PADDING + 3 * (BUTTON_WIDTH + 5), buttonY, BUTTON_WIDTH, BUTTON_HEIGHT, "Disband Gang", function()
+        Derma_StringRequest("Disband Gang", "Enter the gang password to disband", "", function(password)
+            Derma_Query("Are you sure you want to disband the gang? This action is irreversible.", "Disband Gang Confirmation", "Yes", function()
+                net.Start("RPMenu_DisbandGang")
+                net.WriteString(password)
+                net.SendToServer()
+            end, "No", function() end)
+        end, function() end, "Submit", "Cancel")
+    end, Color(255, 0, 0, 255))
+    -- Set visibility based on rank
+    disbandButton:SetVisible(false) -- Default to hidden
+    hook.Add("Think", "CheckGangLeaderForDisbandButton", function()
+        if not IsValid(disbandButton) then return end
+        if not CachedGangData or not CachedGangData.members then return end
+        local playerRank = "Unknown"
+        for _, member in ipairs(CachedGangData.members) do
+            if member.steamid == LocalPlayer():SteamID() then
+                playerRank = member.rank or "Recruit"
+                break
+            end
+        end
+        disbandButton:SetVisible(playerRank == "Leader")
+    end)
 
     -- Player List (bottom left)
     local playerListHeight = FRAME_HEIGHT - TOP_OFFSET - INFO_HEIGHT - 3 * PADDING
@@ -335,6 +334,7 @@ local function CreateRPMenu()
 
     -- Add context menu for player list
     playerListView.OnRowRightClick = function(self, lineID, line)
+        print("[RPMenu] Right-clicked on player list row: " .. line:GetColumnText(1))
         local steamID = string.match(line:GetColumnText(1), "%((STEAM_[0-1]:[0-1]:%d+)%)")
         local playerRank = "Unknown"
         for _, member in ipairs(CachedGangData and CachedGangData.members or {}) do
@@ -343,6 +343,7 @@ local function CreateRPMenu()
                 break
             end
         end
+        print("[RPMenu] Player rank: " .. playerRank .. ", Target SteamID: " .. (steamID or "nil"))
 
         local menu = DermaMenu()
         if playerRank == "Leader" and steamID ~= LocalPlayer():SteamID() then
@@ -393,7 +394,7 @@ local function CreateRPMenu()
     -- Upgrade List (top right)
     local upgradeListPanel = vgui.Create("DPanelList", gangsPanel)
     upgradeListPanel:SetPos(QUADRANT_WIDTH + PADDING, TOP_OFFSET)
-    upgradeListPanel:SetSize(RIGHT_PANEL_WIDTH, UPGRADE_HEIGHT) -- Fixed width of 400
+    upgradeListPanel:SetSize(RIGHT_PANEL_WIDTH, UPGRADE_HEIGHT)
     upgradeListPanel:SetSpacing(5)
     upgradeListPanel:EnableVerticalScrollbar(false)
     upgradeListPanel:SetPadding(5)
@@ -431,15 +432,13 @@ local function CreateRPMenu()
         end
 
         print("[RPMenu] Updating gang UI for " .. data.gangName)
-        -- Debug gang color
         print("[RPMenu] Gang Color - r: " .. tostring(data.gangColor.r) .. ", g: " .. tostring(data.gangColor.g) .. ", b: " .. tostring(data.gangColor.b))
 
         IsDataLoaded = true
         CurrentGangLevel = data.gangLevel
         CurrentGangXP = 0
 
-        -- Validate and apply gang color with fallback
-        local gangColor = Color(255, 255, 0) -- Fallback to yellow if invalid
+        local gangColor = Color(255, 255, 0)
         if data.gangColor and type(data.gangColor.r) == "number" and type(data.gangColor.g) == "number" and type(data.gangColor.b) == "number" then
             gangColor = Color(data.gangColor.r, data.gangColor.g, data.gangColor.b)
         else
@@ -485,7 +484,7 @@ local function CreateRPMenu()
         for _, upgrade in ipairs(orderedUpgrades) do
             local level = data.upgrades[upgrade] or 0
             local upgradePanel = vgui.Create("DPanel")
-            local barWidth = 200 -- Fixed width for bars, reduced from 275
+            local barWidth = 200
             upgradePanel:SetSize(barWidth, 20)
             upgradePanel.Paint = function(self, w, h)
                 draw.RoundedBox(4, 0, 0, w, h, Color(0, 0, 0, 150))
@@ -513,8 +512,8 @@ local function CreateRPMenu()
             end
 
             local upgradeLabel = vgui.Create("DLabel", upgradePanel)
-            upgradeLabel:SetPos(0, 0)
-            upgradeLabel:SetSize(barWidth, 20)
+            upgradeLabel:SetPos(20, 0)
+            upgradeLabel:SetSize(barWidth - 20, 20)
             upgradeLabel:SetFont("RPMenuTextSmall")
             upgradeLabel:SetText(upgrade .. ": " .. level .. "/10")
             upgradeLabel:SetTextColor(Color(255, 255, 255))
@@ -523,7 +522,6 @@ local function CreateRPMenu()
             upgradeListPanel:AddItem(upgradePanel)
         end
 
-        -- Update Gang Items UI
         if IsValid(gangItemsPanel) then
             gangsPanel:UpdateGangItemsUI(data)
         end
@@ -571,7 +569,7 @@ local function CreateRPMenu()
                 label:SetFont("RPMenuTextSmall")
                 label:SetText(entity.name .. " (Unlocked at Level " .. entity.level .. ")")
                 label:SetTextColor(Color(255, 255, 255))
-                label:SetWrap(true) -- Enable text wrapping
+                label:SetWrap(true)
 
                 yOffset = yOffset + 25
             end
@@ -580,11 +578,11 @@ local function CreateRPMenu()
         if yOffset == 40 then
             local noItemsLabel = vgui.Create("DLabel", gangItemsPanel)
             noItemsLabel:SetPos(PADDING, 40)
-            noItemsLabel:SetSize(panelWidth - 2 * PADDING, 40) -- Increased height to allow wrapping
+            noItemsLabel:SetSize(panelWidth - 2 * PADDING, 40)
             noItemsLabel:SetFont("RPMenuTextSmall")
             noItemsLabel:SetText("No items unlocked. Upgrade 'Gang Items' to unlock entities.")
             noItemsLabel:SetTextColor(Color(255, 255, 255))
-            noItemsLabel:SetWrap(true) -- Enable text wrapping
+            noItemsLabel:SetWrap(true)
         end
     end
 

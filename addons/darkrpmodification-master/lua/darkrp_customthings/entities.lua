@@ -16,10 +16,10 @@ https://darkrp.miraheze.org/wiki/DarkRP:CustomEntityFields
 
 Add entities under the following line:
 ---------------------------------------------------------------------------]]
-DarkRP.createEntity("Inventory", {
-    ent = "weapon_inventory",
-    model = "models/weapons/w_toolgun.mdl",
-    price = 0,
-    max = 1,
-    cmd = "buyinventory"
-})
+--DarkRP.createEntity("Inventory", {
+ --   ent = "weapon_inventory",
+  --  model = "models/weapons/w_toolgun.mdl",
+ --   price = 0,
+  --  max = 1,
+  --  cmd = "buyinventory"
+--})

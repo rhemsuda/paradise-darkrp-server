@@ -86,6 +86,7 @@ concommand.Add("rp_buyammo", function(ply)
             -- Add 300 ammo to the player's reserve for this ammo type
             local ammoBefore = ply:GetAmmoCount(correctedAmmoType)
             ply:GiveAmmo(300, correctedAmmoType, false)
+            ply:setMoney(-100)
             local ammoAfter = ply:GetAmmoCount(correctedAmmoType)
             DebugPrint("[RPAammo] Added 300 " .. correctedAmmoType .. " ammo for " .. weaponClass .. " to " .. ply:Nick() .. ". Ammo before: " .. ammoBefore .. ", after: " .. ammoAfter)
             table.insert(weaponsProcessed, itemData.name)
