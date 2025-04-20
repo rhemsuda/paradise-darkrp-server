@@ -149,6 +149,9 @@ net.Receive("RPMenu_UpgradeGang", function(len, ply)
 
     ply:ChatPrint("Upgraded " .. upgrade .. " to level " .. (level + 1))
     SendGangData(ply)
+
+    -- Reapply upgrades to all gang members
+    ReapplyGangUpgrades(gangName)
 end)
 
 net.Receive("RPMenu_DonateToBank", function(len, ply)

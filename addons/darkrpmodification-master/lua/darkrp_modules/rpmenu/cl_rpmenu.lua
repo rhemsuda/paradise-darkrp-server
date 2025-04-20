@@ -7,7 +7,7 @@ local QUADRANT_WIDTH = (FRAME_WIDTH - 3 * PADDING) / 2 -- 425
 local RIGHT_PANEL_WIDTH = 400
 local TOP_OFFSET = 40
 local INFO_HEIGHT = 250
-local UPGRADE_HEIGHT = 155
+local UPGRADE_HEIGHT = 165
 local BUTTON_HEIGHT = 30
 local BUTTON_WIDTH = 125
 
@@ -16,6 +16,7 @@ surface.CreateFont("RPMenuTitle", {font = "Trebuchet24", size = 40, weight = 700
 surface.CreateFont("RPMenuText", {font = "Trebuchet18", size = 20, weight = 500, antialias = true, shadow = true})
 surface.CreateFont("RPMenuTextSmall", {font = "Trebuchet18", size = 18, weight = 500, antialias = true, shadow = true})
 surface.CreateFont("RPMenuTextLargeBold", {font = "Trebuchet18", size = 24, weight = 700, antialias = true, shadow = true})
+surface.CreateFont("RPMenuNameLarge", {font = "Trebuchet24", size = 30, weight = 700, antialias = true, shadow = true})
 
 -- Global state
 local RPMenu = nil
@@ -247,43 +248,51 @@ function CreateGangUI(gangsPanel)
     end
 
     local labelWidth = QUADRANT_WIDTH - 3 * PADDING
-    local namePrefixLabel = vgui.Create("DLabel", gangInfoPanel)
-    namePrefixLabel:SetPos(PADDING, PADDING + 5)
-    namePrefixLabel:SetSize(60, 20)
-    namePrefixLabel:SetFont("RPMenuTextSmall")
-    namePrefixLabel:SetText("Name:")
-    namePrefixLabel:SetTextColor(Color(255, 255, 255))
 
+    -- Gang Name (larger, with background, centered, with outline)
     local nameLabel = vgui.Create("DLabel", gangInfoPanel)
-    nameLabel:SetPos(70, PADDING)
-    nameLabel:SetSize(labelWidth - 70, 30)
-    nameLabel:SetFont("RPMenuTextLargeBold")
+    nameLabel:SetPos(PADDING, PADDING)
+    nameLabel:SetSize(labelWidth, 40)
+    nameLabel:SetFont("RPMenuNameLarge")
     nameLabel:SetText("Loading...")
     nameLabel:SetTextColor(Color(255, 255, 255))
+    nameLabel:SetContentAlignment(5) -- Center-align the text
+    nameLabel.Paint = function(self, w, h)
+        draw.RoundedBox(4, 0, 0, w, h, Color(80, 80, 80, 200))
+        -- Draw outline (1px in all directions, black)
+        draw.SimpleText(self:GetText(), self:GetFont(), w / 2 + 1, h / 2, Color(0, 0, 0, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        draw.SimpleText(self:GetText(), self:GetFont(), w / 2 - 1, h / 2, Color(0, 0, 0, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        draw.SimpleText(self:GetText(), self:GetFont(), w / 2, h / 2 + 1, Color(0, 0, 0, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        draw.SimpleText(self:GetText(), self:GetFont(), w / 2, h / 2 - 1, Color(0, 0, 0, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        -- Draw shadow (1px offset, black)
+        draw.SimpleText(self:GetText(), self:GetFont(), w / 2 + 1, h / 2 + 1, Color(0, 0, 0, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        -- Draw main text
+        draw.SimpleText(self:GetText(), self:GetFont(), w / 2, h / 2, self:GetTextColor(), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+    end
 
     local levelLabel = vgui.Create("DLabel", gangInfoPanel)
-    levelLabel:SetPos(PADDING, 50)
+    levelLabel:SetPos(PADDING, 50 + 10)
     levelLabel:SetSize(labelWidth, 20)
     levelLabel:SetFont("RPMenuTextSmall")
     levelLabel:SetText("Level: Loading...")
     levelLabel:SetTextColor(Color(255, 255, 255))
 
     local capacityLabel = vgui.Create("DLabel", gangInfoPanel)
-    capacityLabel:SetPos(PADDING, 70)
+    capacityLabel:SetPos(PADDING, 70 + 10)
     capacityLabel:SetSize(labelWidth, 20)
-    capacityLabel:SetFont("RPMenuTextSmall")
+    levelLabel:SetFont("RPMenuTextSmall")
     capacityLabel:SetText("Gang Members: 0/10")
     capacityLabel:SetTextColor(Color(255, 255, 255))
 
     local bankLabel = vgui.Create("DLabel", gangInfoPanel)
-    bankLabel:SetPos(PADDING, 90)
+    bankLabel:SetPos(PADDING, 90 + 10)
     bankLabel:SetSize(labelWidth, 20)
     bankLabel:SetFont("RPMenuTextSmall")
     bankLabel:SetText("Gang Bank: 0")
     bankLabel:SetTextColor(Color(255, 255, 255))
 
     local pointsLabel = vgui.Create("DLabel", gangInfoPanel)
-    pointsLabel:SetPos(PADDING, 110)
+    pointsLabel:SetPos(PADDING, 110 + 10)
     pointsLabel:SetSize(labelWidth, 20)
     pointsLabel:SetFont("RPMenuTextSmall")
     pointsLabel:SetText("Upgrade Points: Loading...")
@@ -498,7 +507,7 @@ function CreateGangUI(gangsPanel)
     local upgradeListPanel = vgui.Create("DPanelList", gangsPanel)
     upgradeListPanel:SetPos(QUADRANT_WIDTH + PADDING, TOP_OFFSET)
     upgradeListPanel:SetSize(RIGHT_PANEL_WIDTH, UPGRADE_HEIGHT)
-    upgradeListPanel:SetSpacing(5)
+    upgradeListPanel:SetSpacing(7)
     upgradeListPanel:EnableVerticalScrollbar(false)
     upgradeListPanel:SetPadding(5)
     upgradeListPanel.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(70, 70, 70, 150)) end
@@ -565,11 +574,10 @@ function CreateGangUI(gangsPanel)
         end
 
         upgradeListPanel:Clear()
-        local orderedUpgrades = {"Health", "Armor", "Damage", "Speed", "Luck", "Gang Items"}
+        local orderedUpgrades = {"Health", "Armor", "Speed", "Luck", "Gang Items"}
         local iconPaths = {
             Health = "icon16/heart.png",
             Armor = "icon16/shield.png",
-            Damage = "icon16/bomb.png",
             Speed = "icon16/lightning.png",
             Luck = "icon16/star.png",
             ["Gang Items"] = "icon16/box.png"
@@ -577,8 +585,8 @@ function CreateGangUI(gangsPanel)
         for _, upgrade in ipairs(orderedUpgrades) do
             local level = data.upgrades[upgrade] or 0
             local upgradePanel = vgui.Create("DPanel")
-            local barWidth = 200
-            local barHeight = 20
+            local barWidth = RIGHT_PANEL_WIDTH - 20
+            local barHeight = 25
             upgradePanel:SetSize(barWidth, barHeight)
             upgradePanel.Paint = function(self, w, h)
                 draw.RoundedBox(4, 0, 0, w, h, Color(0, 0, 0, 150))
