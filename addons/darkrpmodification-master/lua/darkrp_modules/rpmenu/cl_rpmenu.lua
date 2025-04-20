@@ -759,31 +759,33 @@ net.Receive("RPMenu_ReceiveInvite", function()
 end)
 
 -- Hooks and Commands
-if DarkRP and DarkRP.openF4Menu then
-    local oldOpenF4Menu = DarkRP.openF4Menu
-    DarkRP.openF4Menu = function(...)
-        CreateRPMenu()
-        return true
+-- Override DarkRP's default F1 menu functionality (previously F4)
+if DarkRP and DarkRP.openHelp then
+    local oldOpenHelp = DarkRP.openHelp
+    DarkRP.openHelp = function()
+        if input.IsKeyDown(KEY_F1) then
+            CreateRPMenu()
+            return true -- Prevent default DarkRP help menu
+        end
     end
 end
 
-hook.Add("ShowTeam", "CustomRPMenu", function()
+-- Hook to open the Gang Menu with F1 (previously ShowTeam for F4)
+hook.Add("ShowHelp", "CustomRPMenu", function()
     CreateRPMenu()
-    return true
+    return true -- Block the default ShowHelp behavior
 end, -1000)
 
-hook.Add("PlayerBindPress", "BlockDefaultF4Menu", function(ply, bind, pressed)
-    if bind == "gm_showteam" and pressed then
+-- Block the default F1 bind (gm_showhelp, previously gm_showteam for F4)
+hook.Add("PlayerBindPress", "BlockDefaultF1Menu", function(ply, bind, pressed)
+    if bind == "gm_showhelp" and pressed then
         CreateRPMenu()
-        return true
+        return true -- Suppress the default F1 action
     end
 end, -1000)
 
-hook.Add("InitPostEntity", "DisableDarkRPF4Menu", function()
-    timer.Simple(1, function()
-        if IsValid(RPMenu) then RPMenu:Remove() end
-    end)
-end)
+-- Remove InitPostEntity hook as it's no longer needed for F4-specific behavior
+-- (You can re-add it if needed for other purposes)
 
 concommand.Add("open_rpmenu", function()
     CreateRPMenu()
