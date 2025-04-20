@@ -1,5 +1,3 @@
-print("[RPMenu] sv_rpmenu.lua file found, attempting to load")
-
 if not SERVER then return end
 
 -- Networking messages
@@ -12,11 +10,17 @@ util.AddNetworkString("RPMenu_DonateToBank")
 util.AddNetworkString("RPMenu_LeaveGang")
 util.AddNetworkString("RPMenu_KickPlayer")
 util.AddNetworkString("RPMenu_SetRank")
-util.AddNetworkString("RPMenu_DisbandGang")
+util.AddNetworkString("RPMenu_ChangePassword")
+util.AddNetworkString("RPMenu_RequestPasswordForKick")
+util.AddNetworkString("RPMenu_SubmitPasswordForKick")
+util.AddNetworkString("RPMenu_InvitePlayer")
+util.AddNetworkString("RPMenu_AcceptInvite")
+util.AddNetworkString("RPMenu_DeclineInvite")
+util.AddNetworkString("RPMenu_ReceiveInvite")
 
--- SQL table creation and migration for gangs
+-- SQL table creation for gangs
 sql.Begin()
-    local createGangsTable = sql.Query([[
+    sql.Query([[
         CREATE TABLE IF NOT EXISTS darkrp_gangs (
             gang_name TEXT PRIMARY KEY,
             gang_level INTEGER DEFAULT 1,
@@ -28,11 +32,6 @@ sql.Begin()
             gang_bank INTEGER DEFAULT 0
         )
     ]])
-    if createGangsTable == false then
-        print("[RPMenu] Failed to create darkrp_gangs table: " .. sql.LastError())
-    else
-        print("[RPMenu] Created or verified darkrp_gangs table")
-    end
 
     local columns = sql.Query("PRAGMA table_info(darkrp_gangs)")
     local columnExists = {}
@@ -44,74 +43,29 @@ sql.Begin()
 
     if not columnExists.gang_password then
         sql.Query("ALTER TABLE darkrp_gangs ADD COLUMN gang_password TEXT")
-        print("[RPMenu] Added gang_password column")
     end
-
     if not columnExists.upgrade_points then
         sql.Query("ALTER TABLE darkrp_gangs ADD COLUMN upgrade_points INTEGER DEFAULT 0")
-        print("[RPMenu] Added upgrade_points column")
     end
-
     if not columnExists.members then
         sql.Query("ALTER TABLE darkrp_gangs ADD COLUMN members TEXT DEFAULT '[]'")
-        print("[RPMenu] Added members column")
     end
-
     if not columnExists.gang_bank then
         sql.Query("ALTER TABLE darkrp_gangs ADD COLUMN gang_bank INTEGER DEFAULT 0")
-        print("[RPMenu] Added gang_bank column")
     end
 sql.Commit()
 
 -- Function to send gang data to a player
 local function SendGangData(ply)
-    if not IsValid(ply) then
-        print("[RPMenu] SendGangData: Invalid player")
-        return
-    end
+    if not IsValid(ply) then return end
 
     local gangName = ply:GetNWString("GangName", "")
-    if gangName == "" then
-        print("[RPMenu] SendGangData: No gang for " .. ply:Nick())
-        return
-    end
+    if gangName == "" then return end
 
-    print("[RPMenu] SendGangData: Querying for gang " .. gangName .. " for " .. ply:Nick())
     local gangData = sql.QueryRow("SELECT * FROM darkrp_gangs WHERE gang_name = " .. sql.SQLStr(gangName))
-    if not gangData then
-        print("[RPMenu] SendGangData: Gang " .. gangName .. " not found in database for " .. ply:Nick())
-        return
-    end
+    if not gangData then return end
 
     local members = util.JSONToTable(gangData.members or "[]") or {}
-    -- Remove duplicates by keeping the highest rank
-    local seenSteamIDs = {}
-    local cleanedMembers = {}
-    for _, member in ipairs(members) do
-        local steamID = member.steamid
-        local rank = member.rank or "Recruit"
-        if not seenSteamIDs[steamID] then
-            seenSteamIDs[steamID] = { rank = rank, member = member }
-        else
-            -- Compare ranks: Leader > Vice Leader > Recruit
-            local existingRank = seenSteamIDs[steamID].rank
-            local rankOrder = { Leader = 3, ["Vice Leader"] = 2, Recruit = 1 }
-            if (rankOrder[rank] or 0) > (rankOrder[existingRank] or 0) then
-                seenSteamIDs[steamID] = { rank = rank, member = member }
-            end
-        end
-    end
-    for steamID, data in pairs(seenSteamIDs) do
-        table.insert(cleanedMembers, data.member)
-    end
-    members = cleanedMembers
-
-    -- Update the database with cleaned members
-    local membersJSON = util.TableToJSON(members)
-    sql.Query("UPDATE darkrp_gangs SET members = " .. sql.SQLStr(membersJSON) .. " WHERE gang_name = " .. sql.SQLStr(gangName))
-
-    print("[RPMenu] SendGangData: Preparing data - Name: " .. gangName .. ", Level: " .. gangData.gang_level .. ", Members: " .. #members .. ", Points: " .. (gangData.upgrade_points or 0))
-
     net.Start("RPMenu_SendGangData")
     net.WriteString(gangName)
     net.WriteUInt(tonumber(gangData.gang_level), 8)
@@ -121,43 +75,7 @@ local function SendGangData(ply)
     net.WriteUInt(tonumber(gangData.upgrade_points or 0), 8)
     net.WriteUInt(tonumber(gangData.gang_bank or 0), 32)
     net.Send(ply)
-    print("[RPMenu] SendGangData: Sent data to " .. ply:Nick())
 end
-
--- Function to add XP to a gang
-function AddGangXP(gangName, xp)
-    local gangData = sql.QueryRow("SELECT gang_level, upgrade_points FROM darkrp_gangs WHERE gang_name = " .. sql.SQLStr(gangName))
-    if not gangData then
-        print("[RPMenu] Gang " .. gangName .. " not found for XP addition")
-        return
-    end
-    local level = tonumber(gangData.gang_level)
-    local points = tonumber(gangData.upgrade_points)
-    local totalXP = (level - 1) * 1000 + xp
-    local newLevel = math.min(math.floor(totalXP / 1000) + 1, 20)
-    if newLevel > level then
-        points = points + (newLevel - level)
-        local updateQuery = sql.Query("UPDATE darkrp_gangs SET gang_level = " .. newLevel .. ", upgrade_points = " .. points .. " WHERE gang_name = " .. sql.SQLStr(gangName))
-        if updateQuery == false then
-            print("[RPMenu] Failed to update gang level and points: " .. sql.LastError())
-            return
-        end
-        print("[RPMenu] Gang " .. gangName .. " leveled up to " .. newLevel .. " with " .. points .. " upgrade points")
-    end
-    for _, ply in ipairs(player.GetAll()) do
-        if ply:GetNWString("GangName", "") == gangName then
-            SendGangData(ply)
-        end
-    end
-end
-
-concommand.Add("add_gang_xp", function(ply, cmd, args)
-    if not args[1] or not args[2] then
-        print("Usage: add_gang_xp <gangName> <xp>")
-        return
-    end
-    AddGangXP(args[1], tonumber(args[2]))
-end)
 
 -- Server-side Network Handlers
 net.Receive("RPMenu_CreateGang", function(len, ply)
@@ -165,15 +83,8 @@ net.Receive("RPMenu_CreateGang", function(len, ply)
     local gangColor = net.ReadColor()
     local password = net.ReadString()
 
-    print("[RPMenu] CreateGang: Attempt by " .. ply:Nick() .. " for gang " .. gangName)
-
-    local currentGang = ply:GetNWString("GangName", "")
-    if currentGang != "" then
-        ply:ChatPrint("You are already in a gang! Leave your current gang before creating a new one.")
-        print("[RPMenu] CreateGang: Player " .. ply:Nick() .. " already in gang " .. currentGang)
-        net.Start("RPMenu_UpdateGangStatus")
-        net.WriteString(currentGang)
-        net.Send(ply)
+    if ply:GetNWString("GangName", "") != "" then
+        ply:ChatPrint("You are already in a gang! Leave your current gang first.")
         SendGangData(ply)
         return
     end
@@ -181,49 +92,27 @@ net.Receive("RPMenu_CreateGang", function(len, ply)
     local existingGang = sql.Query("SELECT gang_name FROM darkrp_gangs WHERE gang_name = " .. sql.SQLStr(gangName))
     if existingGang and #existingGang > 0 then
         ply:ChatPrint("A gang with this name already exists!")
-        print("[RPMenu] CreateGang: Gang name " .. gangName .. " already exists")
         return
     end
 
-    local members = {}
-    -- Check if player is already in the members list (shouldn't be, but for safety)
-    local playerExists = false
-    for _, member in ipairs(members) do
-        if member.steamid == ply:SteamID() then
-            playerExists = true
-            break
-        end
-    end
-    if not playerExists then
-        table.insert(members, {steamid = ply:SteamID(), rank = "Leader"})
-    end
+    local members = {{steamid = ply:SteamID(), rank = "Leader"}}
     local membersJSON = util.TableToJSON(members)
     local colorJSON = util.TableToJSON({r = gangColor.r, g = gangColor.g, b = gangColor.b})
-    local insertGang = sql.Query([[
+
+    sql.Query([[
         INSERT INTO darkrp_gangs (gang_name, gang_level, gang_color, gang_password, gang_upgrades, upgrade_points, members, gang_bank)
         VALUES (]] .. sql.SQLStr(gangName) .. [[, 1, ]] .. sql.SQLStr(colorJSON) .. [[, ]] .. sql.SQLStr(password) .. [[, '{}', 1, ]] .. sql.SQLStr(membersJSON) .. [[, 0)
     ]])
-    if insertGang == false then
-        local err = sql.LastError()
-        ply:ChatPrint("Failed to create gang: " .. err)
-        print("[RPMenu] CreateGang: Failed to create gang " .. gangName .. ": " .. err)
-        return
-    end
 
     ply:SetNWString("GangName", gangName)
-    ply:ChatPrint("Gang '" .. gangName .. "' created successfully at level 1!")
-    print("[RPMenu] CreateGang: Gang " .. gangName .. " created successfully for " .. ply:Nick())
+    ply:ChatPrint("Gang '" .. gangName .. "' created successfully!")
 
     net.Start("RPMenu_UpdateGangStatus")
     net.WriteString(gangName)
     net.Send(ply)
 
-    SendGangData(ply)
-    timer.Simple(1, function()
-        if IsValid(ply) then
-            SendGangData(ply)
-            print("[RPMenu] CreateGang: Retry SendGangData for " .. ply:Nick())
-        end
+    timer.Simple(0.1, function()
+        if IsValid(ply) then SendGangData(ply) end
     end)
 end)
 
@@ -232,15 +121,12 @@ net.Receive("RPMenu_UpgradeGang", function(len, ply)
     local gangName = ply:GetNWString("GangName", "")
     if gangName == "" then
         ply:ChatPrint("You are not in a gang!")
-        print("[RPMenu] UpgradeGang: " .. ply:Nick() .. " not in a gang")
         return
     end
 
-    print("[RPMenu] UpgradeGang: Attempt by " .. ply:Nick() .. " for " .. upgrade .. " in gang " .. gangName)
     local gangData = sql.QueryRow("SELECT gang_upgrades, upgrade_points FROM darkrp_gangs WHERE gang_name = " .. sql.SQLStr(gangName))
     if not gangData then
         ply:ChatPrint("Gang data not found!")
-        print("[RPMenu] UpgradeGang: Gang data not found for " .. gangName)
         return
     end
 
@@ -248,28 +134,20 @@ net.Receive("RPMenu_UpgradeGang", function(len, ply)
     local points = tonumber(gangData.upgrade_points)
     if points < 1 then
         ply:ChatPrint("Not enough upgrade points!")
-        print("[RPMenu] UpgradeGang: Not enough points for " .. gangName)
         return
     end
 
     local level = upgrades[upgrade] or 0
     if level >= 10 then
         ply:ChatPrint(upgrade .. " is already at max level!")
-        print("[RPMenu] UpgradeGang: " .. upgrade .. " already at max level for " .. gangName)
         return
     end
 
     upgrades[upgrade] = level + 1
     points = points - 1
-    local updateQuery = sql.Query("UPDATE darkrp_gangs SET gang_upgrades = " .. sql.SQLStr(util.TableToJSON(upgrades)) .. ", upgrade_points = " .. points .. " WHERE gang_name = " .. sql.SQLStr(gangName))
-    if updateQuery == false then
-        ply:ChatPrint("Failed to upgrade: " .. sql.LastError())
-        print("[RPMenu] UpgradeGang: Failed to update upgrades for " .. gangName .. ": " .. sql.LastError())
-        return
-    end
+    sql.Query("UPDATE darkrp_gangs SET gang_upgrades = " .. sql.SQLStr(util.TableToJSON(upgrades)) .. ", upgrade_points = " .. points .. " WHERE gang_name = " .. sql.SQLStr(gangName))
 
     ply:ChatPrint("Upgraded " .. upgrade .. " to level " .. (level + 1))
-    print("[RPMenu] UpgradeGang: " .. upgrade .. " upgraded to level " .. (level + 1) .. " for " .. gangName)
     SendGangData(ply)
 end)
 
@@ -278,35 +156,26 @@ net.Receive("RPMenu_DonateToBank", function(len, ply)
     local gangName = ply:GetNWString("GangName", "")
     if gangName == "" then
         ply:ChatPrint("You are not in a gang!")
-        print("[RPMenu] DonateToBank: " .. ply:Nick() .. " not in a gang")
         return
     end
 
     local playerMoney = ply:getDarkRPVar("money") or 0
     if amount > playerMoney then
         ply:ChatPrint("You don't have enough money!")
-        print("[RPMenu] DonateToBank: " .. ply:Nick() .. " has insufficient funds (" .. amount .. " > " .. playerMoney .. ")")
         return
     end
 
     local gangData = sql.QueryRow("SELECT gang_bank FROM darkrp_gangs WHERE gang_name = " .. sql.SQLStr(gangName))
     if not gangData then
         ply:ChatPrint("Gang data not found!")
-        print("[RPMenu] DonateToBank: Gang data not found for " .. gangName)
         return
     end
 
     local newBank = (tonumber(gangData.gang_bank) or 0) + amount
-    local updateQuery = sql.Query("UPDATE darkrp_gangs SET gang_bank = " .. newBank .. " WHERE gang_name = " .. sql.SQLStr(gangName))
-    if updateQuery == false then
-        ply:ChatPrint("Failed to donate: " .. sql.LastError())
-        print("[RPMenu] DonateToBank: Failed to update bank for " .. gangName .. ": " .. sql.LastError())
-        return
-    end
+    sql.Query("UPDATE darkrp_gangs SET gang_bank = " .. newBank .. " WHERE gang_name = " .. sql.SQLStr(gangName))
 
     ply:addMoney(-amount)
     ply:ChatPrint("Donated " .. amount .. " to the gang bank!")
-    print("[RPMenu] DonateToBank: " .. ply:Nick() .. " donated " .. amount .. " to " .. gangName)
 
     for _, p in ipairs(player.GetAll()) do
         if p:GetNWString("GangName", "") == gangName then
@@ -319,44 +188,57 @@ net.Receive("RPMenu_LeaveGang", function(len, ply)
     local gangName = ply:GetNWString("GangName", "")
     if gangName == "" then
         ply:ChatPrint("You are not in a gang!")
-        print("[RPMenu] LeaveGang: " .. ply:Nick() .. " not in a gang")
         return
     end
 
     local gangData = sql.QueryRow("SELECT members FROM darkrp_gangs WHERE gang_name = " .. sql.SQLStr(gangName))
     if not gangData then
         ply:ChatPrint("Gang data not found!")
-        print("[RPMenu] LeaveGang: Gang data not found for " .. gangName)
         return
     end
 
     local members = util.JSONToTable(gangData.members or "[]") or {}
-    local newMembers = {}
+    local playerRank = "Recruit"
     for _, member in ipairs(members) do
-        if member.steamid != ply:SteamID() then
-            table.insert(newMembers, member)
+        if member.steamid == ply:SteamID() then
+            playerRank = member.rank or "Recruit"
+            break
         end
     end
 
-    local membersJSON = util.TableToJSON(newMembers)
-    local updateQuery = sql.Query("UPDATE darkrp_gangs SET members = " .. sql.SQLStr(membersJSON) .. " WHERE gang_name = " .. sql.SQLStr(gangName))
-    if updateQuery == false then
-        ply:ChatPrint("Failed to leave gang: " .. sql.LastError())
-        print("[RPMenu] LeaveGang: Failed to update members for " .. gangName .. ": " .. sql.LastError())
-        return
-    end
+    if playerRank == "Leader" then
+        sql.Query("DELETE FROM darkrp_gangs WHERE gang_name = " .. sql.SQLStr(gangName))
+        ply:ChatPrint("Gang '" .. gangName .. "' has been disbanded!")
 
-    ply:SetNWString("GangName", "")
-    ply:ChatPrint("You have left the gang '" .. gangName .. "'!")
-    print("[RPMenu] LeaveGang: " .. ply:Nick() .. " left gang " .. gangName)
+        for _, p in ipairs(player.GetAll()) do
+            if p:GetNWString("GangName", "") == gangName then
+                p:SetNWString("GangName", "")
+                p:ChatPrint("Your gang '" .. gangName .. "' has been disbanded by the leader!")
+                net.Start("RPMenu_UpdateGangStatus")
+                net.WriteString("")
+                net.Send(p)
+            end
+        end
+    else
+        local newMembers = {}
+        for _, member in ipairs(members) do
+            if member.steamid != ply:SteamID() then
+                table.insert(newMembers, member)
+            end
+        end
 
-    net.Start("RPMenu_UpdateGangStatus")
-    net.WriteString("")
-    net.Send(ply)
+        sql.Query("UPDATE darkrp_gangs SET members = " .. sql.SQLStr(util.TableToJSON(newMembers)) .. " WHERE gang_name = " .. sql.SQLStr(gangName))
+        ply:SetNWString("GangName", "")
+        ply:ChatPrint("You have left the gang '" .. gangName .. "'!")
 
-    for _, p in ipairs(player.GetAll()) do
-        if p:GetNWString("GangName", "") == gangName then
-            SendGangData(p)
+        net.Start("RPMenu_UpdateGangStatus")
+        net.WriteString("")
+        net.Send(ply)
+
+        for _, p in ipairs(player.GetAll()) do
+            if p:GetNWString("GangName", "") == gangName then
+                SendGangData(p)
+            end
         end
     end
 end)
@@ -365,14 +247,12 @@ net.Receive("RPMenu_KickPlayer", function(len, ply)
     local gangName = ply:GetNWString("GangName", "")
     if gangName == "" then
         ply:ChatPrint("You are not in a gang!")
-        print("[RPMenu] KickPlayer: " .. ply:Nick() .. " not in a gang")
         return
     end
 
     local gangData = sql.QueryRow("SELECT members FROM darkrp_gangs WHERE gang_name = " .. sql.SQLStr(gangName))
     if not gangData then
         ply:ChatPrint("Gang data not found!")
-        print("[RPMenu] KickPlayer: Gang data not found for " .. gangName)
         return
     end
 
@@ -387,7 +267,6 @@ net.Receive("RPMenu_KickPlayer", function(len, ply)
 
     if playerRank != "Leader" then
         ply:ChatPrint("Only the gang leader can kick players!")
-        print("[RPMenu] KickPlayer: " .. ply:Nick() .. " is not a leader")
         return
     end
 
@@ -400,29 +279,37 @@ net.Receive("RPMenu_KickPlayer", function(len, ply)
         end
     end
 
-    local newMembers = {}
+    local targetRank = "Recruit"
     local targetFound = false
     for _, member in ipairs(members) do
         if member.steamid == steamID then
+            targetRank = member.rank or "Recruit"
             targetFound = true
-        else
-            table.insert(newMembers, member)
+            break
         end
     end
 
     if not targetFound then
         ply:ChatPrint("Player not found in gang!")
-        print("[RPMenu] KickPlayer: Player " .. steamID .. " not found in gang " .. gangName)
         return
     end
 
-    local membersJSON = util.TableToJSON(newMembers)
-    local updateQuery = sql.Query("UPDATE darkrp_gangs SET members = " .. sql.SQLStr(membersJSON) .. " WHERE gang_name = " .. sql.SQLStr(gangName))
-    if updateQuery == false then
-        ply:ChatPrint("Failed to kick player: " .. sql.LastError())
-        print("[RPMenu] KickPlayer: Failed to update members for " .. gangName .. ": " .. sql.LastError())
+    if targetRank == "Leader" then
+        net.Start("RPMenu_RequestPasswordForKick")
+        net.WriteString(steamID)
+        net.WriteString(IsValid(targetPlayer) and targetPlayer:Nick() or steamID)
+        net.Send(ply)
         return
     end
+
+    local newMembers = {}
+    for _, member in ipairs(members) do
+        if member.steamid != steamID then
+            table.insert(newMembers, member)
+        end
+    end
+
+    sql.Query("UPDATE darkrp_gangs SET members = " .. sql.SQLStr(util.TableToJSON(newMembers)) .. " WHERE gang_name = " .. sql.SQLStr(gangName))
 
     if IsValid(targetPlayer) then
         targetPlayer:SetNWString("GangName", "")
@@ -433,7 +320,82 @@ net.Receive("RPMenu_KickPlayer", function(len, ply)
     end
 
     ply:ChatPrint("Player has been kicked from the gang!")
-    print("[RPMenu] KickPlayer: " .. steamID .. " kicked from gang " .. gangName .. " by " .. ply:Nick())
+
+    for _, p in ipairs(player.GetAll()) do
+        if p:GetNWString("GangName", "") == gangName then
+            SendGangData(p)
+        end
+    end
+end)
+
+net.Receive("RPMenu_SubmitPasswordForKick", function(len, ply)
+    local gangName = ply:GetNWString("GangName", "")
+    if gangName == "" then
+        ply:ChatPrint("You are not in a gang!")
+        return
+    end
+
+    local gangData = sql.QueryRow("SELECT members, gang_password FROM darkrp_gangs WHERE gang_name = " .. sql.SQLStr(gangName))
+    if not gangData then
+        ply:ChatPrint("Gang data not found!")
+        return
+    end
+
+    local steamID = net.ReadString()
+    local password = net.ReadString()
+    if password != gangData.gang_password then
+        ply:ChatPrint("Incorrect password!")
+        return
+    end
+
+    local members = util.JSONToTable(gangData.members or "[]") or {}
+    local playerRank = "Recruit"
+    for _, member in ipairs(members) do
+        if member.steamid == ply:SteamID() then
+            playerRank = member.rank or "Recruit"
+            break
+        end
+    end
+
+    if playerRank != "Leader" then
+        ply:ChatPrint("Only the gang leader can kick players!")
+        return
+    end
+
+    local targetPlayer = nil
+    for _, p in ipairs(player.GetAll()) do
+        if p:SteamID() == steamID then
+            targetPlayer = p
+            break
+        end
+    end
+
+    local targetFound = false
+    local newMembers = {}
+    for _, member in ipairs(members) do
+        if member.steamid == steamID then
+            targetFound = true
+        else
+            table.insert(newMembers, member)
+        end
+    end
+
+    if not targetFound then
+        ply:ChatPrint("Player not found in gang!")
+        return
+    end
+
+    sql.Query("UPDATE darkrp_gangs SET members = " .. sql.SQLStr(util.TableToJSON(newMembers)) .. " WHERE gang_name = " .. sql.SQLStr(gangName))
+
+    if IsValid(targetPlayer) then
+        targetPlayer:SetNWString("GangName", "")
+        targetPlayer:ChatPrint("You have been kicked from the gang '" .. gangName .. "'!")
+        net.Start("RPMenu_UpdateGangStatus")
+        net.WriteString("")
+        net.Send(targetPlayer)
+    end
+
+    ply:ChatPrint("Player has been kicked from the gang!")
 
     for _, p in ipairs(player.GetAll()) do
         if p:GetNWString("GangName", "") == gangName then
@@ -446,14 +408,12 @@ net.Receive("RPMenu_SetRank", function(len, ply)
     local gangName = ply:GetNWString("GangName", "")
     if gangName == "" then
         ply:ChatPrint("You are not in a gang!")
-        print("[RPMenu] SetRank: " .. ply:Nick() .. " not in a gang")
         return
     end
 
     local gangData = sql.QueryRow("SELECT members FROM darkrp_gangs WHERE gang_name = " .. sql.SQLStr(gangName))
     if not gangData then
         ply:ChatPrint("Gang data not found!")
-        print("[RPMenu] SetRank: Gang data not found for " .. gangName)
         return
     end
 
@@ -468,7 +428,6 @@ net.Receive("RPMenu_SetRank", function(len, ply)
 
     if playerRank != "Leader" and playerRank != "Vice Leader" then
         ply:ChatPrint("Only leaders and vice leaders can set ranks!")
-        print("[RPMenu] SetRank: " .. ply:Nick() .. " is not a leader or vice leader")
         return
     end
 
@@ -476,7 +435,6 @@ net.Receive("RPMenu_SetRank", function(len, ply)
     local newRank = net.ReadString()
     if not (newRank == "Recruit" or newRank == "Vice Leader" or newRank == "Leader") then
         ply:ChatPrint("Invalid rank!")
-        print("[RPMenu] SetRank: Invalid rank " .. newRank .. " by " .. ply:Nick())
         return
     end
 
@@ -492,19 +450,16 @@ net.Receive("RPMenu_SetRank", function(len, ply)
 
     if not targetFound then
         ply:ChatPrint("Player not found in gang!")
-        print("[RPMenu] SetRank: Player " .. steamID .. " not found in gang " .. gangName)
         return
     end
 
     if (targetRank == "Leader" or targetRank == "Vice Leader") and playerRank != "Leader" then
         ply:ChatPrint("Only leaders can modify the rank of leaders and vice leaders!")
-        print("[RPMenu] SetRank: " .. ply:Nick() .. " cannot modify rank of " .. targetRank)
         return
     end
 
     if newRank == "Leader" and playerRank != "Leader" then
         ply:ChatPrint("Only leaders can set the Leader rank!")
-        print("[RPMenu] SetRank: " .. ply:Nick() .. " cannot set Leader rank")
         return
     end
 
@@ -524,16 +479,8 @@ net.Receive("RPMenu_SetRank", function(len, ply)
         end
     end
 
-    local membersJSON = util.TableToJSON(members)
-    local updateQuery = sql.Query("UPDATE darkrp_gangs SET members = " .. sql.SQLStr(membersJSON) .. " WHERE gang_name = " .. sql.SQLStr(gangName))
-    if updateQuery == false then
-        ply:ChatPrint("Failed to set rank: " .. sql.LastError())
-        print("[RPMenu] SetRank: Failed to update members for " .. gangName .. ": " .. sql.LastError())
-        return
-    end
-
+    sql.Query("UPDATE darkrp_gangs SET members = " .. sql.SQLStr(util.TableToJSON(members)) .. " WHERE gang_name = " .. sql.SQLStr(gangName))
     ply:ChatPrint("Set rank of player to " .. newRank .. "!")
-    print("[RPMenu] SetRank: " .. steamID .. " rank set to " .. newRank .. " in gang " .. gangName .. " by " .. ply:Nick())
 
     for _, p in ipairs(player.GetAll()) do
         if p:GetNWString("GangName", "") == gangName then
@@ -542,18 +489,40 @@ net.Receive("RPMenu_SetRank", function(len, ply)
     end
 end)
 
-net.Receive("RPMenu_DisbandGang", function(len, ply)
+net.Receive("RPMenu_ChangePassword", function(len, ply)
     local gangName = ply:GetNWString("GangName", "")
     if gangName == "" then
         ply:ChatPrint("You are not in a gang!")
-        print("[RPMenu] DisbandGang: " .. ply:Nick() .. " not in a gang")
         return
     end
 
-    local gangData = sql.QueryRow("SELECT gang_password, members FROM darkrp_gangs WHERE gang_name = " .. sql.SQLStr(gangName))
+    local gangData = sql.QueryRow("SELECT gang_password FROM darkrp_gangs WHERE gang_name = " .. sql.SQLStr(gangName))
     if not gangData then
         ply:ChatPrint("Gang data not found!")
-        print("[RPMenu] DisbandGang: Gang data not found for " .. gangName)
+        return
+    end
+
+    local currentPassword = net.ReadString()
+    local newPassword = net.ReadString()
+    if currentPassword != gangData.gang_password then
+        ply:ChatPrint("Incorrect current password!")
+        return
+    end
+
+    sql.Query("UPDATE darkrp_gangs SET gang_password = " .. sql.SQLStr(newPassword) .. " WHERE gang_name = " .. sql.SQLStr(gangName))
+    ply:ChatPrint("Gang password changed successfully!")
+end)
+
+net.Receive("RPMenu_InvitePlayer", function(len, ply)
+    local gangName = ply:GetNWString("GangName", "")
+    if gangName == "" then
+        ply:ChatPrint("You are not in a gang!")
+        return
+    end
+
+    local gangData = sql.QueryRow("SELECT members FROM darkrp_gangs WHERE gang_name = " .. sql.SQLStr(gangName))
+    if not gangData then
+        ply:ChatPrint("Gang data not found!")
         return
     end
 
@@ -566,48 +535,82 @@ net.Receive("RPMenu_DisbandGang", function(len, ply)
         end
     end
 
-    if playerRank != "Leader" then
-        ply:ChatPrint("Only the gang leader can disband the gang!")
-        print("[RPMenu] DisbandGang: " .. ply:Nick() .. " is not a leader")
+    if playerRank != "Leader" and playerRank != "Vice Leader" then
+        ply:ChatPrint("Only leaders and vice leaders can invite players!")
         return
     end
 
-    local password = net.ReadString()
-    if gangData.gang_password != password then
-        ply:ChatPrint("Incorrect password!")
-        print("[RPMenu] DisbandGang: Incorrect password for " .. gangName)
+    local steamID = net.ReadString()
+    local targetPlayer = nil
+    for _, p in ipairs(player.GetAll()) do
+        if p:SteamID() == steamID then
+            targetPlayer = p
+            break
+        end
+    end
+
+    if not IsValid(targetPlayer) then
+        ply:ChatPrint("Player not found or not online!")
         return
     end
 
-    local deleteQuery = sql.Query("DELETE FROM darkrp_gangs WHERE gang_name = " .. sql.SQLStr(gangName))
-    if deleteQuery == false then
-        ply:ChatPrint("Failed to disband gang: " .. sql.LastError())
-        print("[RPMenu] DisbandGang: Failed to delete gang " .. gangName .. ": " .. sql.LastError())
+    if targetPlayer:GetNWString("GangName", "") != "" then
+        ply:ChatPrint("That player is already in a gang!")
         return
     end
 
-    print("[RPMenu] DisbandGang: Gang " .. gangName .. " disbanded by " .. ply:Nick())
-    ply:ChatPrint("Gang '" .. gangName .. "' has been disbanded!")
+    net.Start("RPMenu_ReceiveInvite")
+    net.WriteString(gangName)
+    net.Send(targetPlayer)
+    ply:ChatPrint("Invite sent to " .. targetPlayer:Nick() .. "!")
+end)
 
-    -- Notify all members and update their status
+net.Receive("RPMenu_AcceptInvite", function(len, ply)
+    if ply:GetNWString("GangName", "") != "" then
+        ply:ChatPrint("You are already in a gang!")
+        return
+    end
+
+    local gangName = net.ReadString()
+    local gangData = sql.QueryRow("SELECT members FROM darkrp_gangs WHERE gang_name = " .. sql.SQLStr(gangName))
+    if not gangData then
+        ply:ChatPrint("Gang no longer exists!")
+        return
+    end
+
+    local members = util.JSONToTable(gangData.members or "[]") or {}
+    if #members >= 10 then
+        ply:ChatPrint("This gang has reached its maximum capacity of 10 members!")
+        return
+    end
+
+    table.insert(members, {steamid = ply:SteamID(), rank = "Recruit"})
+    sql.Query("UPDATE darkrp_gangs SET members = " .. sql.SQLStr(util.TableToJSON(members)) .. " WHERE gang_name = " .. sql.SQLStr(gangName))
+
+    ply:SetNWString("GangName", gangName)
+    ply:ChatPrint("You have joined the gang '" .. gangName .. "'!")
+
+    net.Start("RPMenu_UpdateGangStatus")
+    net.WriteString(gangName)
+    net.Send(ply)
+
     for _, p in ipairs(player.GetAll()) do
         if p:GetNWString("GangName", "") == gangName then
-            p:SetNWString("GangName", "")
-            p:ChatPrint("Your gang '" .. gangName .. "' has been disbanded by the leader!")
-            net.Start("RPMenu_UpdateGangStatus")
-            net.WriteString("")
-            net.Send(p)
+            SendGangData(p)
         end
     end
 end)
 
+net.Receive("RPMenu_DeclineInvite", function(len, ply)
+    local gangName = net.ReadString()
+    ply:ChatPrint("You have declined the invite from '" .. gangName .. "'.")
+end)
+
 net.Receive("RPMenu_RequestGangData", function(len, ply)
-    print("[RPMenu] RequestGangData: Requested by " .. ply:Nick())
     SendGangData(ply)
 end)
 
 hook.Add("PlayerInitialSpawn", "RPMenu_SendGangDataOnJoin", function(ply)
-    print("[RPMenu] PlayerInitialSpawn: Checking gang for " .. ply:Nick())
     local gangs = sql.Query("SELECT gang_name, members FROM darkrp_gangs")
     local gangName = ""
     if gangs then
@@ -623,12 +626,8 @@ hook.Add("PlayerInitialSpawn", "RPMenu_SendGangDataOnJoin", function(ply)
         end
     end
     ply:SetNWString("GangName", gangName)
-    print("[RPMenu] PlayerInitialSpawn: Set GangName to " .. gangName .. " for " .. ply:Nick())
 
-    timer.Simple(1, function()
-        if not IsValid(ply) then return end
-        SendGangData(ply)
+    timer.Simple(0.1, function()
+        if IsValid(ply) then SendGangData(ply) end
     end)
 end)
-
-print("[RPMenu] Server-side loaded successfully")
