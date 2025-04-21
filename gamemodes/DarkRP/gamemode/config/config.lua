@@ -18,7 +18,7 @@ Set to true or false.
 -- voice3D - Enable/disable 3DVoice is enabled.
 GM.Config.voice3D                       = true
 -- AdminsCopWeapons - Enable/disable admins spawning with cop weapons.
-GM.Config.AdminsCopWeapons              = false
+GM.Config.AdminsCopWeapons              = true
 -- adminBypassJobCustomCheck - Enable/disable whether an admin can force set a job with whenever customCheck returns false.
 GM.Config.adminBypassJobRestrictions    = true
 -- Acts/Taunts - Enable/disable Taunts (e.g. act salute)
@@ -26,13 +26,13 @@ GM.Config.allowActs                     = false
 -- allow people getting their own custom jobs.
 GM.Config.allowjobswitch                = true
 -- allowrpnames - Allow Players to Set their RP names using the /rpname command.
-GM.Config.allowrpnames                  = false
+GM.Config.allowrpnames                  = true
 -- allowsprays - Enable/disable the use of sprays on the server.
 GM.Config.allowsprays                   = true
 -- allowvehicleowning - Enable/disable whether people can own vehicles.
 GM.Config.allowvehicleowning            = true
 -- allowvnocollide - Enable/disable the ability to no-collide a vehicle (for security).
-GM.Config.allowvnocollide               = true
+GM.Config.allowvnocollide               = false
 -- alltalk - Enable for global chat, disable for local chat.
 GM.Config.alltalk                       = false
 -- antimultirun - Disallow people joining your server(s) twice on the same account.
@@ -50,17 +50,17 @@ GM.Config.chiefjailpos                  = true
 -- cit_propertytax - Enable/disable property tax that is exclusive only for citizens.
 GM.Config.cit_propertytax               = false
 -- copscanunfreeze - Enable/disable the ability of cops to unfreeze other people's props.
-GM.Config.copscanunfreeze               = false
+GM.Config.copscanunfreeze               = true
 -- copscanunweld - Enable/disable the ability of cops to unweld other people's props.
 GM.Config.copscanunweld                 = false
 -- cpcanarrestcp - Allow/Disallow CPs to arrest other CPs.
-GM.Config.cpcanarrestcp                 = false
+GM.Config.cpcanarrestcp                 = true
 -- currencyLeft - The position of the currency symbol. true for left, false for right.
 GM.Config.currencyLeft                  = true
 -- customjobs - Enable/disable the /job command (personalized job names).
-GM.Config.customjobs                    = false
+GM.Config.customjobs                    = true
 -- customspawns - Enable/disable whether custom spawns should be used.
-GM.Config.customspawns                  = false
+GM.Config.customspawns                  = true
 -- deathblack - Whether or not a player sees black on death.
 GM.Config.deathblack                    = false
 -- showdeaths - Display kill information in the upper right corner of everyone's screen.
@@ -74,13 +74,13 @@ GM.Config.deathpov                      = false
 -- decalcleaner - Enable/Disable clearing every player's decals.
 GM.Config.decalcleaner                  = false
 -- disallowClientsideScripts - Clientside scripts can be very useful for customizing the HUD or to aid in building. This option bans those scripts.
-GM.Config.disallowClientsideScripts     = true
+GM.Config.disallowClientsideScripts     = false
 -- doorwarrants - Enable/disable Warrant requirement to enter property.
 GM.Config.doorwarrants                  = true
 -- dropmoneyondeath - Enable/disable whether people drop money on death.
 GM.Config.dropmoneyondeath              = false
 -- droppocketarrest - Enable/disable whether people drop the stuff in their pockets when they get arrested.
-GM.Config.droppocketarrest              = true
+GM.Config.droppocketarrest              = false
 -- droppocketdeath - Enable/disable whether people drop the stuff in their pockets when they die.
 GM.Config.droppocketdeath               = true
 -- dropweapondeath - Enable/disable whether people drop their current weapon when they die.
@@ -92,13 +92,13 @@ GM.Config.dynamicvoice                  = true
 -- earthquakes - Enable/disable earthquakes.
 GM.Config.earthquakes                   = false
 -- enablebuypistol - Turn /buy on of off.
-GM.Config.enablebuypistol               = false
+GM.Config.enablebuypistol               = true
 -- enforceplayermodel - Whether or not to force players to use their role-defined character models.
 GM.Config.enforceplayermodel            = true
 -- globalshow - Whether or not to display player info above players' heads in-game.
 GM.Config.globalshow                    = false
 -- ironshoot - Enable/disable whether people need iron sights to shoot.
-GM.Config.ironshoot                     = false
+GM.Config.ironshoot                     = true
 -- showjob - Whether or not to display a player's job above their head in-game.
 GM.Config.showjob                       = true
 -- letters - Enable/disable letter writing / typing.
@@ -108,7 +108,7 @@ GM.Config.license                       = false
 -- lockdown - Enable/Disable initiating lockdowns for mayors.
 GM.Config.lockdown                      = true
 -- lockpickfading - Enable/disable the lockpicking of fading doors.
-GM.Config.lockpickfading                = false
+GM.Config.lockpickfading                = true
 -- logging - Enable/disable logging everything that happens.
 GM.Config.logging                       = true
 -- lottery - Enable/disable creating lotteries for mayors.
@@ -265,7 +265,7 @@ GM.Config.propcost                      = 10
 -- quakechance - Chance of an earthquake happening.
 GM.Config.quakechance                   = 4000
 -- respawntime - Minimum amount of seconds a player has to wait before respawning.
-GM.Config.respawntime                   = 15
+GM.Config.respawntime                   = 1
 -- changejobtime - Minimum amount of seconds a player has to wait before changing job.
 GM.Config.changejobtime                 = 10
 -- runspeed - Sets the max running speed.
@@ -434,7 +434,9 @@ GM.Config.AdminWeapons = {
 
 -- These are the default laws, they're unchangeable in-game.
 GM.Config.DefaultLaws = {
-
+    "Do not attack other citizens except in self-defence.",
+    "Do not steal or break into people's homes.",
+    "Money printers/drugs are illegal.",
 }
 
 GM.Config.PocketBlacklist = {

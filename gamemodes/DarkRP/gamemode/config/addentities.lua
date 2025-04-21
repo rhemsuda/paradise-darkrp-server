@@ -1,4 +1,4 @@
---[[DarkRP.createShipment("Desert eagle", {
+DarkRP.createShipment("Desert eagle", {
     model = "models/weapons/w_pist_deagle.mdl",
     entity = "weapon_deagle2",
     price = 215,
@@ -115,18 +115,18 @@ DarkRP.createShipment("Sniper rifle", {
     noship = false,
     allowed = {TEAM_GUN},
     category = "Snipers",
-}) -]]
+})
 
---[[DarkRP.createEntity("Drug lab", {
+DarkRP.createEntity("Drug lab", {
     ent = "drug_lab",
     model = "models/props_lab/crematorcase.mdl",
     price = 400,
     max = 3,
     cmd = "buydruglab",
     allowed = {TEAM_GANG, TEAM_MOB}
-}) -]]
+})
 
---[[DarkRP.createEntity("Money printer", {
+DarkRP.createEntity("Money printer", {
     ent = "money_printer",
     model = "models/props_c17/consolebox01a.mdl",
     price = 1000,
@@ -141,18 +141,18 @@ DarkRP.createEntity("Tip Jar", {
     max = 2,
     cmd = "tipjar",
     allowTools = true,
-}) --]]
+})
 
---[[DarkRP.createEntity("Gun lab", {
+DarkRP.createEntity("Gun lab", {
     ent = "gunlab",
     model = "models/props_c17/TrapPropeller_Engine.mdl",
     price = 500,
     max = 1,
     cmd = "buygunlab",
     allowed = TEAM_GUN
-}) --]]
+})
 
---[[if not DarkRP.disabledDefaults["modules"]["hungermod"] then
+if not DarkRP.disabledDefaults["modules"]["hungermod"] then
     DarkRP.createEntity("Microwave", {
         ent = "microwave",
         model = "models/props/cs_office/microwave.mdl",
@@ -162,7 +162,7 @@ DarkRP.createEntity("Tip Jar", {
         allowed = TEAM_COOK
     })
 end
--]]
+
 DarkRP.createCategory{
     name = "Other",
     categorises = "entities",

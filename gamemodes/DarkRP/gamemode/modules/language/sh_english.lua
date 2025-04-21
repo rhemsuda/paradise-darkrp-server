@@ -119,7 +119,6 @@ local my_language = {
     health = "Health: %s",
     job = "Job: %s",
     salary = "Salary: %s%s",
-    level = "Level: %s",
     wallet = "Wallet: %s%s",
     weapon = "Weapon: %s",
     kills = "Kills: %s",

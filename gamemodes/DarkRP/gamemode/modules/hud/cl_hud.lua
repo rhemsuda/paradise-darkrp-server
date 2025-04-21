@@ -47,9 +47,7 @@ local function ReloadConVars()
         Job1 = {0,0,150,200},
         Job2 = {0,0,0,255},
         salary1 = {0,150,0,200},
-        salary2 = {0,0,0,255},
-        experience1 = {0,150,0,200},
-        experience2 = {0,0,0,255}
+        salary2 = {0,0,0,255}
     }
 
     for name, Colour in pairs(ConVars) do
@@ -104,38 +102,22 @@ local function DrawHealth()
 end
 
 local salaryText, JobWalletText
-local experienceText
-local function DrawInfo()    
+local function DrawInfo()
     salaryText = salaryText or DarkRP.getPhrase("salary", DarkRP.formatMoney(localplayer:getDarkRPVar("salary")), "")
+
     JobWalletText = JobWalletText or string.format("%s\n%s",
         DarkRP.getPhrase("job", localplayer:getDarkRPVar("job") or ""),
         DarkRP.getPhrase("wallet", DarkRP.formatMoney(localplayer:getDarkRPVar("money")), "")
     )
 
-    local maxLevel = GetGlobalInt("MaxLevel", 0)
-    local currentLevel = localplayer:GetNWInt("Level", 1)
-
-    local remainingXP = 0
-    
-    if currentLevel != maxLevel then 
-        remainingXP = localplayer:GetNWInt("NextLevelXP", 0) - localplayer:GetNWInt("Experience", 0) 
-    end
-
-    experienceText = string.format("Level: %d | Remaining XP: %d", currentLevel, remainingXP)
-
     draw.DrawNonParsedText(salaryText, "DarkRPHUD2", RelativeX + 5, RelativeY - HUDHeight + 6, ConVars.salary1, 0)
     draw.DrawNonParsedText(salaryText, "DarkRPHUD2", RelativeX + 4, RelativeY - HUDHeight + 5, ConVars.salary2, 0)
 
     surface.SetFont("DarkRPHUD2")
-    local _, salaryHeight = surface.GetTextSize(salaryText)
+    local _, h = surface.GetTextSize(salaryText)
 
-    draw.DrawNonParsedText(JobWalletText, "DarkRPHUD2", RelativeX + 5, RelativeY - HUDHeight + salaryHeight + 6, ConVars.Job1, 0)
-    draw.DrawNonParsedText(JobWalletText, "DarkRPHUD2", RelativeX + 4, RelativeY - HUDHeight + salaryHeight + 5, ConVars.Job2, 0)
-
-    local _, jobWalletHeight = surface.GetTextSize(JobWalletText)
-
-    draw.DrawNonParsedText(experienceText, "DarkRPHUD2", RelativeX + 5, RelativeY - HUDHeight + salaryHeight + jobWalletHeight + 6, ConVars.experience1, 0)
-    draw.DrawNonParsedText(experienceText, "DarkRPHUD2", RelativeX + 4, RelativeY - HUDHeight + salaryHeight + jobWalletHeight + 5, ConVars.experience2, 0)
+    draw.DrawNonParsedText(JobWalletText, "DarkRPHUD2", RelativeX + 5, RelativeY - HUDHeight + h + 6, ConVars.Job1, 0)
+    draw.DrawNonParsedText(JobWalletText, "DarkRPHUD2", RelativeX + 4, RelativeY - HUDHeight + h + 5, ConVars.Job2, 0)
 end
 
 local Page = Material("icon16/page_white_text.png")

@@ -26,7 +26,7 @@ GM.Config.allowActs                     = false
 -- allow people getting their own custom jobs.
 GM.Config.allowjobswitch                = true
 -- allowrpnames - Allow Players to Set their RP names using the /rpname command.
-GM.Config.allowrpnames                  = true
+GM.Config.allowrpnames                  = false
 -- allowsprays - Enable/disable the use of sprays on the server.
 GM.Config.allowsprays                   = true
 -- allowvehicleowning - Enable/disable whether people can own vehicles.
@@ -50,7 +50,7 @@ GM.Config.chiefjailpos                  = true
 -- cit_propertytax - Enable/disable property tax that is exclusive only for citizens.
 GM.Config.cit_propertytax               = false
 -- copscanunfreeze - Enable/disable the ability of cops to unfreeze other people's props.
-GM.Config.copscanunfreeze               = true
+GM.Config.copscanunfreeze               = false
 -- copscanunweld - Enable/disable the ability of cops to unweld other people's props.
 GM.Config.copscanunweld                 = false
 -- cpcanarrestcp - Allow/Disallow CPs to arrest other CPs.
@@ -92,7 +92,7 @@ GM.Config.dynamicvoice                  = true
 -- earthquakes - Enable/disable earthquakes.
 GM.Config.earthquakes                   = false
 -- enablebuypistol - Turn /buy on of off.
-GM.Config.enablebuypistol               = true
+GM.Config.enablebuypistol               = false
 -- enforceplayermodel - Whether or not to force players to use their role-defined character models.
 GM.Config.enforceplayermodel            = true
 -- globalshow - Whether or not to display player info above players' heads in-game.
@@ -106,9 +106,9 @@ GM.Config.letters                       = true
 -- license - Enable/disable People need a license to be able to pick up guns.
 GM.Config.license                       = false
 -- lockdown - Enable/Disable initiating lockdowns for mayors.
-GM.Config.lockdown                      = true
+GM.Config.lockdown                      = false
 -- lockpickfading - Enable/disable the lockpicking of fading doors.
-GM.Config.lockpickfading                = true
+GM.Config.lockpickfading                = false
 -- logging - Enable/disable logging everything that happens.
 GM.Config.logging                       = true
 -- lottery - Enable/disable creating lotteries for mayors.

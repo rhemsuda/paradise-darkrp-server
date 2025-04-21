@@ -13,21 +13,21 @@ local GovernmentJobs, GangsterJobs
 
 local function config()
     GovernmentJobs = {
-        [TEAM_MAYOR] = true,
-        [TEAM_POLICE] = true,
-        [TEAM_CHIEF] = true
+       -- [TEAM_MAYOR] = true,
+       -- [TEAM_POLICE] = true,
+       -- [TEAM_CHIEF] = true
     }
 
     GangsterJobs = {
-        [TEAM_GANG] = true,
-        [TEAM_MOB] = true
+        --[TEAM_GANG] = true,
+        --[TEAM_MOB] = true
     }
 end
 
 local function decide(ply, target)
     if not GovernmentJobs then config() end
 
-    if ply:Team() == TEAM_HOBO then return false, DarkRP.getPhrase("hobos_no_rights") end
+   -- if ply:Team() == TEAM_HOBO then return false, DarkRP.getPhrase("hobos_no_rights") end
 
     if GangsterJobs[ply:Team()] and GovernmentJobs[target:Team()] then
         return false, DarkRP.getPhrase("gangsters_cant_vote_for_government")

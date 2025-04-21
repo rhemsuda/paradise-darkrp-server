@@ -1,4 +1,4 @@
-if SERVER then
+--[[if SERVER then
     -- Ensure MySQL tables are initialized (already in sv_data.lua)
     -- Populate darkrp_levelinfo with example data if empty
     hook.Add("Initialize", "SetupLevelingSystem", function()

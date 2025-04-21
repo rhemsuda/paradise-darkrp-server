@@ -2,7 +2,7 @@ hook.Run("DarkRPStartedLoading")
 
 GM.Version = "2.7.0"
 GM.Name = "DarkRP"
-GM.Author = "Paradise V1"
+GM.Author = "By FPtje Falco et al."
 
 DeriveGamemode("sandbox")
 DEFINE_BASECLASS("gamemode_sandbox")
@@ -30,9 +30,6 @@ end
 
 GM.Config = {} -- config table
 GM.NoLicense = GM.NoLicense or {}
-
-
-include("darkrp/gamemode/modules/base/cl_spawnmenu.lua") -- custom context menu
 
 include("config/config.lua")
 include("libraries/sh_cami.lua")
