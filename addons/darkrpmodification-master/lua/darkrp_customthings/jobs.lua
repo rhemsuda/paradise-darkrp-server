@@ -33,22 +33,22 @@ TEAM_MINER = DarkRP.createJob("Miner", {
     canDemote = false,
 })
 
-TEAM_FOR = DarkRP.createJob("Forager", {
-    color = Color(247, 100, 38),
-    model = "models/Characters/Hostage_01.mdl",
-    description = [[
-        Gather Materials for crafting
-    ]],
-   weapons = {},
-    command = "forager",
-    max = 5,
-    salary = 100,
-    admin = 0,
-    vote = false,
-    hasLicense = false,
-    category = "Citizens",
-    canDemote = false,
-})
+--TEAM_FOR = DarkRP.createJob("Forager", {
+   -- color = Color(247, 100, 38),
+   -- model = "models/Characters/Hostage_01.mdl",
+   -- description = [[
+   --     Gather Materials for crafting
+   -- ]],
+  -- weapons = {},
+  --  command = "forager",
+   -- max = 5,
+   -- salary = 100,
+   -- admin = 0,
+   -- vote = false,
+   -- hasLicense = false,
+   -- category = "Citizens",
+   -- canDemote = false,
+--})
 
 -- TEAM_MINER = DarkRP.createJob("Miner", {
    -- color = Color(247, 160, 38),

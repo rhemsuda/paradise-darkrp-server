@@ -72,18 +72,18 @@ DarkRP.disabledDefaults["shipments"] = {
     ["MP5"]          = false,
     ["P228"]         = false,
     ["Pump shotgun"] = false,
-    ["Sniper rifle"] = false,
+    ["Sniper rifle"] = true,
 }
 
 --[[---------------------------------------------------------------------------
 Entities
 ---------------------------------------------------------------------------]]
 DarkRP.disabledDefaults["entities"] = {
-    ["Drug lab"]      = false,
+    ["Drug lab"]      = true,
     ["Gun lab"]       = false,
     ["Money printer"] = false,
     ["Microwave"]     = false, --Hungermod only
-    ["Tip Jar"]       = false,
+    ["Tip Jar"]       = true,
 }
 
 --[[---------------------------------------------------------------------------

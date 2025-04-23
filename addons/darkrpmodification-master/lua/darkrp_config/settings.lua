@@ -411,18 +411,9 @@ GM.Config.CategoryOverride = {
         ["Sniper rifle"]                        = "Snipers",
 
     },
-    weapons = {
-        ["Desert eagle"]                        = "Pistols",
-        ["Fiveseven"]                           = "Pistols",
-        ["Glock"]                               = "Pistols",
-        ["P228"]                                = "Pistols",
-    },
+    weapons = {},
     vehicles = {}, -- There are no default vehicles.
-    ammo = {
-        ["Pistol ammo"]                         = "Other",
-        ["Shotgun ammo"]                        = "Other",
-        ["Rifle ammo"]                          = "Other",
-    },
+    ammo = {},
 }
 
 -- The list of weapons admins spawn with, in addition to the default weapons, a job's weapons and GM.Config.AdminsCopWeapons.

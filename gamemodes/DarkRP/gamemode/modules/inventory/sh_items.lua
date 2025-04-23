@@ -242,6 +242,18 @@ InventoryItems["ak47"] = {
     ammoType = "AR2"
 }
 
+InventoryItems["Galil"] = {
+    name = "Galil",
+    description = "A powerful assault rifle, upgradeable.",
+    model = "models/weapons/w_rif_galil.mdl",
+    entityClass = "bb_galil",
+    maxStack = 1,
+    category = "Weapons",
+    useFunction = function(ply) equipWeapon(ply, "bb_ak47", "AK47") end,
+    baseRarity = "Uncommon",
+    ammoType = "AR2"
+}
+
 InventoryItems["m4a1"] = {
     name = "M4A1",
     description = "A versatile assault rifle, upgradeable.",
