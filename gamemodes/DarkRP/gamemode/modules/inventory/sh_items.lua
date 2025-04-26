@@ -38,6 +38,18 @@ InventoryItems["shovel"] = {
     ammoType = nil -- Melee weapon, no ammo required
 }
 
+InventoryItems["pickaxe"] = {
+    name = "Pickaxe",
+    description = "A tool for mining resources, can be upgraded.",
+    model = "models/weapons/w_mining_pickaxe.mdl",
+    entityClass = "weapon_pickaxe",
+    maxStack = 1,
+    category = "Weapons",
+    useFunction = function(ply) equipWeapon(ply, "weapon_pickaxe", "Pickaxe") end,
+    baseRarity = "Common",
+    ammoType = nil -- Melee weapon, no ammo required
+}
+
 InventoryItems["pistol"] = {
     name = "Pistol",
     description = "A basic handgun, upgradeable.",
@@ -230,6 +242,18 @@ InventoryItems["p90"] = {
     ammoType = "SMG1"
 }
 
+InventoryItems["smg"] = {
+    name = "SMG",
+    description = "A standard SMG, upgradeable.",
+    model = "models/weapons/w_smg1.mdl",
+    entityClass = "weapon_smg1",
+    maxStack = 1,
+    category = "Weapons",
+    useFunction = function(ply) equipWeapon(ply, "weapon_smg1", "SMG") end,
+    baseRarity = "Common",
+    ammoType = "SMG1"
+}
+
 InventoryItems["ak47"] = {
     name = "AK-47",
     description = "A powerful assault rifle, upgradeable.",
@@ -350,7 +374,7 @@ InventoryItems["knife"] = {
     ammoType = nil -- Melee weapon, no ammo required
 }
 
--- Utility (Non-craftable, no rarity or slots)
+-- Utility (Non-craftable, no rarity)
 InventoryItems["healthkit1"] = {
     name = "Small Medkit",
     description = "Restores a small amount of health.",
@@ -388,13 +412,42 @@ InventoryItems["healthkit3"] = {
     end
 }
 
+InventoryItems["energydrink"] = {
+    name = "Energy Drink",
+    description = "Temporarily boosts movement speed by 20% for 30 seconds.",
+    model = "models/props_junk/PopCan01a.mdl",
+    entityClass = "item_energydrink",
+    maxStack = 5,
+    category = "Utility",
+    useFunction = function(ply)
+        local oldSpeed = ply:GetWalkSpeed()
+        ply:SetWalkSpeed(oldSpeed * 1.2)
+        ply:SetRunSpeed(oldSpeed * 1.2)
+        timer.Simple(30, function()
+            if IsValid(ply) then
+                ply:SetWalkSpeed(oldSpeed)
+                ply:SetRunSpeed(oldSpeed)
+            end
+        end)
+    end
+}
+
 -- Props (Added for the props panel in sv_props.lua and cl_props.lua)
+InventoryItems["crafting_table"] = {
+    name = "Crafting Table",
+    model = "models/props/CS_militia/table_shed.mdl",
+    category = "Props",
+    resources = { rock = 20, copper = 10, iron = 5, steel = 0 },
+    price = 300,
+    health = 2000
+}
+
 InventoryItems["weapon_stripper"] = {
     name = "Weapon Stripper",
     model = "models/props_combine/weaponstripper.mdl",
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
-    price = 150, -- DarkRP money cost for "Buy" mode
+    price = 150,
     health = 1500
 }
 
@@ -550,33 +603,6 @@ InventoryItems["storefront_bars"] = {
     price = 150,
     health = 7500
 }
-
---[[InventoryItems["interior_fence_002d"] = {
-    name = "Interior Fence 002D",
-    model = "models/props_wasteland/interior_fence002d.mdl",
-    category = "Props",
-    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
-    price = 150,
-    health = 1500
-}--]]
-
---[[ InventoryItems["fence_03a"] = {
-    name = "Fence 03A",
-    model = "models/props_c17/fence03a.mdl",
-    category = "Props",
-    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
-    price = 150,
-    health = 1500
-} ]]--
-
---[[ InventoryItems["interior_fence_001g"] = {
-    name = "Interior Fence 001G",
-    model = "models/props_wasteland/interior_fence001g.mdl",
-    category = "Props",
-    resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
-    price = 150,
-    health = 1500
-} ]]--
 
 InventoryItems["concrete_barrier"] = {
     name = "Concrete Barrier",

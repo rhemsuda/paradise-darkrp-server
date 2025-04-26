@@ -73,7 +73,6 @@ function AddItemToInventory(ply, itemID, amount, stats, page, silent)
         if not stats then
             stats = {
                 damage = 0, -- Will be set below for weapons
-                slots = 0,
                 rarity = nil,
                 slotType = nil,
                 crafter = ply:Nick()
@@ -81,9 +80,6 @@ function AddItemToInventory(ply, itemID, amount, stats, page, silent)
             if isWeaponOrArmor then
                 local rarityRoll = math.random(1, 500)
                 stats.rarity = rarityRoll == 1 and "Legendary" or rarityRoll <= 3 and "Epic" or rarityRoll <= 10 and "Rare" or rarityRoll <= 50 and "Uncommon" or "Common"
-                local slotCaps = { Common = 2, Uncommon = 3, Rare = 4, Epic = 5, Legendary = 6 }
-                stats.slots = math.random(0, slotCaps[stats.rarity] or 2)
-
                 if InventoryItems[itemID].category == "Weapons" then
                     stats.slotType = math.random(1, 500) == 1 and "Sidearm" or "Primary"
                     local weaponType = WeaponTypes[itemID] or "unknown"
@@ -106,7 +102,6 @@ function AddItemToInventory(ply, itemID, amount, stats, page, silent)
             id = uniqueID, 
             itemID = itemID, 
             damage = stats.damage, 
-            slots = stats.slots, 
             rarity = stats.rarity, 
             slotType = stats.slotType, 
             crafter = stats.crafter 
@@ -163,22 +158,6 @@ local RARITY_COLORS = {
     legendary = Color(139, 0, 0)
 }
 
-local function CalculateSlotCounts(item, itemData)
-    local isWeaponOrArmor = itemData.category == "Weapons" or itemData.category == "Armor"
-    local slotCount = item.slots or 0
-    local baseSlotCount = 0
-    if isWeaponOrArmor then
-        if itemData.category == "Weapons" then
-            local weaponSlots = { ak47 = 2, m4a1 = 2, sg552 = 2, aug = 2, m249 = 2 }
-            baseSlotCount = weaponSlots[item.itemID] or 1
-        else
-            baseSlotCount = 1
-        end
-    end
-    local displaySlotCount = isWeaponOrArmor and math.max(slotCount, baseSlotCount) or slotCount
-    return slotCount, baseSlotCount, displaySlotCount
-end
-
 local function CreateTooltipContent(item, itemData)
     local isWeaponOrArmor = itemData.category == "Weapons" or itemData.category == "Armor"
     local isUtility = itemData.category == "Utility"
@@ -188,7 +167,6 @@ local function CreateTooltipContent(item, itemData)
     local slotType = item.slotType or "N/A"
     local slotTypeColor = (slotType == "Sidearm") and RARITY_COLORS.epic or Color(255, 255, 255)
     local crafter = item.crafter or "Unknown"
-    local slotCount, baseSlotCount, displaySlotCount = CalculateSlotCounts(item, itemData)
 
     local lines = {}
     if isWeaponOrArmor then
@@ -198,13 +176,6 @@ local function CreateTooltipContent(item, itemData)
             table.insert(lines, { text = slotType, color = slotTypeColor })
         end
         table.insert(lines, { text = "Damage: " .. damage, color = Color(255, 255, 255) })
-        if displaySlotCount > 0 then
-            table.insert(lines, { text = "Slots:", color = Color(255, 255, 255) })
-            for i = 1, displaySlotCount do
-                local slotText = (slotCount > 0) and "Empty Slot" or "No Slots"
-                table.insert(lines, { text = "  " .. slotText, color = Color(255, 255, 255) })
-            end
-        end
         table.insert(lines, { text = "Crafter: " .. crafter, color = Color(255, 255, 220) })
     elseif isUtility then
         table.insert(lines, { text = itemData.name, color = Color(255, 255, 255) })

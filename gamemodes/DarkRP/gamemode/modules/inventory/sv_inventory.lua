@@ -20,6 +20,7 @@ util.AddNetworkString("SyncLoadout")
 util.AddNetworkString("EquipItem")
 util.AddNetworkString("UnequipItem")
 util.AddNetworkString("SyncResources") -- Already present in your system, ensuring it's defined
+util.AddNetworkString("CraftItem") -- For crafting system
 
 -- Include sh_items.lua
 if file.Exists("modules/inventory/sh_items.lua", "LUA") then
@@ -78,7 +79,7 @@ function AddItemToInventory(ply, itemID, amount, stats, page, silent)
     end
 
     local steamID = ply:SteamID()
-    local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {} }
+    local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {}, resources = { rock = 0, copper = 0, iron = 0, steel = 0 } }
     page = tonumber(page) or 1
     inv.maxPages = inv.maxPages or 1
 
@@ -97,7 +98,6 @@ function AddItemToInventory(ply, itemID, amount, stats, page, silent)
         if not stats then
             stats = {
                 damage = 0, -- Will be set below for weapons
-                slots = 0,
                 rarity = nil,
                 slotType = nil,
                 crafter = ply:Nick()
@@ -115,8 +115,6 @@ function AddItemToInventory(ply, itemID, amount, stats, page, silent)
                 else
                     stats.rarity = "Common" -- 37-200, 164/200 or 82%
                 end
-                local slotCaps = { Common = 2, Uncommon = 3, Rare = 4, Epic = 5, Legendary = 6 }
-                stats.slots = math.random(0, slotCaps[stats.rarity] or 2)
 
                 if InventoryItems[itemID].category == "Weapons" then
                     stats.slotType = math.random(1, 500) == 1 and "Sidearm" or "Primary"
@@ -140,7 +138,6 @@ function AddItemToInventory(ply, itemID, amount, stats, page, silent)
             id = uniqueID, 
             itemID = itemID, 
             damage = stats.damage, 
-            slots = stats.slots, 
             rarity = stats.rarity, 
             slotType = stats.slotType, 
             crafter = stats.crafter 
@@ -288,88 +285,132 @@ local function RemoveItemFromInventory(ply, uniqueID, page)
             table.remove(inv.items[page], i)
             inv.positions[page][uniqueID] = nil
             PlayerInventories[steamID] = inv
+            net.Start("SyncInventory")
+            net.WriteUInt(page, 8)
+            net.WriteTable(inv.items[page])
+            net.WriteTable(inv.positions[page])
+            net.Send(ply)
             SavePlayerInventory(ply)
-            SyncInventoryFromSQL(ply, page)
             DebugPrint("[Inventory Module] Removed item " .. uniqueID .. " from " .. ply:Nick() .. "'s inventory on page " .. page)
-            return item, itemData
+            return itemData
         end
     end
-    DebugPrint("[Inventory Module] Item " .. uniqueID .. " not found in " .. ply:Nick() .. "'s inventory on page " .. page)
+    return nil
 end
 
-net.Receive("UpdateInventoryPositions", function(len, ply)
-    local page = net.ReadUInt(8)
-    local steamID = ply:SteamID()
-    local newPositions = net.ReadTable()
-    local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {}, resources = { rock = 0, copper = 0, iron = 0, steel = 0 } }
-    inv.positions[page] = newPositions
-    PlayerInventories[steamID] = inv
-    SavePlayerInventory(ply)
-    SyncInventoryFromSQL(ply, page)
-    DebugPrint("[Inventory Module] Updated inventory positions for " .. ply:Nick() .. " on page " .. page)
-end)
+-- Crafting System Functions
+local function CanCraftItem(ply, itemID)
+    if not IsValid(ply) or not InventoryItems[itemID] or not InventoryItems[itemID].craftingRequirements then
+        return false, "Invalid item or no crafting requirements."
+    end
 
+    local steamID = ply:SteamID()
+    local inv = PlayerInventories[steamID]
+    if not inv or not inv.resources then
+        return false, "Inventory not initialized."
+    end
+
+    local requirements = InventoryItems[itemID].craftingRequirements
+    for resource, amount in pairs(requirements) do
+        if (inv.resources[resource] or 0) < amount then
+            return false, "Not enough " .. resource .. ". Need " .. amount .. ", have " .. (inv.resources[resource] or 0) .. "."
+        end
+    end
+    return true, "Can craft."
+end
+
+local function DeductCraftingResources(ply, itemID)
+    if not IsValid(ply) or not InventoryItems[itemID] or not InventoryItems[itemID].craftingRequirements then return end
+
+    local steamID = ply:SteamID()
+    local inv = PlayerInventories[steamID]
+    local requirements = InventoryItems[itemID].craftingRequirements
+
+    for resource, amount in pairs(requirements) do
+        inv.resources[resource] = (inv.resources[resource] or 0) - amount
+    end
+
+    PlayerInventories[steamID] = inv
+    net.Start("SyncResources")
+    net.WriteTable(inv.resources)
+    net.Send(ply)
+    SavePlayerInventory(ply)
+    DebugPrint("[Inventory Module] Deducted resources for crafting " .. itemID .. " from " .. ply:Nick())
+end
+
+-- Network Receivers
 net.Receive("DropItem", function(len, ply)
     local uniqueID = net.ReadString()
     local page = net.ReadUInt(8)
-    local item, itemData = RemoveItemFromInventory(ply, uniqueID, page)
-    if not item or not itemData then 
-        DebugPrint("[Inventory Module] Failed to drop item " .. uniqueID .. " for " .. ply:Nick() .. " on page " .. page)
-        return 
-    end
-
-    if itemData.category == "Weapons" or itemData.category == "Armor" then
-        SendInventoryMessage(ply, "Cannot drop weapons or armor!")
-        AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, slots = item.slots, rarity = item.rarity, slotType = item.slotType, crafter = item.crafter }, page, true)
-        DebugPrint("[Inventory Module] Prevented " .. ply:Nick() .. " from dropping " .. itemData.name .. " (category: " .. itemData.category .. ")")
+    local itemData = RemoveItemFromInventory(ply, uniqueID, page)
+    if not itemData then
+        SendInventoryMessage(ply, "Item not found.")
         return
     end
 
-    SendInventoryMessage(ply, "You dropped your " .. itemData.name .. " from page " .. page .. ".")
-    DebugPrint("[Inventory Module] " .. ply:Nick() .. " dropped 1 " .. itemData.name .. " from page " .. page)
-    local ent = ents.Create("prop_physics")
-    if IsValid(ent) then
-        ent:SetModel(itemData.model or "models/error.mdl")
-        ent:SetPos(ply:EyePos() + ply:GetForward() * 50)
-        ent:Spawn()
-        ent:SetNWString("UniqueID", uniqueID)
-        ent:SetNWString("ItemID", item.itemID)
-        ent:SetNWInt("Damage", item.damage or 0)
-        ent:SetNWInt("Slots", item.slots or 0)
-        ent:SetNWString("Rarity", item.rarity or "")
-        ent:SetNWString("Crafter", item.crafter or "Unknown")
-        local phys = ent:GetPhysicsObject()
-        if IsValid(phys) then 
-            phys:Wake() 
-            phys:SetVelocity(Vector(0, 0, -100)) 
-        end
-        ent:SetCollisionGroup(COLLISION_GROUP_DEBRIS)
+    if itemData.category == "Weapons" or itemData.category == "Armor" then
+        SendInventoryMessage(ply, "Cannot drop Weapons or Armor.")
+        AddItemToInventory(ply, itemData.itemID, 1, { id = uniqueID, damage = itemData.damage, rarity = itemData.rarity, slotType = itemData.slotType, crafter = itemData.crafter }, page)
+        return
     end
+
+    local ent = ents.Create(itemData.entityClass or "prop_physics")
+    if not IsValid(ent) then
+        SendInventoryMessage(ply, "Failed to drop item: Invalid entity.")
+        AddItemToInventory(ply, itemData.itemID, 1, { id = uniqueID, damage = itemData.damage, rarity = itemData.rarity, slotType = itemData.slotType, crafter = itemData.crafter }, page)
+        return
+    end
+
+    local trace = ply:GetEyeTrace()
+    local pos = trace.HitPos + trace.HitNormal * 10
+    ent:SetModel(itemData.model or "models/error.mdl")
+    ent:SetPos(pos)
+    ent:Spawn()
+    SendInventoryMessage(ply, "Dropped " .. itemData.name .. ".")
+    DebugPrint("[Inventory Module] " .. ply:Nick() .. " dropped item " .. uniqueID .. " (" .. itemData.name .. ")")
 end)
 
 net.Receive("UseItem", function(len, ply)
     local uniqueID = net.ReadString()
     local page = net.ReadUInt(8)
-    local item, itemData = RemoveItemFromInventory(ply, uniqueID, page)
-    if not item or not itemData or not itemData.useFunction then 
-        DebugPrint("[Inventory Module] Failed to use item " .. uniqueID .. " for " .. ply:Nick() .. " on page " .. page)
-        return 
+    local itemData = RemoveItemFromInventory(ply, uniqueID, page)
+    if not itemData then
+        SendInventoryMessage(ply, "Item not found.")
+        return
     end
-    itemData.useFunction(ply)
-    SendInventoryMessage(ply, "You used your " .. itemData.name .. " from page " .. page .. ".")
-    DebugPrint("[Inventory Module] " .. ply:Nick() .. " used 1 " .. itemData.name .. " from page " .. page)
+
+    local itemInfo = InventoryItems[itemData.itemID]
+    if itemInfo.useFunction then
+        itemInfo.useFunction(ply)
+        SendInventoryMessage(ply, "Used " .. itemInfo.name .. ".")
+        DebugPrint("[Inventory Module] " .. ply:Nick() .. " used item " .. uniqueID .. " (" .. itemInfo.name .. ")")
+    else
+        SendInventoryMessage(ply, "This item cannot be used.")
+        AddItemToInventory(ply, itemData.itemID, 1, { id = uniqueID, damage = itemData.damage, rarity = itemData.rarity, slotType = itemData.slotType, crafter = itemData.crafter }, page)
+    end
 end)
 
 net.Receive("DeleteItem", function(len, ply)
     local uniqueID = net.ReadString()
     local page = net.ReadUInt(8)
-    local item, itemData = RemoveItemFromInventory(ply, uniqueID, page)
-    if not item or not itemData then 
-        DebugPrint("[Inventory Module] Failed to delete item " .. uniqueID .. " for " .. ply:Nick() .. " on page " .. page)
-        return 
+    local itemData = RemoveItemFromInventory(ply, uniqueID, page)
+    if not itemData then
+        SendInventoryMessage(ply, "Item not found.")
+        return
     end
-    SendInventoryMessage(ply, "You deleted your " .. itemData.name .. " from page " .. page .. ".")
-    DebugPrint("[Inventory Module] " .. ply:Nick() .. " deleted 1 " .. itemData.name .. " from page " .. page)
+    SendInventoryMessage(ply, "Deleted " .. InventoryItems[itemData.itemID].name .. ".")
+    DebugPrint("[Inventory Module] " .. ply:Nick() .. " deleted item " .. uniqueID .. " (" .. InventoryItems[itemData.itemID].name .. ")")
+end)
+
+net.Receive("UpdateInventoryPositions", function(len, ply)
+    local page = net.ReadUInt(8)
+    local newPositions = net.ReadTable()
+    local steamID = ply:SteamID()
+    local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {}, resources = { rock = 0, copper = 0, iron = 0, steel = 0 } }
+    inv.positions[page] = newPositions
+    PlayerInventories[steamID] = inv
+    SavePlayerInventory(ply)
+    DebugPrint("[Inventory Module] Updated positions for " .. ply:Nick() .. " on page " .. page)
 end)
 
 net.Receive("EquipItem", function(len, ply)
@@ -378,394 +419,155 @@ net.Receive("EquipItem", function(len, ply)
     local slot = net.ReadString()
     local steamID = ply:SteamID()
     local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {}, resources = { rock = 0, copper = 0, iron = 0, steel = 0 } }
-    local item, itemData
+    local item, itemIndex
 
     for i, it in ipairs(inv.items[page] or {}) do
         if it.id == uniqueID then
             item = it
-            itemData = InventoryItems[it.itemID]
-            table.remove(inv.items[page], i)
-            inv.positions[page][uniqueID] = nil
+            itemIndex = i
             break
         end
     end
 
-    if not item or not itemData then 
-        DebugPrint("[Inventory Module] Failed to equip item " .. uniqueID .. " for " .. ply:Nick() .. " on page " .. page)
-        return 
-    end
-
-    local validSlots = {["Armor"] = true, ["Weapon"] = true, ["Sidearm"] = true, ["Boots"] = true, ["Utility"] = true}
-    local canEquip = true
-    local failMessage = "You cannot equip this item to this slot!"
-
-    if not validSlots[slot] then
-        canEquip = false
-    elseif (slot == "Weapon" or slot == "Sidearm") and itemData.category != "Weapons" then
-        canEquip = false
-    elseif slot == "Utility" and itemData.category != "Utility" then
-        canEquip = false
-    elseif slot == "Weapon" or slot == "Sidearm" then
-        local requiredSlotType = (slot == "Weapon") and "Primary" or "Sidearm"
-        if item.slotType and item.slotType != requiredSlotType then
-            canEquip = false
-        end
-    end
-
-    if not canEquip then
-        SendInventoryMessage(ply, failMessage)
-        AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, slots = item.slots, rarity = item.rarity, slotType = item.slotType, crafter = item.crafter }, page, true)
-        DebugPrint("[Inventory Module] " .. ply:Nick() .. " cannot equip " .. itemData.name .. " to slot " .. slot)
+    if not item then
+        SendInventoryMessage(ply, "Item not found.")
         return
     end
 
-    local existingItem = inv.loadout[slot]
-    if existingItem and InventoryItems[existingItem.itemID] then
-        local existingItemData = InventoryItems[existingItem.itemID]
-        if existingItemData.category == "Weapons" then
-            local weaponClass = existingItemData.entityClass or existingItem.itemID
-            local ammoType = existingItemData.ammoType or "none"
-            local ammoCount = ply:GetAmmoCount(ammoType)
-            DebugPrint("[Inventory Module] Unequipping " .. weaponClass .. " (ammo type: " .. ammoType .. ", current ammo: " .. ammoCount .. ") from slot " .. slot)
-            ply:StripWeapon(weaponClass)
-        end
-        AddItemToInventory(ply, existingItem.itemID, 1, { 
-            id = existingItem.id, 
-            damage = existingItem.damage, 
-            slots = existingItem.slots, 
-            rarity = existingItem.rarity, 
-            slotType = existingItem.slotType, 
-            crafter = existingItem.crafter 
-        }, 1, true)
-        inv.loadout[slot] = nil
-        SendInventoryMessage(ply, "You unequipped your " .. existingItemData.name .. " from " .. slot .. " to equip new item.")
-        DebugPrint("[Inventory Module] " .. ply:Nick() .. " unequipped " .. existingItemData.name .. " from " .. slot .. " to equip new item")
+    local itemData = InventoryItems[item.itemID]
+    if not itemData then
+        SendInventoryMessage(ply, "Invalid item data.")
+        return
+    end
+
+    local expectedCategory = (slot == "Utility") and "Utility" or "Weapons"
+    if itemData.category ~= expectedCategory then
+        SendInventoryMessage(ply, "This item cannot be equipped in this slot.")
+        return
+    end
+
+    if slot == "Weapon" and item.slotType ~= "Primary" then
+        SendInventoryMessage(ply, "This weapon can only be equipped as a Sidearm.")
+        return
+    elseif slot == "Sidearm" and item.slotType ~= "Sidearm" then
+        SendInventoryMessage(ply, "This weapon can only be equipped as a Primary.")
+        return
+    end
+
+    if inv.loadout[slot] then
+        local oldItem = inv.loadout[slot]
+        table.insert(inv.items[page], oldItem)
+        inv.positions[page][oldItem.id] = inv.positions[page][uniqueID]
     end
 
     inv.loadout[slot] = item
+    table.remove(inv.items[page], itemIndex)
+    inv.positions[page][uniqueID] = nil
+
     PlayerInventories[steamID] = inv
-    SavePlayerInventory(ply)
-    net.Start("SyncLoadout")
-    net.WriteTable(inv.loadout)
-    net.Send(ply)
     net.Start("SyncInventory")
     net.WriteUInt(page, 8)
     net.WriteTable(inv.items[page])
     net.WriteTable(inv.positions[page])
     net.Send(ply)
-    SendInventoryMessage(ply, "You equipped your " .. itemData.name .. " to " .. slot .. " slot.")
-    DebugPrint("[Inventory Module] " .. ply:Nick() .. " equipped " .. itemData.name .. " to " .. slot)
-
-    if itemData.category == "Weapons" then
-        local weaponClass = itemData.entityClass or item.itemID
-        local ammoType
-        local weapon = ply:GetWeapon(weaponClass)
-        if IsValid(weapon) then
-            local ammoTypeID = weapon:GetPrimaryAmmoType()
-            ammoType = game.GetAmmoName(ammoTypeID)
-            DebugPrint("[Inventory Module] Weapon " .. weaponClass .. " has ammo type: " .. (ammoType or "none") .. " (ID: " .. ammoTypeID .. ")")
-        else
-            ammoType = itemData.ammoType or "none"
-            DebugPrint("[Inventory Module] Weapon " .. weaponClass .. " not found, using InventoryItems ammo type: " .. ammoType)
-        end
-
-        local ammoBeforeAll = ply:GetAmmoCount(ammoType)
-        DebugPrint("[Inventory Module] Before equipping " .. weaponClass .. " to " .. ply:Nick() .. ": Reserve Ammo = " .. ammoBeforeAll)
-
-        if not ply:HasWeapon(weaponClass) then
-            ply:Give(weaponClass, true) -- true to prevent default ammo
-            weapon = ply:GetWeapon(weaponClass)
-            if not IsValid(weapon) then
-                DebugPrint("[Inventory Module] Failed to give " .. weaponClass .. " to " .. ply:Nick())
-            end
-        else
-            DebugPrint("[Inventory Module] " .. ply:Nick() .. " already has " .. weaponClass)
-        end
-
-        ply:SelectWeapon(weaponClass)
-        if IsValid(weapon) then
-            weapon:SetNWInt("CustomDamage", item.damage)
-            weapon:SetNWString("WeaponType", WeaponTypes[item.itemID] or "unknown")
-            weapon:SetNWString("Rarity", item.rarity or "Common")
-
-            -- Ensure no default ammo was added by external hooks
-            local ammoAfterAll = ply:GetAmmoCount(ammoType)
-            DebugPrint("[Inventory Module] After equipping " .. weaponClass .. " to " .. ply:Nick() .. ": Reserve Ammo = " .. ammoAfterAll)
-            if ammoAfterAll > ammoBeforeAll then
-                local defaultAmmoAdded = ammoAfterAll - ammoBeforeAll
-                ply:RemoveAmmo(defaultAmmoAdded, ammoType)
-                DebugPrint("[Inventory Module] Removed " .. defaultAmmoAdded .. " default ammo for " .. weaponClass .. ". Reserve Ammo now: " .. ply:GetAmmoCount(ammoType))
-            else
-                DebugPrint("[Inventory Module] No default ammo added for " .. weaponClass)
-            end
-
-            local clip1 = weapon:Clip1()
-            local clip2 = weapon:Clip2()
-            local reserveAmmo = ply:GetAmmoCount(ammoType)
-            DebugPrint("[Inventory Module] Equipped weapon " .. weaponClass .. ": Clip1 = " .. clip1 .. ", Clip2 = " .. clip2 .. ", Reserve Ammo = " .. reserveAmmo)
-        end
-    end
+    net.Start("SyncLoadout")
+    net.WriteTable(inv.loadout)
+    net.Send(ply)
+    SavePlayerInventory(ply)
+    SendInventoryMessage(ply, "Equipped " .. itemData.name .. " to " .. slot .. " slot.")
+    DebugPrint("[Inventory Module] " .. ply:Nick() .. " equipped item " .. uniqueID .. " to " .. slot .. " slot")
 end)
 
 net.Receive("UnequipItem", function(len, ply)
     local slot = net.ReadString()
     local steamID = ply:SteamID()
     local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {}, resources = { rock = 0, copper = 0, iron = 0, steel = 0 } }
-    local item = inv.loadout[slot]
-    if not item or not InventoryItems[item.itemID] then 
-        DebugPrint("[Inventory Module] Failed to unequip item from slot " .. slot .. " for " .. ply:Nick())
-        return 
+    local page = 1 -- Default to page 1 for unequipping
+
+    if not inv.loadout[slot] then
+        SendInventoryMessage(ply, "No item equipped in " .. slot .. " slot.")
+        return
     end
 
+    local item = inv.loadout[slot]
     local itemData = InventoryItems[item.itemID]
     inv.loadout[slot] = nil
-    -- Add the item back to the inventory while preserving all stats
-    AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, slots = item.slots, rarity = item.rarity, slotType = item.slotType, crafter = item.crafter }, 1, true)
+    AddItemToInventory(ply, item.itemID, 1, { id = item.id, damage = item.damage, rarity = item.rarity, slotType = item.slotType, crafter = item.crafter }, page)
     PlayerInventories[steamID] = inv
-    SavePlayerInventory(ply)
     net.Start("SyncLoadout")
     net.WriteTable(inv.loadout)
     net.Send(ply)
-    SendInventoryMessage(ply, "You unequipped your " .. itemData.name .. " from " .. slot .. " slot.")
-    DebugPrint("[Inventory Module] " .. ply:Nick() .. " unequipped " .. itemData.name .. " from " .. slot)
-
-    if itemData.category == "Weapons" then
-        local weaponClass = itemData.entityClass or item.itemID
-        ply:StripWeapon(weaponClass)
-    end
+    SavePlayerInventory(ply)
+    SendInventoryMessage(ply, "Unequipped " .. itemData.name .. " from " .. slot .. " slot.")
+    DebugPrint("[Inventory Module] " .. ply:Nick() .. " unequipped item from " .. slot .. " slot")
 end)
 
-hook.Add("PlayerInitialSpawn", "Inventory_InitInventory", function(ply)
-    if not IsValid(ply) then return end
+net.Receive("CraftItem", function(len, ply)
+    local itemID = net.ReadString()
+    local page = net.ReadUInt(8)
+    if not IsValid(ply) or not InventoryItems[itemID] then
+        SendInventoryMessage(ply, "Invalid item.")
+        return
+    end
+
+    local canCraft, reason = CanCraftItem(ply, itemID)
+    if not canCraft then
+        SendInventoryMessage(ply, reason)
+        return
+    end
+
+    DeductCraftingResources(ply, itemID)
+    AddItemToInventory(ply, itemID, 1, nil, page)
+    SendInventoryMessage(ply, "Crafted " .. InventoryItems[itemID].name .. ".")
+    DebugPrint("[Inventory Module] " .. ply:Nick() .. " crafted " .. itemID)
+end)
+
+hook.Add("PlayerInitialSpawn", "LoadCustomInventory", function(ply)
     LoadPlayerInventory(ply)
 end)
 
-hook.Add("PlayerSetTeam", "Inventory_EquipLoadoutAfterJobSet", function(ply)
-    if not IsValid(ply) then return end
-    local steamID = ply:SteamID()
-    local inv = PlayerInventories[steamID]
-    if not inv or not inv.loadout then return end
-
-    DebugPrint("[Inventory Module] Equipping loadout items for " .. ply:Nick() .. " after job set.")
-
-    for slot, item in pairs(inv.loadout) do
-        if item and InventoryItems[item.itemID] and InventoryItems[item.itemID].category == "Weapons" then
-            local weaponClass = InventoryItems[item.itemID].entityClass or item.itemID
-            if not ply:HasWeapon(weaponClass) then
-                ply:Give(weaponClass)
-                DebugPrint("[Inventory Module] Gave " .. weaponClass .. " to " .. ply:Nick() .. " (did not have weapon)")
-            else
-                DebugPrint("[Inventory Module] " .. ply:Nick() .. " already has " .. weaponClass .. ", skipping ammo give")
-            end
-            local weapon = ply:GetWeapon(weaponClass)
-            if IsValid(weapon) then
-                weapon:SetNWInt("CustomDamage", item.damage or 0)
-                weapon:SetNWString("WeaponType", WeaponTypes[item.itemID] or "unknown")
-                weapon:SetNWString("Rarity", item.rarity or "Common")
-                DebugPrint("[Inventory Module] Equipped " .. weaponClass .. " for " .. ply:Nick() .. " with damage: " .. (item.damage or 0))
-            end
-        end
-    end
+hook.Add("PlayerDisconnected", "SaveCustomInventory", function(ply)
+    SavePlayerInventory(ply)
+    PlayerInventories[ply:SteamID()] = nil
 end)
 
-hook.Add("PlayerSpawn", "Inventory_EquipLoadoutOnSpawn", function(ply)
-    if not IsValid(ply) then return end
-    local steamID = ply:SteamID()
-    local inv = PlayerInventories[steamID]
-    if not inv or not inv.loadout then return end
-
-    DebugPrint("[Inventory Module] Equipping loadout items for " .. ply:Nick() .. " on spawn.")
-
-    for slot, item in pairs(inv.loadout) do
-        if item and InventoryItems[item.itemID] and InventoryItems[item.itemID].category == "Weapons" then
-            local weaponClass = InventoryItems[item.itemID].entityClass or item.itemID
-            if not ply:HasWeapon(weaponClass) then
-                ply:Give(weaponClass)
-                DebugPrint("[Inventory Module] Gave " .. weaponClass .. " to " .. ply:Nick() .. " (did not have weapon)")
-            else
-                DebugPrint("[Inventory Module] " .. ply:Nick() .. " already has " .. weaponClass .. ", skipping ammo give")
-            end
-            local weapon = ply:GetWeapon(weaponClass)
-            if IsValid(weapon) then
-                weapon:SetNWInt("CustomDamage", item.damage or 0)
-                weapon:SetNWString("WeaponType", WeaponTypes[item.itemID] or "unknown")
-                weapon:SetNWString("Rarity", item.rarity or "Common")
-                DebugPrint("[Inventory Module] Equipped " .. weaponClass .. " for " .. ply:Nick() .. " with damage: " .. (item.damage or 0))
-            end
-        end
-    end
-end)
-
-hook.Add("PlayerDisconnected", "SaveInventoryOnDisconnect", SavePlayerInventory)
-
-hook.Add("PlayerUse", "PickupInventoryItem", function(ply, ent)
-    local uniqueID = ent:GetNWString("UniqueID")
-    if not uniqueID or uniqueID == "" then return end
-    local itemID = ent:GetNWString("ItemID")
-    if not InventoryItems[itemID] then return end
-    local stats = {
-        damage = ent:GetNWInt("Damage", 0),
-        slots = ent:GetNWInt("Slots", 0),
-        rarity = ent:GetNWString("Rarity", ""),
-        slotType = ent:GetNWString("SlotType", ""),
-        crafter = ent:GetNWString("Crafter", "Unknown")
-    }
-    if InventoryItems[itemID].category == "Weapons" or InventoryItems[itemID].category == "Armor" then return end
-    AddItemToInventory(ply, itemID, 1, stats, 1)
-    ent:Remove()
-    SendInventoryMessage(ply, "You picked up 1 " .. InventoryItems[itemID].name .. ".")
-    DebugPrint("[Inventory Module] " .. ply:Nick() .. " picked up 1 " .. InventoryItems[itemID].name)
-    return true
-end)
-
--- Apply custom weapon damage
-hook.Add("EntityTakeDamage", "ApplyCustomWeaponDamage", function(target, dmginfo)
-    local attacker = dmginfo:GetAttacker()
-    if not IsValid(attacker) or not attacker:IsPlayer() then return end
-
-    -- Use the weapon from the damage info instead of the active weapon
-    local weapon = dmginfo:GetWeapon()
-    if not IsValid(weapon) then
-        -- Fallback to active weapon if GetWeapon fails (e.g., for melee or physics damage)
-        weapon = attacker:GetActiveWeapon()
-        if not IsValid(weapon) then return end
-    end
-
-    local customDamage = weapon:GetNWInt("CustomDamage", -1)
-    if customDamage == -1 then
-        -- Custom damage not set; attempt to reapply from player's loadout
-        local steamID = attacker:SteamID()
-        local inv = PlayerInventories[steamID]
-        if inv and inv.loadout then
-            for slot, item in pairs(inv.loadout) do
-                if item and InventoryItems[item.itemID] and InventoryItems[item.itemID].category == "Weapons" then
-                    local weaponClass = InventoryItems[item.itemID].entityClass or item.itemID
-                    if weapon:GetClass() == weaponClass then
-                        weapon:SetNWInt("CustomDamage", item.damage or 0)
-                        weapon:SetNWString("WeaponType", WeaponTypes[item.itemID] or "unknown")
-                        weapon:SetNWString("Rarity", item.rarity or "Common")
-                        customDamage = item.damage or 0
-                        DebugPrint("[Inventory Module] Reapplied custom damage (" .. customDamage .. ") to " .. weaponClass .. " for " .. attacker:Nick())
-                        break
-                    end
-                end
-            end
-        end
-    end
-
-    if customDamage == -1 then return end
-
-    local weaponType = weapon:GetNWString("WeaponType", "unknown")
-    local rarity = weapon:GetNWString("Rarity", "Common")
-    local damageToApply = customDamage
-
-    if weaponType == "shotgun" then
-        local numPellets = 6
-        damageToApply = customDamage * numPellets
-        dmginfo:SetDamage(damageToApply / numPellets)
-    else
-        dmginfo:SetDamage(damageToApply)
-    end
-
-    DebugPrint(string.format("[Weapon Damage Test] %s (%s, %s) dealt %d damage to %s with %s (Base Damage: %d)",
-        attacker:Nick(), weaponType, rarity, damageToApply, target:GetClass(), weapon:GetClass(), customDamage))
-end, 100) -- Added priority to ensure this hook runs late
-
-concommand.Add("test_weapon_damage", function(ply)
-    if not IsValid(ply) then return end
+-- Admin command to give items
+concommand.Add("rp_giveitem", function(ply, cmd, args)
     if not ply:IsSuperAdmin() then
-        SendInventoryMessage(ply, "Superadmin only.")
+        SendInventoryMessage(ply, "You must be a superadmin to use this command.")
         return
     end
 
-    local npc = ents.Create("npc_zombie")
-    if not IsValid(npc) then
-        SendInventoryMessage(ply, "Failed to spawn test NPC (npc_zombie).")
+    if #args < 2 then
+        SendInventoryMessage(ply, "Usage: rp_giveitem <SteamID> <itemID> [amount] [page]")
         return
     end
 
-    local pos = ply:GetEyeTrace().HitPos + Vector(0, 0, 50)
-    npc:SetPos(pos)
-    npc:Spawn()
-    npc:SetHealth(1000)
+    local targetSteamID = args[1]
+    local itemID = args[2]
+    local amount = tonumber(args[3]) or 1
+    local page = tonumber(args[4]) or 1
+    local target = nil
 
-    SendInventoryMessage(ply, "Spawned a test NPC (npc_zombie) with 1000 health. Shoot it to test damage.")
-    DebugPrint("[Inventory Module] " .. ply:Nick() .. " spawned a test NPC for weapon damage testing")
-end)
-
-concommand.Add("additem", function(ply, _, args)
-    if not ply:IsSuperAdmin() then 
-        SendInventoryMessage(ply, "Superadmin only.")
-        return 
-    end
-    AddItemToInventory(ply, args[1], tonumber(args[2]) or 1, nil, 1)
-end)
-
--- Add resource command: addresource <player> <resource> <amount>
-concommand.Add("addresource", function(ply, _, args)
-    -- Restrict to superadmins
-    if not ply:IsSuperAdmin() then
-        SendInventoryMessage(ply, "Superadmin only.")
-        return
-    end
-
-    -- Validate arguments
-    if #args < 3 then
-        SendInventoryMessage(ply, "Usage: addresource <player> <resource> <amount>")
-        return
-    end
-
-    local playerName = args[1]
-    local resourceID = string.lower(args[2])
-    local amount = tonumber(args[3])
-
-    -- Validate amount
-    if not amount or amount < 0 then
-        SendInventoryMessage(ply, "Invalid amount: " .. tostring(args[3]))
-        return
-    end
-
-    -- Validate resourceID
-    local validResources = { "rock", "copper", "iron", "steel" }
-    if not table.HasValue(validResources, resourceID) then
-        SendInventoryMessage(ply, "Invalid resourceID: " .. resourceID)
-        return
-    end
-
-    -- Find the player by partial name (case-insensitive)
-    local targetPlayer
     for _, p in ipairs(player.GetAll()) do
-        if string.find(string.lower(p:Nick()), string.lower(playerName), 1, true) then
-            targetPlayer = p
+        if p:SteamID() == targetSteamID then
+            target = p
             break
         end
     end
 
-    if not IsValid(targetPlayer) then
-        SendInventoryMessage(ply, "Player not found: " .. playerName)
+    if not target then
+        SendInventoryMessage(ply, "Player with SteamID " .. targetSteamID .. " not found.")
         return
     end
 
-    -- Fetch and update resources
-    local steamID = targetPlayer:SteamID()
-    local inv = PlayerInventories[steamID] or { items = { [1] = {} }, positions = { [1] = {} }, maxPages = 1, loadout = {}, resources = { rock = 0, copper = 0, iron = 0, steel = 0 } }
+    if not InventoryItems[itemID] then
+        SendInventoryMessage(ply, "Item " .. itemID .. " does not exist.")
+        return
+    end
 
-    -- Add the specified resource
-    inv.resources[resourceID] = (inv.resources[resourceID] or 0) + amount
-    PlayerInventories[steamID] = inv
-
-    -- Save updated resources back to the database
-    SavePlayerInventory(targetPlayer)
-
-    -- Sync updated resources to the client
-    net.Start("SyncResources")
-    net.WriteTable(inv.resources)
-    net.Send(targetPlayer)
-
-    -- Notify both the admin and the target player
-    SendInventoryMessage(ply, "Added " .. amount .. " " .. resourceID .. " to " .. targetPlayer:Nick())
-    SendInventoryMessage(targetPlayer, "You received " .. amount .. " " .. resourceID .. " from an admin.")
-    DebugPrint("[Inventory Module] Added " .. amount .. " " .. resourceID .. " to " .. targetPlayer:Nick() .. ": " .. util.TableToJSON(inv.resources))
+    AddItemToInventory(target, itemID, amount, nil, page)
+    SendInventoryMessage(ply, "Gave " .. amount .. " " .. InventoryItems[itemID].name .. "(s) to " .. target:Nick() .. " on page " .. page .. ".")
 end)
 
 -- This print will always show to confirm successful load

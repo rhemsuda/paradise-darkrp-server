@@ -80,3 +80,4 @@ DarkRP.createAmmoType("smg1", {
 
 Add new ammo types under the next line!
 ---------------------------------------------------------------------------]]
+--]]

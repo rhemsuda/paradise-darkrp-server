@@ -8,3 +8,12 @@ models/stalker.mdl
 models/breen.mdl
 models/Barney.mdl
 models/player/ct_sas.mdl
+
+models/player/tmbweeb/nanosuit_pm/nanosuit_player.mdl
+models/player/neo_heavy.mdl
+models/player/skeleton/skeleton.mdl
+models/player/t51b/slow.mdl
+models/nikout/swtor/npc/hk47.mdl
+models/grim.mdl
+
+shoe - models/props_junk/shoe001a.mdl
