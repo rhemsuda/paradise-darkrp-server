@@ -25,81 +25,94 @@ local AmmoTypeMapping = {
     -- Add more mappings as needed for other weapons
 }
 
+-- Table to track the last time each player used the command
+local playerCooldowns = {}
+
 -- Console command to buy ammo
 concommand.Add("rp_buyammo", function(ply)
     if not IsValid(ply) then return end
 
-    -- Check if the player has a loadout
+    -- Check cooldown
     local steamID = ply:SteamID()
-    local inv = PlayerInventories[steamID]
-    if not inv or not inv.loadout then
-        SendRPAammoMessage(ply, "You don't have any equipped weapons to buy ammo for!")
-        DebugPrint("[RPAammo] " .. ply:Nick() .. " tried to buy ammo but has no loadout.")
+    local currentTime = CurTime()
+    if playerCooldowns[steamID] and (currentTime - playerCooldowns[steamID]) < 3 then
+        return -- Silently ignore if within cooldown
+    end
+
+    -- Check if the player has enough money (100 DarkRP currency)
+    if not ply:canAfford(100) then
+        SendRPAammoMessage(ply, "You need 100 currency to buy ammo!")
+        DebugPrint("[RPAammo] " .. ply:Nick() .. " tried to buy ammo but lacks funds.")
         return
     end
 
     -- Track if any weapons were found
     local weaponsFound = false
-    local weaponsProcessed = {}
 
-    -- Iterate through the loadout
-    for slot, item in pairs(inv.loadout) do
-        if item and InventoryItems[item.itemID] and InventoryItems[item.itemID].category == "Weapons" then
-            weaponsFound = true
-            local itemData = InventoryItems[item.itemID]
-            local weaponClass = itemData.entityClass or item.itemID
-            DebugPrint("[RPAammo] Processing weapon: " .. weaponClass .. " in slot: " .. slot)
+    -- Get all weapons the player currently has equipped
+    local weapons = ply:GetWeapons()
+    if not weapons or #weapons == 0 then
+        SendRPAammoMessage(ply, "You don't have any equipped weapons to buy ammo for!")
+        DebugPrint("[RPAammo] " .. ply:Nick() .. " tried to buy ammo but has no equipped weapons.")
+        return
+    end
 
-            -- Check if the player has the weapon in their inventory
-            local weapon = ply:GetWeapon(weaponClass)
-            local ammoType
-            if IsValid(weapon) then
-                -- Dynamically get the weapon's actual ammo type
-                local ammoTypeID = weapon:GetPrimaryAmmoType()
-                ammoType = game.GetAmmoName(ammoTypeID)
-                DebugPrint("[RPAammo] Weapon " .. weaponClass .. " has ammo type: " .. (ammoType or "none") .. " (ID: " .. ammoTypeID .. ")")
-            else
-                -- Fallback to the ammo type defined in InventoryItems
-                ammoType = itemData.ammoType
-                DebugPrint("[RPAammo] Weapon " .. weaponClass .. " not found on player, using InventoryItems ammo type: " .. (ammoType or "none"))
-            end
+    -- Process each equipped weapon
+    for _, weapon in ipairs(weapons) do
+        if not IsValid(weapon) then continue end
 
-            if not ammoType then
-                DebugPrint("[RPAammo] No ammo type defined for " .. weaponClass .. ".")
-                SendRPAammoMessage(ply, "Error: No ammo type defined for " .. itemData.name .. ".")
-                continue
-            end
+        local weaponClass = weapon:GetClass()
+        DebugPrint("[RPAammo] Processing equipped weapon: " .. weaponClass)
 
-            -- Check if the ammo type needs mapping
-            local correctedAmmoType = AmmoTypeMapping[ammoType] or ammoType
-            if AmmoTypeMapping[ammoType] then
-                DebugPrint("[RPAammo] Mapped ammo type '" .. ammoType .. "' to '" .. correctedAmmoType .. "' for " .. weaponClass)
-            end
-
-            -- Validate the ammo type
-            if not game.GetAmmoID(correctedAmmoType) or game.GetAmmoID(correctedAmmoType) == -1 then
-                DebugPrint("[RPAammo] Invalid ammo type '" .. correctedAmmoType .. "' for " .. weaponClass .. ".")
-                SendRPAammoMessage(ply, "Error: Invalid ammo type for " .. itemData.name .. " (" .. correctedAmmoType .. ").")
-                continue
-            end
-
-            -- Add 300 ammo to the player's reserve for this ammo type
-            local ammoBefore = ply:GetAmmoCount(correctedAmmoType)
-            ply:GiveAmmo(300, correctedAmmoType, false)
-            local ammoAfter = ply:GetAmmoCount(correctedAmmoType)
-            DebugPrint("[RPAammo] Added 300 " .. correctedAmmoType .. " ammo for " .. weaponClass .. " to " .. ply:Nick() .. ". Ammo before: " .. ammoBefore .. ", after: " .. ammoAfter)
-            table.insert(weaponsProcessed, itemData.name)
+        -- Dynamically get the weapon's actual ammo type
+        local ammoTypeID = weapon:GetPrimaryAmmoType()
+        if ammoTypeID == -1 then
+            DebugPrint("[RPAammo] Weapon " .. weaponClass .. " has no ammo type (melee?). Skipping.")
+            continue
         end
+
+        local ammoType = game.GetAmmoName(ammoTypeID)
+        if not ammoType then
+            DebugPrint("[RPAammo] Weapon " .. weaponClass .. " has an invalid ammo type ID: " .. ammoTypeID)
+            continue
+        end
+        DebugPrint("[RPAammo] Weapon " .. weaponClass .. " has ammo type: " .. ammoType .. " (ID: " .. ammoTypeID .. ")")
+
+        -- Check if the ammo type needs mapping
+        local correctedAmmoType = AmmoTypeMapping[ammoType] or ammoType
+        if AmmoTypeMapping[ammoType] then
+            DebugPrint("[RPAammo] Mapped ammo type '" .. ammoType .. "' to '" .. correctedAmmoType .. "' for " .. weaponClass)
+        end
+
+        -- Validate the ammo type
+        if not game.GetAmmoID(correctedAmmoType) or game.GetAmmoID(correctedAmmoType) == -1 then
+            DebugPrint("[RPAammo] Invalid ammo type '" .. correctedAmmoType .. "' for " .. weaponClass .. ".")
+            continue
+        end
+
+        -- Add 300 ammo to the player's reserve for this ammo type
+        local ammoBefore = ply:GetAmmoCount(correctedAmmoType)
+        ply:GiveAmmo(300, correctedAmmoType, false)
+        local ammoAfter = ply:GetAmmoCount(correctedAmmoType)
+        DebugPrint("[RPAammo] Added 300 " .. correctedAmmoType .. " ammo for " .. weaponClass .. " to " .. ply:Nick() .. ". Ammo before: " .. ammoBefore .. ", after: " .. ammoAfter)
+        weaponsFound = true
     end
 
     -- Notify the player of the result
     if not weaponsFound then
-        SendRPAammoMessage(ply, "You don't have any equipped weapons to buy ammo for!")
-        DebugPrint("[RPAammo] " .. ply:Nick() .. " tried to buy ammo but has no equipped weapons.")
+        SendRPAammoMessage(ply, "You don't have any equipped weapons that require ammo!")
+        DebugPrint("[RPAammo] " .. ply:Nick() .. " tried to buy ammo but has no ammo-requiring weapons.")
     else
-        local message = "Bought 300 ammo for: " .. table.concat(weaponsProcessed, ", ") .. "."
-        SendRPAammoMessage(ply, message)
-        DebugPrint("[RPAammo] " .. ply:Nick() .. " bought ammo for: " .. table.concat(weaponsProcessed, ", "))
+        -- Deduct 100 DarkRP currency
+        ply:addMoney(-100)
+        DebugPrint("[RPAammo] Deducted 100 currency from " .. ply:Nick() .. " for buying ammo.")
+
+        -- Set cooldown
+        playerCooldowns[steamID] = currentTime
+
+        -- Send generalized message
+        SendRPAammoMessage(ply, "Purchased ammo for weapons.")
+        DebugPrint("[RPAammo] " .. ply:Nick() .. " bought ammo for equipped weapons.")
     end
 end)
 

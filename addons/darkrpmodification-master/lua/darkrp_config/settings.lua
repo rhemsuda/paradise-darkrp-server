@@ -207,7 +207,7 @@ GM.Config.doorcost                      = 30
 -- entremovedelay - how long to wait before removing a bought entity after disconnect.
 GM.Config.entremovedelay                = 0
 -- gunlabweapon - The weapon that the gunlab spawns.
-GM.Config.gunlabweapon                  = "weapon_p2282"
+GM.Config.gunlabweapon                  = "bb_p228"
 -- jailtimer - Sets the jailtimer (in seconds).
 GM.Config.jailtimer                     = 120
 -- lockdowndelay - The amount of time a mayor must wait before starting the next lockdown.
