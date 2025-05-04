@@ -29,14 +29,12 @@ function PANEL:Init()
     self.infoCard = vgui.Create("ScorePlayerInfoCard", self)
 
     self.lblName = vgui.Create("DLabel", self)
-    self.lblGang = vgui.Create("DLabel", self)
     if GM10_IsDarkRP then
         self.lblJob = vgui.Create("DLabel", self)
     end
     self.lblPing = vgui.Create("DLabel", self)
 
     self.lblName:SetMouseInputEnabled(false)
-    self.lblGang:SetMouseInputEnabled(false)
     if GM10_IsDarkRP then
         self.lblJob:SetMouseInputEnabled(false)
     end
@@ -56,7 +54,6 @@ function PANEL:UpdatePlayerData()
     if not self.Player or not IsValid(self.Player) then return end
 
     self.lblName:SetText(self.Player:Nick())
-    self.lblGang:SetText("testtest")  -- Placeholder, to be replaced with actual gang retrieval
     if GM10_IsDarkRP then
         local job = self.Player:getDarkRPVar("job") or "Unknown"
         DebugPrint("Player job for " .. self.Player:Nick() .. ": " .. tostring(job))
@@ -88,7 +85,6 @@ end
 
 function PANEL:ApplySchemeSettings()
     self.lblName:SetFont("ScoreboardPlayerName")
-    self.lblGang:SetFont("ScoreboardPlayerName")
     if GM10_IsDarkRP then
         self.lblJob:SetFont("ScoreboardPlayerName")
         self.lblJob:SetTextColor(color_white)
@@ -96,7 +92,6 @@ function PANEL:ApplySchemeSettings()
     self.lblPing:SetFont("ScoreboardPlayerName")
 
     self.lblName:SetTextColor(color_white)
-    self.lblGang:SetTextColor(Color(255, 0, 0, 255))  -- Red for gang, matching previous screenshot
     self.lblPing:SetTextColor(color_white)
 end
 
@@ -194,10 +189,6 @@ function PANEL:PerformLayout()
     self.lblName:SizeToContents()
     self.lblName:SetPos(16, 3)
 
-    -- Gang (centered under header at x = 431.6)
-    self.lblGang:SizeToContents()
-    local gangWidth = self.lblGang:GetWide()
-    self.lblGang:SetPos(431.6 - gangWidth / 2, 3)
 
     -- Job (centered under header at x = 581.6)
     if GM10_IsDarkRP then

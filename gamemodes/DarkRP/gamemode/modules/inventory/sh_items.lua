@@ -5,11 +5,63 @@ end
 
 InventoryItems = InventoryItems or {}
 
+-- sh_items.lua
+
+ResourceAppearances = {
+    rock = { material = "", color = nil },
+    copper = { material = "models/shiny", color = Color(184, 115, 51, 100) },
+    iron = { material = "models/shiny", color = Color(169, 169, 169, 255) },
+    steel = { material = "models/shiny", color = Color(192, 192, 192, 255) },
+    titanium = { material = "models/shiny", color = Color(46, 139, 87, 255) },
+    emerald = { material = "models/shiny", color = Color(0, 255, 127, 200) },
+    ruby = { material = "models/shiny", color = Color(255, 36, 0, 200) },
+    sapphire = { material = "models/shiny", color = Color(0, 191, 255, 200) },
+    obsidian = { material = "models/shiny", color = Color(47, 79, 79, 200) },
+    diamond = { material = "models/shiny", color = Color(240, 248, 255, 200) }
+}
+
+-- Remove 'local' to make resourceTemplates global
+resourceTemplates = {
+    minerals = {
+        { id = "rock", name = "Rock", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
+        { id = "copper", name = "Copper", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
+        { id = "iron", name = "Iron", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
+        { id = "steel", name = "Steel", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
+        { id = "titanium", name = "Titanium", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" }
+    },
+    gems = {
+        { id = "emerald", name = "Emerald", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
+        { id = "ruby", name = "Ruby", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" }, -- Fixed typo: .mdd to .mdl
+        { id = "sapphire", name = "Sapphire", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
+        { id = "obsidian", name = "Obsidian", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
+        { id = "diamond", name = "Diamond", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" }
+    }
+}
+
+ResourceItems = ResourceItems or {}
+for _, category in pairs(resourceTemplates) do
+    for _, data in ipairs(category) do
+        ResourceItems[data.id] = { name = data.name, icon = data.icon, model = data.model }
+    end
+end
+
 -- Helper function to equip weapons
 local function equipWeapon(ply, className, debugTag)
     local wep = ply:Give(className)
     if IsValid(wep) then
         print("[" .. debugTag .. " Debug] Successfully gave " .. ply:Nick() .. " " .. className)
+        -- Remove all ammo to ensure the weapon starts with 0 ammo (clip and reserve)
+        local ammoType = wep:GetPrimaryAmmoType()
+        if ammoType and ammoType != -1 then
+            wep:SetClip1(0) -- Set clip ammo to 0
+            local reserveAmmo = ply:GetAmmoCount(ammoType)
+            if reserveAmmo > 0 then
+                ply:RemoveAmmo(reserveAmmo, ammoType) -- Remove reserve ammo
+            end
+            print("[" .. debugTag .. " Debug] Set ammo to 0 for " .. className .. " (Clip: 0, Reserve: 0)")
+        else
+            print("[" .. debugTag .. " Debug] No ammo type for " .. className .. ", skipping ammo reset")
+        end
         timer.Simple(0.2, function()
             if IsValid(ply) and ply:HasWeapon(className) then
                 ply:SelectWeapon(className)
@@ -18,10 +70,12 @@ local function equipWeapon(ply, className, debugTag)
                 print("[" .. debugTag .. " Debug] Failed to equip " .. ply:Nick() .. ": " .. className .. " not in inventory")
             end
         end)
+        return true -- Success
     else
         print("[" .. debugTag .. " Debug] Failed to give " .. ply:Nick() .. " " .. className .. " - SWEP not registered")
-        AddItemToInventory(ply, className:gsub("bb_", ""), 1)
-        SendInventoryMessage(ply, InventoryItems[className:gsub("bb_", "")].name .. " failed to equip - returned to inventory.")
+        -- Do not call SendInventoryMessage here; handle it in sv_inventory.lua
+        -- Return the item to inventory in the calling function
+        return false, className:gsub("bb_", "") -- Failure, return the itemID
     end
 end
 
@@ -33,7 +87,7 @@ InventoryItems["shovel"] = {
     entityClass = "weapon_shovel",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "weapon_shovel", "Shovel") end,
+    useFunction = function(ply) return equipWeapon(ply, "weapon_shovel", "Shovel") end,
     baseRarity = "Common",
     ammoType = nil -- Melee weapon, no ammo required
 }
@@ -45,7 +99,7 @@ InventoryItems["pickaxe"] = {
     entityClass = "weapon_pickaxe",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "weapon_pickaxe", "Pickaxe") end,
+    useFunction = function(ply) return equipWeapon(ply, "weapon_pickaxe", "Pickaxe") end,
     baseRarity = "Common",
     ammoType = nil -- Melee weapon, no ammo required
 }
@@ -57,7 +111,7 @@ InventoryItems["pistol"] = {
     entityClass = "weapon_pistol",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "weapon_pistol", "Pistol") end,
+    useFunction = function(ply) return equipWeapon(ply, "weapon_pistol", "Pistol") end,
     baseRarity = "Common",
     ammoType = "Pistol"
 }
@@ -69,7 +123,7 @@ InventoryItems["crowbar"] = {
     entityClass = "weapon_crowbar",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "weapon_crowbar", "Crowbar") end,
+    useFunction = function(ply) return equipWeapon(ply, "weapon_crowbar", "Crowbar") end,
     baseRarity = "Common",
     ammoType = nil -- Melee weapon, no ammo required
 }
@@ -81,7 +135,7 @@ InventoryItems["glock"] = {
     entityClass = "bb_glock",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_glock", "Glock") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_glock", "Glock") end,
     baseRarity = "Common",
     ammoType = "Pistol"
 }
@@ -93,7 +147,7 @@ InventoryItems["usp"] = {
     entityClass = "bb_usp",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_usp", "USP") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_usp", "USP") end,
     baseRarity = "Uncommon",
     ammoType = "Pistol"
 }
@@ -105,7 +159,7 @@ InventoryItems["p228"] = {
     entityClass = "bb_p228",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_p228", "P228") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_p228", "P228") end,
     baseRarity = "Common",
     ammoType = "Pistol"
 }
@@ -117,7 +171,7 @@ InventoryItems["deagle"] = {
     entityClass = "bb_deagle",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_deagle", "Deagle") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_deagle", "Deagle") end,
     baseRarity = "Rare",
     ammoType = "357" -- Desert Eagle uses a more powerful ammo type
 }
@@ -129,7 +183,7 @@ InventoryItems["awp"] = {
     entityClass = "bb_awp",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_awp", "AWP") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_awp", "AWP") end,
     baseRarity = "Rare",
     ammoType = "357" -- Same ammo type as other snipers
 }
@@ -141,7 +195,7 @@ InventoryItems["fiveseven"] = {
     entityClass = "bb_fiveseven",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_fiveseven", "FiveSeven") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_fiveseven", "FiveSeven") end,
     baseRarity = "Uncommon",
     ammoType = "Pistol"
 }
@@ -153,7 +207,7 @@ InventoryItems["elite"] = {
     entityClass = "bb_elite",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_elite", "Elite") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_elite", "Elite") end,
     baseRarity = "Rare",
     ammoType = "Pistol"
 }
@@ -165,7 +219,7 @@ InventoryItems["m3"] = {
     entityClass = "bb_m3",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_m3", "M3") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_m3", "M3") end,
     baseRarity = "Common",
     ammoType = "Buckshot"
 }
@@ -177,7 +231,7 @@ InventoryItems["xm1014"] = {
     entityClass = "bb_xm1014",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_xm1014", "XM1014") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_xm1014", "XM1014") end,
     baseRarity = "Uncommon",
     ammoType = "Buckshot"
 }
@@ -189,7 +243,7 @@ InventoryItems["mac10"] = {
     entityClass = "bb_mac10",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_mac10", "MAC10") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_mac10", "MAC10") end,
     baseRarity = "Common",
     ammoType = "SMG1"
 }
@@ -201,7 +255,7 @@ InventoryItems["tmp"] = {
     entityClass = "bb_tmp",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_tmp", "TMP") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_tmp", "TMP") end,
     baseRarity = "Uncommon",
     ammoType = "SMG1"
 }
@@ -213,7 +267,7 @@ InventoryItems["mp5navy"] = {
     entityClass = "bb_mp5navy",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_mp5navy", "MP5") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_mp5navy", "MP5") end,
     baseRarity = "Common",
     ammoType = "SMG1"
 }
@@ -225,7 +279,7 @@ InventoryItems["ump45"] = {
     entityClass = "bb_ump45",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_ump45", "UMP45") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_ump45", "UMP45") end,
     baseRarity = "Common",
     ammoType = "SMG1"
 }
@@ -237,7 +291,7 @@ InventoryItems["p90"] = {
     entityClass = "bb_p90",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_p90", "P90") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_p90", "P90") end,
     baseRarity = "Rare",
     ammoType = "SMG1"
 }
@@ -249,7 +303,7 @@ InventoryItems["smg"] = {
     entityClass = "weapon_smg1",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "weapon_smg1", "SMG") end,
+    useFunction = function(ply) return equipWeapon(ply, "weapon_smg1", "SMG") end,
     baseRarity = "Common",
     ammoType = "SMG1"
 }
@@ -261,7 +315,7 @@ InventoryItems["ak47"] = {
     entityClass = "bb_ak47",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_ak47", "AK47") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_ak47", "AK47") end,
     baseRarity = "Uncommon",
     ammoType = "AR2"
 }
@@ -273,7 +327,7 @@ InventoryItems["Galil"] = {
     entityClass = "bb_galil",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_ak47", "AK47") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_ak47", "AK47") end,
     baseRarity = "Uncommon",
     ammoType = "AR2"
 }
@@ -285,7 +339,7 @@ InventoryItems["m4a1"] = {
     entityClass = "bb_m4a1",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_m4a1", "M4A1") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_m4a1", "M4A1") end,
     baseRarity = "Uncommon",
     ammoType = "AR2"
 }
@@ -297,7 +351,7 @@ InventoryItems["sg552"] = {
     entityClass = "bb_sg552",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_sg552", "SG552") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_sg552", "SG552") end,
     baseRarity = "Rare",
     ammoType = "AR2"
 }
@@ -309,7 +363,7 @@ InventoryItems["aug"] = {
     entityClass = "bb_aug",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_aug", "AUG") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_aug", "AUG") end,
     baseRarity = "Rare",
     ammoType = "AR2"
 }
@@ -321,7 +375,7 @@ InventoryItems["scout"] = {
     entityClass = "bb_scout",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_scout", "Scout") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_scout", "Scout") end,
     baseRarity = "Uncommon",
     ammoType = "SniperRound" -- Custom ammo type for snipers (adjust if needed)
 }
@@ -333,7 +387,7 @@ InventoryItems["g3sg1"] = {
     entityClass = "bb_g3sg1",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_g3sg1", "G3SG1") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_g3sg1", "G3SG1") end,
     baseRarity = "Rare",
     ammoType = "SniperRound" -- Custom ammo type for snipers (adjust if needed)
 }
@@ -345,7 +399,7 @@ InventoryItems["sg550"] = {
     entityClass = "bb_sg550",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_sg550", "SG550") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_sg550", "SG550") end,
     baseRarity = "Rare",
     ammoType = "SniperRound" -- Custom ammo type for snipers (adjust if needed)
 }
@@ -357,7 +411,7 @@ InventoryItems["m249"] = {
     entityClass = "bb_m249",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_m249", "M249") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_m249", "M249") end,
     baseRarity = "Epic",
     ammoType = "AR2" -- Using AR2 for heavy machine gun (adjust if needed)
 }
@@ -369,7 +423,7 @@ InventoryItems["knife"] = {
     entityClass = "bb_css_knife",
     maxStack = 1,
     category = "Weapons",
-    useFunction = function(ply) equipWeapon(ply, "bb_css_knife", "Knife") end,
+    useFunction = function(ply) return equipWeapon(ply, "bb_css_knife", "Knife") end,
     baseRarity = "Common",
     ammoType = nil -- Melee weapon, no ammo required
 }
@@ -384,6 +438,15 @@ InventoryItems["healthkit1"] = {
     category = "Utility",
     useFunction = function(ply)
         ply:SetHealth(math.min(ply:Health() + 25, ply:GetMaxHealth()))
+        if SERVER then
+            -- Use SendInventoryMessage server-side
+            local SendInventoryMessage = _G.SendInventoryMessage
+            if SendInventoryMessage then
+                SendInventoryMessage(ply, "Used a Small Medkit and restored 25 health.")
+            end
+        elseif CLIENT then
+            chat.AddText(Color(255, 255, 255), "[Inventory] ", Color(200, 200, 200), "Used a Small Medkit and restored 25 health.")
+        end
     end
 }
 
@@ -396,6 +459,14 @@ InventoryItems["healthkit2"] = {
     category = "Utility",
     useFunction = function(ply)
         ply:SetHealth(math.min(ply:Health() + 50, ply:GetMaxHealth()))
+        if SERVER then
+            local SendInventoryMessage = _G.SendInventoryMessage
+            if SendInventoryMessage then
+                SendInventoryMessage(ply, "Used a Medkit and restored 50 health.")
+            end
+        elseif CLIENT then
+            chat.AddText(Color(255, 255, 255), "[Inventory] ", Color(200, 200, 200), "Used a Medkit and restored 50 health.")
+        end
     end
 }
 
@@ -409,26 +480,14 @@ InventoryItems["healthkit3"] = {
     useFunction = function(ply)
         ply:SetHealth(math.min(ply:Health() + 100, ply:GetMaxHealth()))
         ply:SetArmor(100)
-    end
-}
-
-InventoryItems["energydrink"] = {
-    name = "Energy Drink",
-    description = "Temporarily boosts movement speed by 20% for 30 seconds.",
-    model = "models/props_junk/PopCan01a.mdl",
-    entityClass = "item_energydrink",
-    maxStack = 5,
-    category = "Utility",
-    useFunction = function(ply)
-        local oldSpeed = ply:GetWalkSpeed()
-        ply:SetWalkSpeed(oldSpeed * 1.2)
-        ply:SetRunSpeed(oldSpeed * 1.2)
-        timer.Simple(30, function()
-            if IsValid(ply) then
-                ply:SetWalkSpeed(oldSpeed)
-                ply:SetRunSpeed(oldSpeed)
+        if SERVER then
+            local SendInventoryMessage = _G.SendInventoryMessage
+            if SendInventoryMessage then
+                SendInventoryMessage(ply, "Used a Health and Armor kit.")
             end
-        end)
+        elseif CLIENT then
+            chat.AddText(Color(255, 255, 255), "[Inventory] ", Color(200, 200, 200), "Used a Health and Armor kit.")
+        end
     end
 }
 
@@ -439,7 +498,7 @@ InventoryItems["crafting_table"] = {
     category = "Props",
     resources = { rock = 20, copper = 10, iron = 5, steel = 0 },
     price = 300,
-    health = 2000
+    health = 5000
 }
 
 InventoryItems["weapon_stripper"] = {
@@ -448,7 +507,7 @@ InventoryItems["weapon_stripper"] = {
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
-    health = 1500
+    health = 5000
 }
 
 InventoryItems["slotted_door"] = {
@@ -457,7 +516,7 @@ InventoryItems["slotted_door"] = {
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
-    health = 2500
+    health = 5000
 }
 
 InventoryItems["metal_plate_1x1"] = {
@@ -466,7 +525,7 @@ InventoryItems["metal_plate_1x1"] = {
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
-    health = 1000
+    health = 5000
 }
 
 InventoryItems["metal_plate_1x2"] = {
@@ -475,7 +534,7 @@ InventoryItems["metal_plate_1x2"] = {
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
-    health = 1001
+    health = 5000
 }
 
 InventoryItems["metal_plate_2x2"] = {
@@ -484,7 +543,7 @@ InventoryItems["metal_plate_2x2"] = {
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
-    health = 1001
+    health = 5000
 }
 
 InventoryItems["metal_plate_2x4"] = {
@@ -493,7 +552,7 @@ InventoryItems["metal_plate_2x4"] = {
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
-    health = 1001
+    health = 5000
 }
 
 InventoryItems["metal_plate_4x4"] = {
@@ -502,7 +561,7 @@ InventoryItems["metal_plate_4x4"] = {
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
-    health = 1001
+    health = 5000
 }
 
 InventoryItems["metal_tube"] = {
@@ -511,7 +570,7 @@ InventoryItems["metal_tube"] = {
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
-    health = 1001
+    health = 5000
 }
 
 InventoryItems["metal_tube_2x"] = {
@@ -520,7 +579,7 @@ InventoryItems["metal_tube_2x"] = {
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
-    health = 1001
+    health = 5000
 }
 
 InventoryItems["i_beam_2x8"] = {
@@ -529,7 +588,7 @@ InventoryItems["i_beam_2x8"] = {
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
-    health = 1001
+    health = 5000
 }
 
 InventoryItems["i_beam_2x16"] = {
@@ -538,7 +597,7 @@ InventoryItems["i_beam_2x16"] = {
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
-    health = 1001
+    health = 5000
 }
 
 InventoryItems["i_beam_2x32"] = {
@@ -547,7 +606,7 @@ InventoryItems["i_beam_2x32"] = {
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
-    health = 1001
+    health = 5000
 }
 
 InventoryItems["billboard"] = {
@@ -565,7 +624,7 @@ InventoryItems["wooden_shelves"] = {
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
-    health = 1000
+    health = 1500
 }
 
 InventoryItems["gear_60t1"] = {
@@ -574,7 +633,7 @@ InventoryItems["gear_60t1"] = {
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
-    health = 9000
+    health = 12000
 }
 
 InventoryItems["blast_door_c"] = {
@@ -583,7 +642,7 @@ InventoryItems["blast_door_c"] = {
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
-    health = 4000
+    health = 5000
 }
 
 InventoryItems["blast_door_b"] = {
@@ -592,7 +651,7 @@ InventoryItems["blast_door_b"] = {
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
-    health = 4000
+    health = 5000
 }
 
 InventoryItems["storefront_bars"] = {
@@ -601,7 +660,7 @@ InventoryItems["storefront_bars"] = {
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
-    health = 7500
+    health = 10000
 }
 
 InventoryItems["concrete_barrier"] = {
@@ -619,7 +678,7 @@ InventoryItems["vending_machine"] = {
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
-    health = 3500
+    health = 5000
 }
 
 InventoryItems["kitchen_fridge"] = {
@@ -628,7 +687,7 @@ InventoryItems["kitchen_fridge"] = {
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
-    health = 3500
+    health = 5000
 }
 
 InventoryItems["covered_bridge_bottom"] = {
@@ -637,7 +696,7 @@ InventoryItems["covered_bridge_bottom"] = {
     category = "Props",
     resources = { rock = 10, copper = 0, iron = 0, steel = 0 },
     price = 150,
-    health = 4500
+    health = 10000
 }
 
 -- Define props for the admin panel

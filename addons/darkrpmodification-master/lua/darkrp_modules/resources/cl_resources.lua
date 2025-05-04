@@ -3,6 +3,9 @@ print("[Resources Module] cl_resources.lua is loading...")
 
 if not CLIENT then return end
 
+-- Include sh_items.lua to ensure resourceTemplates and ResourceItems are defined
+include("sh_items.lua")
+
 -- Helper function to print debug messages conditionally
 local function DebugPrint(...)
     if GetConVar("rp_debug"):GetInt() == 1 then
@@ -12,54 +15,6 @@ end
 
 -- Client-side Resources Table
 local Resources = {}
-
--- Resource appearances for visual customization
-local resourceAppearances = {
-    rock = { material = "", color = nil },
-    copper = { material = "models/shiny", color = Color(184, 115, 51, 100) },
-    iron = { material = "models/shiny", color = Color(169, 169, 169, 255) },
-    steel = { material = "models/shiny", color = Color(192, 192, 192, 255) },
-    titanium = { material = "models/shiny", color = Color(46, 139, 87, 255) },
-    emerald = { material = "models/shiny", color = Color(0, 255, 127, 200) },
-    ruby = { material = "models/shiny", color = Color(255, 36, 0, 200) },
-    sapphire = { material = "models/shiny", color = Color(0, 191, 255, 200) },
-    obsidian = { material = "models/shiny", color = Color(47, 79, 79, 200) },
-    diamond = { material = "models/shiny", color = Color(240, 248, 255, 200) }
-    --[[ Commented out lumber appearances for later development
-    ash = { material = "models/shiny", color = Color(139, 69, 19, 255) },
-    birch = { material = "models/shiny", color = Color(245, 245, 220, 255) },
-    oak = { material = "models/shiny", color = Color(160, 82, 45, 255) },
-    mahogany = { material = "models/shiny", color = Color(139, 0, 0, 255) },
-    yew = { material = "models/shiny", color = Color(85, 107, 47, 255) }
-    ]]
-}
-
--- Resource templates for UI categorization
-local resourceTemplates = {
-    minerals = {
-        { id = "rock", name = "Rock", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "copper", name = "Copper", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "iron", name = "Iron", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "steel", name = "Steel", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "titanium", name = "Titanium", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" }
-    },
-    gems = {
-        { id = "emerald", name = "Emerald", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "ruby", name = "Ruby", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "sapphire", name = "Sapphire", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "obsidian", name = "Obsidian", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "diamond", name = "Diamond", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" }
-    },
-    --[[ Commented out lumber section for later development
-    lumber = {
-        { id = "ash", name = "Ash", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" },
-        { id = "birch", name = "Birch", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" },
-        { id = "oak", name = "Oak", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" },
-        { id = "mahogany", name = "Mahogany", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" },
-        { id = "yew", name = "Yew", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" }
-    }
-    ]]
-}
 
 -- Function to build the resources menu (used by sh_inventory.lua)
 function BuildResourcesMenu(parent)
@@ -74,10 +29,7 @@ function BuildResourcesMenu(parent)
 
     local categories = {
         { name = "Minerals", items = resourceTemplates.minerals },
-        { name = "Gems", items = resourceTemplates.gems },
-        --[[ Commented out lumber category for later development
-        { name = "Lumber", items = resourceTemplates.lumber }
-        ]]
+        { name = "Gems", items = resourceTemplates.gems }
     }
     for _, cat in ipairs(categories) do
         local catPanel = layout:Add("DPanel")
@@ -105,7 +57,7 @@ function BuildResourcesMenu(parent)
             resIcon:SetFOV(30)
             resIcon:SetCamPos(Vector(30, 30, 30))
             resIcon:SetLookAt(Vector(0, 0, 0))
-            local appearance = resourceAppearances[resourceID] or { material = "models/shiny", color = Color(255, 255, 255) }
+            local appearance = ResourceAppearances[resourceID] or { material = "models/shiny", color = Color(255, 255, 255) }
             if appearance.material != "" then resIcon.Entity:SetMaterial(appearance.material) end
             if appearance.color then resIcon:SetColor(appearance.color) end
             resIcon.OnCursorEntered = function(self)

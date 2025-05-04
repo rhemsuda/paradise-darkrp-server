@@ -16,7 +16,6 @@ surface.CreateFont("ScoreboardPlayerName", {font = "coolvetica", size = 20, weig
 local texGradient = surface.GetTextureID("gui/center_gradient")
 local texLogo = surface.GetTextureID("gui/gmod_logo")
 
-local gangWidthCache = 80
 
 local PANEL = {}
 
@@ -34,8 +33,6 @@ function PANEL:Init()
 
     self.PlayerRows = {}
 
-    self.lblGang = vgui.Create("DLabel", self)
-    self.lblGang:SetText("Gang")
 
     if GM10_IsDarkRP then
         self.lblJobName = vgui.Create("DLabel", self)
@@ -120,13 +117,6 @@ function PANEL:PerformLayout()
     DebugPrint("Name width: " .. tostring(nameWidth))
     x = x + nameWidth + 70
 
-    -- Gang header (centered at x = 431.6)
-    self.lblGang:SizeToContents()
-    local gangWidth = self.lblGang:GetWide()
-    self.lblGang:SetPos(431.6 - gangWidth / 2, self.PlayerFrame.y - self.lblGang:GetTall() - 3)
-    DebugPrint("Gang header x: " .. tostring(431.6 - gangWidth / 2))
-
-    x = 431.6 + 80 + 70
 
     -- Job header (centered at x = 581.6)
     if GM10_IsDarkRP and self.lblJobName then
@@ -155,9 +145,7 @@ function PANEL:ApplySchemeSettings()
     self.Hostname:SetTextColor(Color(255, 255, 255, 200))  -- Adjusted for better contrast
     self.Description:SetTextColor(color_white)
 
-    self.lblGang:SetFont("ScoreboardPlayerName")
-    self.lblGang:SetTextColor(Color(255, 255, 255, 100))  -- Adjusted for better contrast
-
+    
     if GM10_IsDarkRP and self.lblJobName then
         self.lblJobName:SetFont("ScoreboardPlayerName")
         self.lblJobName:SetTextColor(Color(255, 255, 255, 100))  -- Adjusted for better contrast
