@@ -1,7 +1,7 @@
 -- Debug print to confirm the file is loading
 print("[Inventory Module] cl_inventory.lua loaded successfully")
 
--- Helper function to print debug messages conditionally
+-- Helper function for debug messages
 local function DebugPrint(...)
     if GetConVar("rp_debug") and GetConVar("rp_debug"):GetInt() == 1 then
         print(...)
@@ -11,11 +11,40 @@ end
 -- Include sh_items.lua
 if file.Exists("modules/inventory/sh_items.lua", "LUA") then
     include("modules/inventory/sh_items.lua")
+    DebugPrint("[Inventory Module] Successfully included sh_items.lua")
+else
+    DebugPrint("[Inventory Module] Warning: sh_items.lua not found at modules/inventory/sh_items.lua")
+end
+
+-- Include cl_jobs.lua
+local jobsPath = "darkrp_modules/rpjobs/cl_jobs.lua"
+if file.Exists(jobsPath, "LUA") then
+    include(jobsPath)
+    if BuildJobsPanel then
+        DebugPrint("[Inventory Module] Successfully included cl_jobs.lua from " .. jobsPath)
+    else
+        DebugPrint("[Inventory Module] Error: cl_jobs.lua included but BuildJobsPanel not defined (possible syntax error)")
+    end
+else
+    DebugPrint("[Inventory Module] Error: cl_jobs.lua not found at " .. jobsPath)
+end
+
+-- Fallback if BuildJobsPanel is not defined
+if not BuildJobsPanel then
+    function BuildJobsPanel(parent)
+        if not IsValid(parent) then return end
+        local label = vgui.Create("DLabel", parent)
+        label:SetText("Jobs Tab - Failed to load (cl_jobs.lua not found or has errors)")
+        label:SetPos(10, 10)
+        label:SetSize(300, 20)
+        label:SetColor(Color(255, 0, 0))
+        DebugPrint("[Inventory Module] Fallback BuildJobsPanel used because cl_jobs.lua was not loaded properly")
+    end
 end
 
 -- Client-Side Logic
 local Inventory, InventoryPositions, Loadout = {}, {}, {}
-local InventoryFrame, ToolSelectorFrame, inventoryTab, resourcesTab, adminTab, propsTab
+local InventoryFrame, ToolSelectorFrame, inventoryTab, resourcesTab, adminTab, propsTab, entitiesTab, jobsTab
 local isInventoryOpen, isToolSelectorOpen, isQKeyHeld = false, false, false
 local currentTooltip, currentInfoBox
 local activeMenus = {}
@@ -24,7 +53,7 @@ local currentPage = 1
 local currentNotification = nil
 local SelectedItems = {}
 local MultiSelectMode = false
-local PendingUnequip = {} -- Track slots pending unequip confirmation with weapon class
+local PendingUnequip = {}
 
 -- Tooltip Configuration
 surface.CreateFont("TooltipFont", { font = "DermaDefault", size = 14, weight = 500 })
@@ -131,7 +160,6 @@ local function CreateTooltip(parent, lines, posX, posY, row, col)
     end
 end
 
--- Helper function to show notifications
 local function ShowNotification(message)
     if IsValid(currentNotification) then
         currentNotification:Remove()
@@ -160,10 +188,8 @@ local function ShowNotification(message)
     surface.PlaySound("ui/buttonclick.wav")
 end
 
--- Forward declarations for UI-related functions
-local CreateTabPanel, CreateGridPanel, CreateSlots, PopulateSlots, BuildInventoryUI
-
-CreateTabPanel = function(parent, deleteButton, multiButton)
+-- UI Functions
+local function CreateTabPanel(parent, deleteButton, multiButton)
     local tabPanel = vgui.Create("DPanel", parent)
     tabPanel:SetSize(980, 50)
     tabPanel:SetPos(5, 5)
@@ -182,7 +208,6 @@ CreateTabPanel = function(parent, deleteButton, multiButton)
         DebugPrint("[Inventory Module] Switched to page 1")
     end
 
-    -- Adjusted positions to ensure buttons stay within the visible area
     local panelWidth = 980
     local buttonSpacing = 10
     local deleteButtonWidth = 120
@@ -193,7 +218,7 @@ CreateTabPanel = function(parent, deleteButton, multiButton)
     deleteButton:SetText("Delete Selected")
     deleteButton:SetTextColor(Color(0, 0, 0))
     deleteButton:SetVisible(false)
-    deleteButton:SetParent(tabPanel) -- Ensure the button is parented to tabPanel
+    deleteButton:SetParent(tabPanel)
     deleteButton.Paint = function(self, w, h)
         draw.RoundedBox(4, 0, 0, w, h, self:IsHovered() and Color(255, 50, 50, 240) or Color(200, 0, 0, 240))
     end
@@ -220,7 +245,7 @@ CreateTabPanel = function(parent, deleteButton, multiButton)
     multiButton:SetText("Multi")
     multiButton:SetTextColor(Color(0, 0, 0))
     multiButton:SetVisible(false)
-    multiButton:SetParent(tabPanel) -- Ensure the button is parented to tabPanel
+    multiButton:SetParent(tabPanel)
     multiButton.Paint = function(self, w, h)
         draw.RoundedBox(4, 0, 0, w, h, MultiSelectMode and Color(100, 200, 100, 240) or (self:IsHovered() and Color(100, 100, 100, 240) or Color(80, 80, 80, 240)))
     end
@@ -247,7 +272,7 @@ CreateTabPanel = function(parent, deleteButton, multiButton)
     return tabPanel
 end
 
-CreateGridPanel = function(parent)
+local function CreateGridPanel(parent)
     local gridPanel = vgui.Create("DPanel", parent)
     gridPanel:SetSize(980, 640)
     gridPanel:SetPos(5, 55)
@@ -263,7 +288,7 @@ CreateGridPanel = function(parent)
     return gridPanel
 end
 
-CreateSlots = function(gridPanel)
+local function CreateSlots(gridPanel)
     local slotWidth, slotHeight = 97, 97
     local slots = {}
     for row = 1, 6 do
@@ -303,7 +328,7 @@ CreateSlots = function(gridPanel)
     return slots
 end
 
-PopulateSlots = function(slots, gridPanel)
+local function PopulateSlots(slots, gridPanel)
     local slotWidth, slotHeight = 97, 97
     for _, item in ipairs(Inventory) do
         local itemID = item.itemID
@@ -434,7 +459,7 @@ PopulateSlots = function(slots, gridPanel)
     end
 end
 
-BuildInventoryUI = function(parent, page)
+function BuildInventoryUI(parent, page)
     if not IsValid(parent) then return end
     for _, child in pairs(parent:GetChildren()) do child:Remove() end
 
@@ -444,6 +469,16 @@ BuildInventoryUI = function(parent, page)
     local gridPanel = CreateGridPanel(parent)
     local slots = CreateSlots(gridPanel)
     PopulateSlots(slots, gridPanel)
+end
+
+local function BuildEntitiesPanel(parent)
+    if not IsValid(parent) then return end
+    for _, child in pairs(parent:GetChildren()) do child:Remove() end
+    local label = vgui.Create("DLabel", parent)
+    label:SetText("Entities Tab - Coming Soon")
+    label:SetPos(10, 10)
+    label:SetSize(300, 20)
+    label:SetColor(Color(255, 255, 255))
 end
 
 local function OpenToolSelector()
@@ -527,6 +562,8 @@ local function OpenCustomQMenu()
         resourcesTab = nil
         adminTab = nil
         propsTab = nil
+        entitiesTab = nil
+        jobsTab = nil
         if isToolSelectorOpen and IsValid(ToolSelectorFrame) then ToolSelectorFrame:Close() end
         SelectedItems = {}
         MultiSelectMode = false
@@ -545,6 +582,16 @@ local function OpenCustomQMenu()
     propsTab.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240)) end
     BuildPropsPanel(propsTab)
     tabPanel:AddSheet("Props", propsTab, "icon16/bricks.png")
+
+    jobsTab = vgui.Create("DPanel", tabPanel)
+    jobsTab.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240)) end
+    BuildJobsPanel(jobsTab)
+    tabPanel:AddSheet("Jobs", jobsTab, "icon16/user.png")
+
+    entitiesTab = vgui.Create("DPanel", tabPanel)
+    entitiesTab.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240)) end
+    BuildEntitiesPanel(entitiesTab)
+    tabPanel:AddSheet("Entities", entitiesTab, "icon16/lightning.png")
 
     resourcesTab = vgui.Create("DPanel", tabPanel)
     resourcesTab.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240)) end
@@ -636,10 +683,8 @@ local function RefreshEquipmentSlots(frame, slotsPanel)
                     net.WriteString(slot)
                     net.SendToServer()
                     DebugPrint("[Inventory Module] Unequipping item from slot " .. slot)
-                    -- Mark the slot as pending removal with the actual weapon class
                     if slot == "Weapon" or slot == "Sidearm" then
                         local itemID = item.itemID
-                        -- Attempt to get the weapon class from InventoryItems
                         local weaponClass = InventoryItems[itemID].weaponClass or "weapon_" .. itemID
                         PendingUnequip[slot] = weaponClass
                         RunConsoleCommand("use", "weapon_physgun")
@@ -731,19 +776,17 @@ local function OpenEquipmentMenu()
     DebugPrint("[Inventory Module] Opened equipment menu")
 end
 
--- Block switching to a weapon that’s pending unequip
 hook.Add("PlayerSwitchWeapon", "BlockPendingUnequip", function(ply, oldWeapon, newWeapon)
     if ply ~= LocalPlayer() then return end
     for slot, weaponClass in pairs(PendingUnequip) do
         if newWeapon:GetClass() == weaponClass then
             DebugPrint("[Inventory Module] Blocked switch to " .. weaponClass .. " due to pending unequip from slot " .. slot)
             RunConsoleCommand("use", "weapon_physgun")
-            return true -- Block the switch
+            return true
         end
     end
 end)
 
--- Ensure the player stays on physgun if they try to switch to a pending weapon
 hook.Add("Think", "EnforcePendingUnequip", function()
     local ply = LocalPlayer()
     if not IsValid(ply) then return end
@@ -794,7 +837,6 @@ net.Receive("InventoryNotification", function()
     local message = net.ReadString() or "Error: No message received"
     DebugPrint("[Inventory Module] Received notification - ID: " .. tostring(id) .. ", Message: " .. tostring(message))
 
-    -- Suppress re-equip message if loadout is empty
     if message:find("Equipped") and table.IsEmpty(Loadout) then
         DebugPrint("[Inventory Module] Suppressed re-equip notification because loadout is empty")
         return
@@ -806,7 +848,6 @@ end)
 net.Receive("SyncLoadout", function()
     Loadout = net.ReadTable()
     DebugPrint("[Inventory Module] Synced loadout: " .. table.ToString(Loadout))
-    -- Clear pending unequip state for slots that are no longer in the loadout
     for slot, weaponClass in pairs(PendingUnequip) do
         if not Loadout[slot] then
             PendingUnequip[slot] = nil

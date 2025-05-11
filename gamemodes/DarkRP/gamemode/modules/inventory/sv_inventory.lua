@@ -30,6 +30,12 @@ if file.Exists("modules/inventory/sh_items.lua", "LUA") then
     AddCSLuaFile("modules/inventory/sh_items.lua")
 end
 
+-- Include sv_jobs.lua
+if file.Exists("modules/rJobs/sv_jobs.lua", "LUA") then
+    include("modules/rJobs/sv_jobs.lua")
+    AddCSLuaFile("modules/rJobs/cl_jobs.lua")
+end
+
 PlayerInventories = PlayerInventories or {}
 
 -- Utility Functions
@@ -671,6 +677,39 @@ end)
 hook.Add("PlayerDisconnected", "SaveCustomInventory", function(ply)
     SavePlayerInventory(ply)
     PlayerInventories[ply:SteamID()] = nil
+end)
+
+-- Sync loadout after job change to handle weapon stripping by DarkRP
+hook.Add("OnPlayerChangedTeam", "SyncLoadoutAfterJobChange", function(ply, oldTeam, newTeam)
+    if not IsValid(ply) then return end
+    local steamID = ply:SteamID()
+    local inv = PlayerInventories[steamID]
+    if not inv then return end
+
+    -- Strip all weapons from the loadout to prevent desync
+    for slot, item in pairs(inv.loadout) do
+        local itemData = InventoryItems[item.itemID]
+        if itemData and itemData.category == "Weapons" then
+            if ply:HasWeapon(item.itemID) then
+                ply:StripWeapon(item.itemID)
+                DebugPrint("[Inventory Module] Stripped weapon " .. item.itemID .. " from " .. ply:Nick() .. " after job change")
+            end
+        end
+    end
+
+    -- Sync the loadout to the client
+    net.Start("SyncLoadout")
+    net.WriteTable(inv.loadout)
+    net.Send(ply)
+    DebugPrint("[Inventory Module] Synced loadout for " .. ply:Nick() .. " after job change from team " .. oldTeam .. " to " .. newTeam)
+end)
+
+-- Disable DarkRP F4 menu
+hook.Add("ShowSpare2", "DisableDarkRPF4Menu", function(ply)
+    if not IsValid(ply) then return end
+    -- Notify the player to use the custom Q menu instead
+    DebugPrint("[Inventory Module] Blocked F4 menu for " .. ply:Nick() .. " and prompted to use Q menu")
+    return true -- Returning true blocks the F4 menu from opening
 end)
 
 -- Admin command to give items

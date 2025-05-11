@@ -4,8 +4,8 @@ print("[Resources Module] sv_resources.lua is loading...")
 if not SERVER then return end
 
 -- Include sh_items.lua to ensure ResourceItems and resourceTemplates are defined
-include("sh_items.lua")
-AddCSLuaFile("sh_items.lua")
+--include("sh_items.lua")
+--AddCSLuaFile("sh_items.lua")
 
 -- Helper function to print debug messages conditionally
 local function DebugPrint(...)
