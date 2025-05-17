@@ -30,42 +30,93 @@ TEAM_MINER = DarkRP.createJob("Miner", {
     vote = false,
     hasLicense = false,
     category = "Citizens",
+    canDemote = true,
+})
+
+TEAM_MERC = DarkRP.createJob("Mercenary", {
+    color = Color(10, 100, 255),
+    model = "models/Combine_Super_Soldier.mdl",
+    description = [[
+        A job for the most deadly of people.
+    ]],
+    weapons = {},
+    command = "merc",
+    max = 5,
+    salary = 100,
+    admin = 0,
+    vote = false,
+    hasLicense = false,
+    category = "Bonus",
     canDemote = false,
 })
 
---TEAM_FOR = DarkRP.createJob("Forager", {
-   -- color = Color(247, 100, 38),
-   -- model = "models/Characters/Hostage_01.mdl",
+TEAM_PARA = DarkRP.createJob("Paramedic", {
+    color = Color(10, 100, 255),
+    model = "models/Characters/hostage_04.mdl",
+    description = [[
+        You're a medic except with exceptional tools!
+    ]],
+    weapons = {},
+    command = "para",
+    max = 2,
+    salary = 100,
+    admin = 0,
+    vote = false,
+    hasLicense = false,
+    category = "Bonus",
+    canDemote = true,
+})
+
+TEAM_SPEC = DarkRP.createJob("Specialist", {
+    color = Color(20, 160, 50),
+    model = "models/Humans/Group03/male_07.mdl",
+    description = [[
+        A job for the most deadly of people.
+    ]],
+    weapons = {},
+    command = "special",
+    max = 5,
+    salary = 100,
+    admin = 0,
+    vote = false,
+    hasLicense = false,
+    category = "Bonus",
+    canDemote = false,
+})
+
+--TEAM_ZOMB = DarkRP.createJob("Zombie", {
+  --  color = Color(255, 10, 10),
+   -- model = "models/Zombie/Classic.mdl",
    -- description = [[
-   --     Gather Materials for crafting
-   -- ]],
-  -- weapons = {},
-  --  command = "forager",
-   -- max = 5,
-   -- salary = 100,
-   -- admin = 0,
-   -- vote = false,
-   -- hasLicense = false,
-   -- category = "Citizens",
-   -- canDemote = false,
+  --      You are infected! KILL THEM ALL!
+ --   ]],
+  --  weapons = {},
+ --   command = "aimzombz",
+ --   max = 20,
+ --   salary = 100,
+ --   admin = 0,
+--    vote = false,
+--    hasLicense = false,
+--    category = "Atomic Infection",
+--    canDemote = false,
 --})
 
--- TEAM_MINER = DarkRP.createJob("Miner", {
-   -- color = Color(247, 160, 38),
-  --  model = models/player/Group03/male_09.mdl,
-   -- description = [[
-   --     Mine minerals and gems for crafting
- --   ]]--,
-   -- weapons = {},
-   -- command = "miner",
-   -- max = 5,
-   -- salary = 100,
-   -- admin = 0,
-   -- vote = false,
-   -- hasLicense = false,
-   -- category = "Citizen",
---canDemote = false,
---})
+TEAM_DRUG = DarkRP.createJob("Druggie", {
+    color = Color(255, 10, 10),
+    model = "models/player/t_phoenix.mdl",
+    description = [[
+        Drugs.... MMMM DRUGZ
+    ]],
+    weapons = {},
+    command = "druggie",
+    max = 20,
+    salary = 100,
+    admin = 0,
+    vote = false,
+    hasLicense = false,
+    category = "Gangsters",
+    canDemote = false,
+})
 
 --[[---------------------------------------------------------------------------
 Define which team joining players spawn into and what team you change to if demoted

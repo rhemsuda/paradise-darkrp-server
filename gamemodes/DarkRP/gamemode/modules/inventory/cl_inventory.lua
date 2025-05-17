@@ -29,6 +29,19 @@ else
     DebugPrint("[Inventory Module] Error: cl_jobs.lua not found at " .. jobsPath)
 end
 
+-- Include cl_rpents.lua
+local entsPath = "darkrp_modules/rpents/cl_rpents.lua"
+if file.Exists(entsPath, "LUA") then
+    include(entsPath)
+    if BuildEntitiesPanel then
+        DebugPrint("[Inventory Module] Successfully included cl_rpents.lua from " .. entsPath)
+    else
+        DebugPrint("[Inventory Module] Error: cl_rpents.lua included but BuildEntitiesPanel not defined (possible syntax error)")
+    end
+else
+    DebugPrint("[Inventory Module] Error: cl_rpents.lua not found at " .. entsPath)
+end
+
 -- Fallback if BuildJobsPanel is not defined
 if not BuildJobsPanel then
     function BuildJobsPanel(parent)
@@ -39,6 +52,19 @@ if not BuildJobsPanel then
         label:SetSize(300, 20)
         label:SetColor(Color(255, 0, 0))
         DebugPrint("[Inventory Module] Fallback BuildJobsPanel used because cl_jobs.lua was not loaded properly")
+    end
+end
+
+-- Fallback if BuildEntitiesPanel is not defined
+if not BuildEntitiesPanel then
+    function BuildEntitiesPanel(parent)
+        if not IsValid(parent) then return end
+        local label = vgui.Create("DLabel", parent)
+        label:SetText("Entities Tab - Failed to load (cl_rpents.lua not found or has errors)")
+        label:SetPos(10, 10)
+        label:SetSize(300, 20)
+        label:SetColor(Color(255, 0, 0))
+        DebugPrint("[Inventory Module] Fallback BuildEntitiesPanel used because cl_rpents.lua was not loaded properly")
     end
 end
 
@@ -469,16 +495,6 @@ function BuildInventoryUI(parent, page)
     local gridPanel = CreateGridPanel(parent)
     local slots = CreateSlots(gridPanel)
     PopulateSlots(slots, gridPanel)
-end
-
-local function BuildEntitiesPanel(parent)
-    if not IsValid(parent) then return end
-    for _, child in pairs(parent:GetChildren()) do child:Remove() end
-    local label = vgui.Create("DLabel", parent)
-    label:SetText("Entities Tab - Coming Soon")
-    label:SetPos(10, 10)
-    label:SetSize(300, 20)
-    label:SetColor(Color(255, 255, 255))
 end
 
 local function OpenToolSelector()
