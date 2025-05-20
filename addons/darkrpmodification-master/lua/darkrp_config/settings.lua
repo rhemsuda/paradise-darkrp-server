@@ -209,7 +209,7 @@ GM.Config.entremovedelay                = 0
 -- gunlabweapon - The weapon that the gunlab spawns.
 GM.Config.gunlabweapon                  = "bb_p228"
 -- jailtimer - Sets the jailtimer (in seconds).
-GM.Config.jailtimer                     = 120
+GM.Config.jailtimer                     = 300
 -- lockdowndelay - The amount of time a mayor must wait before starting the next lockdown.
 GM.Config.lockdowndelay                 = 120
 -- maxadvertbillboards - The maximum number of /advert billboards a player can place.
@@ -241,7 +241,7 @@ GM.Config.gunlabguncost                 = 200
 -- the drugs lab owner can change this price.
 GM.Config.druglabdrugcost               = 100
 -- minlotterycost - Minimum payment the mayor can set to join a lottery.
-GM.Config.minlotterycost                = 30
+GM.Config.minlotterycost                = 500
 -- Money packets will get removed if they don't get picked up after a while. Set to 0 to disable.
 GM.Config.moneyRemoveTime               = 600
 -- mprintamount - Value of the money printed by the money printer.

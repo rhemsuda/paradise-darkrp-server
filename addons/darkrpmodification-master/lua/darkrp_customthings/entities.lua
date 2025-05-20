@@ -16,29 +16,3 @@ https://darkrp.miraheze.org/wiki/DarkRP:CustomEntityFields
 
 Add entities under the following line:
 ---------------------------------------------------------------------------]]
-
-print("[DarkRP Entities] entities.lua loaded successfully")
-
-DarkRP.createEntity("Basic Money Printer", {
-    ent = "basic_money_printer",
-    model = "models/props_c17/consolebox01a.mdl",
-    price = 1000,
-    max = 2,
-    cmd = "buybasicmoneyprinter",
-    allowed = {},
-    category = "Other",
-    customCategory = "Printers"
-})
-
-DarkRP.createEntity("Advanced Money Printer", {
-    ent = "advanced_money_printer",
-    model = "models/props_c17/consolebox03a.mdl",
-    price = 2500,
-    max = 2,
-    cmd = "buyadvancedmoneyprinter",
-    allowed = {},
-    category = "Other",
-    customCategory = "Printers"
-})
-
-print("[DarkRP Entities] Finished defining entities")

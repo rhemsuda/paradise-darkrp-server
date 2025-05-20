@@ -13,9 +13,9 @@ local GovernmentJobs, GangsterJobs
 
 local function config()
     GovernmentJobs = {
-       -- [TEAM_MAYOR] = true,
-       -- [TEAM_POLICE] = true,
-       -- [TEAM_CHIEF] = true
+        [TEAM_MAYOR] = true,
+        [TEAM_POLICE] = true,
+        [TEAM_CHIEF] = true
     }
 
     GangsterJobs = {

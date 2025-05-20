@@ -17,12 +17,12 @@ Add your custom jobs under the following line:
 ---------------------------------------------------------------------------]]
 
 TEAM_MINER = DarkRP.createJob("Miner", {
-    color = Color(247, 160, 38),
+    color = Color(100, 100, 38),
     model = "models/player/Group03/male_09.mdl",
     description = [[
         Mine minerals and gems for crafting
     ]],
-    weapons = {},
+    weapons = {"weapon_shovel"},
     command = "miner",
     max = 5,
     salary = 100,
@@ -39,7 +39,7 @@ TEAM_MERC = DarkRP.createJob("Mercenary", {
     description = [[
         A job for the most deadly of people.
     ]],
-    weapons = {},
+    weapons = {"bb_fiveseven"},
     command = "merc",
     max = 5,
     salary = 100,
@@ -56,7 +56,7 @@ TEAM_PARA = DarkRP.createJob("Paramedic", {
     description = [[
         You're a medic except with exceptional tools!
     ]],
-    weapons = {},
+    weapons = {"med_kit"},
     command = "para",
     max = 2,
     salary = 100,
@@ -73,7 +73,7 @@ TEAM_SPEC = DarkRP.createJob("Specialist", {
     description = [[
         A job for the most deadly of people.
     ]],
-    weapons = {},
+    weapons = {"bb_usp"},
     command = "special",
     max = 5,
     salary = 100,
@@ -126,10 +126,10 @@ GAMEMODE.DefaultTeam = TEAM_CITIZEN
 Define which teams belong to civil protection
 Civil protection can set warrants, make people wanted and do some other police related things
 ---------------------------------------------------------------------------]]
---[[GAMEMODE.CivilProtection = {
+GAMEMODE.CivilProtection = {
     [TEAM_POLICE] = false,
     [TEAM_CHIEF] = true,
-    [TEAM_MAYOR] = false,
+    [TEAM_MAYOR] = true,
 }
 --[[---------------------------------------------------------------------------
 Jobs that are hitmen (enables the hitman menu)
