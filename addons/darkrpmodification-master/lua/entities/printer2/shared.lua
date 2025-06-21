@@ -1,6 +1,6 @@
 ENT.Type = "anim"
 ENT.Base = "base_gmodentity"
-ENT.PrintName = "Donator Printer"
+ENT.PrintName = "Printer"
 ENT.Author = "DarkRP Developers and Nicknmb"
 ENT.Spawnable = false
 ENT.AdminSpawnable = false

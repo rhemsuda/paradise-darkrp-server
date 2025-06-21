@@ -1,23 +1,19 @@
--- Include the shared entities file
 include("sh_entities.lua")
 
 print("[RPEnts Module] cl_rpents.lua loaded successfully")
 
--- Store entity data received from the server
 local EntitiesData = {}
 local IsDonator = false
+local IsGunDealer = false
+local needsRefresh = false
 
--- Currently selected entity (for the info panel)
 local SelectedEntity = nil
 local InfoPanel = nil
 
--- Reference to the entities tab (set externally if needed)
 entitiesTab = entitiesTab or nil
 
--- Store the active timer name
 local ActiveTimerName = nil
 
--- Notification function (copied from cl_inventory.lua)
 local function ShowNotification(message)
     local screenW, screenH = ScrW(), ScrH()
     local notification = vgui.Create("DPanel")
@@ -38,7 +34,6 @@ local function ShowNotification(message)
     surface.PlaySound("ui/buttonclick.wav")
 end
 
--- Function to update the information panel with the selected entity's details
 local function UpdateInfoPanel(entity)
     if not IsValid(InfoPanel) then return end
     for _, child in pairs(InfoPanel:GetChildren()) do child:Remove() end
@@ -56,7 +51,6 @@ local function UpdateInfoPanel(entity)
 
     local yPos = 10
 
-    -- Entity Name
     local nameLabel = vgui.Create("DLabel", InfoPanel)
     nameLabel:SetText("Entity: " .. entity.name)
     nameLabel:SetPos(10, yPos)
@@ -64,15 +58,17 @@ local function UpdateInfoPanel(entity)
     nameLabel:SetColor(Color(255, 255, 255))
     yPos = yPos + 40
 
-    -- Price
     local priceLabel = vgui.Create("DLabel", InfoPanel)
-    priceLabel:SetText("Price: $" .. entity.price)
+    local priceText = "Price: $" .. entity.price
+    priceLabel:SetText(priceText)
     priceLabel:SetPos(10, yPos)
     priceLabel:SetSize(280, 20)
     priceLabel:SetColor(Color(0, 255, 0))
+    surface.SetFont("DermaDefault")
+    local textWidth, _ = surface.GetTextSize(priceText)
+    print("[RPEnts Module] Debug: Price text '" .. priceText .. "' has approximate width: " .. textWidth .. " pixels")
     yPos = yPos + 40
 
-    -- Buy Button
     local buyButton = vgui.Create("DButton", InfoPanel)
     buyButton:SetSize(150, 40)
     buyButton:SetPos(140, yPos)
@@ -97,53 +93,225 @@ local function UpdateInfoPanel(entity)
     end
 end
 
--- Function to build the Entities panel (called from cl_inventory.lua)
 function BuildEntitiesPanel(parent)
     if not IsValid(parent) then
         print("[RPEnts Module] Error: Parent panel is not valid, cannot build Entities panel")
         return
     end
 
-    -- Clean up any existing timer for this panel
+    entitiesTab = parent
+
     local timerName = "CheckEntitiesData_" .. tostring(parent)
     if timer.Exists(timerName) then
         timer.Remove(timerName)
     end
-    ActiveTimerName = timerName -- Store the timer name
+    ActiveTimerName = timerName
 
-    -- Clear existing children
     for _, child in pairs(parent:GetChildren()) do
         if IsValid(child) then child:Remove() end
     end
 
-    -- Left panel: List of entities (using DPanel instead of DScrollPanel)
     local leftPanel = vgui.Create("DPanel", parent)
-    leftPanel:SetSize(650, 650) -- Adjusted to fit 990x670 content area
+    leftPanel:SetSize(650, 650)
     leftPanel:SetPos(10, 10)
     leftPanel.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(40, 40, 40, 200)) end
 
-    -- Container panel for entities (no scrolling)
-    local container = vgui.Create("DPanel", leftPanel)
-    container:Dock(FILL)
-    container:DockMargin(5, 5, 20, 5)
+    -- Create a scroll panel to hold the entity list
+    local scrollPanel = vgui.Create("DScrollPanel", leftPanel)
+    scrollPanel:Dock(FILL)
+    scrollPanel:DockMargin(5, 5, 20, 5)
+    local sbar = scrollPanel:GetVBar()
+    function sbar:Paint(w, h)
+        draw.RoundedBox(4, 0, 0, w, h, Color(0, 0, 0, 100))
+    end
+    function sbar.btnUp:Paint(w, h)
+        draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50))
+    end
+    function sbar.btnDown:Paint(w, h)
+        draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50))
+    end
+    function sbar.btnGrip:Paint(w, h)
+        draw.RoundedBox(4, 0, 0, w, h, Color(100, 100, 100))
+    end
+
+    -- Container inside the scroll panel
+    local container = vgui.Create("DPanel", scrollPanel)
+    container:Dock(TOP)
+    container:DockPadding(5, 5, 5, 5)
     container.Paint = function() end
 
-    -- Right panel: Information panel for selected entity
     InfoPanel = vgui.Create("DPanel", parent)
-    InfoPanel:SetSize(310, 650) -- Adjusted to fit 990x670 content area
+    InfoPanel:SetSize(310, 650)
     InfoPanel:SetPos(670, 10)
     InfoPanel.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(40, 40, 40, 200)) end
 
-    -- If we haven't received entity data yet, show a loading message and request data
-    if table.IsEmpty(EntitiesData) then
+    -- Function to refresh the panel with the latest entities data
+    local function RefreshEntitiesPanel()
+        if not IsValid(parent) or not IsValid(container) or not IsValid(leftPanel) or not IsValid(InfoPanel) or not IsValid(scrollPanel) then
+            print("[RPEnts Module] Parent, container, left panel, scroll panel, or info panel became invalid, stopping refresh")
+            timer.Remove(timerName)
+            ActiveTimerName = nil
+            return
+        end
+
+        for _, child in pairs(container:GetChildren()) do
+            if IsValid(child) then child:Remove() end
+        end
+
+        local filteredEntities = {}
+        for _, ent in ipairs(EntitiesData) do
+            if (not ent.donatorOnly or IsDonator) and (not ent.jobRestricted or IsGunDealer) then
+                table.insert(filteredEntities, ent)
+            end
+        end
+
+        print("[RPEnts Module] Filtered entities for display: " .. #filteredEntities)
+        for _, ent in ipairs(filteredEntities) do
+            print("[RPEnts Module] Debug:  - " .. ent.name .. " (Category: " .. ent.category .. ", JobRestricted: " .. tostring(ent.jobRestricted or false) .. ")")
+        end
+
+        local entitiesAvailable = #filteredEntities > 0
+        if not entitiesAvailable then
+            local noEntLabel = vgui.Create("DLabel", container)
+            noEntLabel:SetText("No entities available.")
+            noEntLabel:SetPos(10, 10)
+            noEntLabel:SetSize(280, 20)
+            noEntLabel:SetColor(Color(255, 255, 255))
+            UpdateInfoPanel(nil)
+            print("[RPEnts Module] No entities available after filtering")
+            container:SetTall(30) -- Minimal height for "No entities" message
+            return
+        end
+
+        local categories = {}
+        for _, ent in ipairs(filteredEntities) do
+            local category = ent.category or "General Entities"
+            if not categories[category] then
+                categories[category] = {}
+            end
+            table.insert(categories[category], ent)
+        end
+
+        local mainCat = vgui.Create("DCollapsibleCategory", container)
+        mainCat:Dock(TOP)
+        mainCat:SetLabel("Entities")
+        mainCat:SetExpanded(true)
+        mainCat:DockMargin(5, 5, 5, 0)
+
+        local mainLayout = vgui.Create("DPanel", mainCat)
+        mainLayout:Dock(TOP)
+        mainLayout:DockMargin(5, 5, 5, 5)
+        mainLayout.Paint = function() end
+
+        mainCat:SetContents(mainLayout)
+
+        local sortedCategories = {}
+        for category, _ in pairs(categories) do
+            table.insert(sortedCategories, category)
+        end
+        table.sort(sortedCategories)
+
+        local totalHeight = 0
+
+        for _, category in ipairs(sortedCategories) do
+            local subCat = vgui.Create("DCollapsibleCategory", mainLayout)
+            subCat:Dock(TOP)
+            subCat:SetLabel(category)
+            subCat:SetExpanded(true)
+            subCat:DockMargin(5, 5, 5, 0)
+
+            local layout = vgui.Create("DPanel", subCat)
+            layout:Dock(TOP)
+            layout:DockMargin(5, 5, 5, 5)
+            layout.Paint = function() end
+
+            if category == "Printers" then
+                table.sort(categories[category], function(a, b)
+                    if a.name == "Printer" then return true end
+                    if b.name == "Printer" then return false end
+                    return a.name < b.name
+                end)
+            else
+                table.sort(categories[category], function(a, b) return a.name < b.name end)
+            end
+
+            local numEntities = #categories[category]
+            local rows = math.ceil(numEntities / 2)
+            layout:SetTall(rows * 130)
+
+            subCat:SetContents(layout)
+
+            totalHeight = totalHeight + 30 + (rows * 130) -- 30 for category header, 130 per row
+
+            for i, ent in ipairs(categories[category]) do
+                local panel = vgui.Create("DPanel", layout)
+                panel:SetSize(280, 120)
+                local row = math.floor((i - 1) / 2)
+                local col = (i - 1) % 2
+                panel:SetPos(col * (280 + 10) + 5, row * (120 + 10) + 5)
+                panel.Entity = ent
+                panel.Paint = function(self, w, h)
+                    local bgColor = (SelectedEntity and SelectedEntity == ent) and Color(60, 60, 60, 240) or Color(40, 40, 40, 200)
+                    draw.RoundedBox(4, 0, 0, w, h, bgColor)
+                end
+
+                local modelPanel = vgui.Create("DModelPanel", panel)
+                modelPanel:SetSize(80, 80)
+                modelPanel:SetPos(10, 20)
+                modelPanel:SetModel(ent.model or "models/error.mdl")
+                modelPanel:SetFOV(20)
+                modelPanel:SetCamPos(Vector(50, 50, 50))
+                modelPanel:SetLookAt(Vector(0, 0, 0))
+                modelPanel:SetMouseInputEnabled(true)
+                if ent.name == "Donator Printer" then
+                    modelPanel.RenderOverride = function(self)
+                        render.SetColorModulation(1, 0.8, 0)
+                        self:DrawModel()
+                        render.SetColorModulation(1, 1, 1)
+                    end
+                end
+                modelPanel.DoClick = function(self)
+                    UpdateInfoPanel(ent)
+                end
+
+                local nameLabel = vgui.Create("DLabel", panel)
+                nameLabel:SetPos(100, 20)
+                nameLabel:SetSize(170, 20)
+                nameLabel:SetText(ent.name)
+                nameLabel:SetColor(Color(255, 255, 255))
+
+                local priceLabel = vgui.Create("DLabel", panel)
+                priceLabel:SetPos(100, 50)
+                priceLabel:SetSize(170, 20)
+                priceLabel:SetText("Price: $" .. ent.price)
+                priceLabel:SetColor(Color(0, 255, 0))
+
+                panel.OnMousePressed = function(self, code)
+                    if code == MOUSE_LEFT then
+                        UpdateInfoPanel(self.Entity)
+                    end
+                end
+            end
+        end
+
+        -- Adjust the container height to fit all categories
+        mainLayout:SetTall(totalHeight)
+        container:SetTall(totalHeight + 40) -- Add padding
+
+        UpdateInfoPanel(nil)
+        print("[RPEnts Module] Successfully loaded entities data")
+    end
+
+    if table.IsEmpty(EntitiesData) or needsRefresh then
+        needsRefresh = false
         local label = vgui.Create("DLabel", container)
         label:SetText("Loading entities...")
         label:SetPos(10, 10)
         label:SetSize(280, 20)
         label:SetColor(Color(255, 255, 255))
+        container:SetTall(30)
 
-        -- Request data from the server with a slight delay
-        timer.Simple(0.5, function()
+        timer.Simple(2, function()
             local success, err = pcall(function()
                 net.Start("RequestEntitiesData")
                 net.SendToServer()
@@ -156,150 +324,17 @@ function BuildEntitiesPanel(parent)
             end
         end)
 
-        -- Wait for data to be received
-        timer.Create(timerName, 0.5, 4, function()
-            if not timer.Exists(timerName) then return end -- Stop if timer was removed
-            if not IsValid(parent) or not IsValid(container) or not IsValid(leftPanel) or not IsValid(InfoPanel) then
-                print("[RPEnts Module] Parent, container, left panel, or info panel became invalid, stopping CheckEntitiesData timer")
+        timer.Create(timerName, 0.5, 10, function()
+            if not timer.Exists(timerName) then return end
+            if not IsValid(parent) or not IsValid(container) or not IsValid(leftPanel) or not IsValid(InfoPanel) or not IsValid(scrollPanel) then
+                print("[RPEnts Module] Parent, container, left panel, scroll panel, or info panel became invalid, stopping CheckEntitiesData timer")
                 timer.Remove(timerName)
                 ActiveTimerName = nil
                 return
             end
 
             if not table.IsEmpty(EntitiesData) then
-                -- Filter entities based on donator status
-                local filteredEntities = {}
-                for _, ent in ipairs(EntitiesData) do
-                    if not ent.donatorOnly or IsDonator then
-                        table.insert(filteredEntities, ent)
-                    end
-                end
-
-                -- Clear the loading message and populate the panel
-                for _, child in pairs(container:GetChildren()) do
-                    if IsValid(child) then child:Remove() end
-                end
-
-                local entitiesAvailable = #filteredEntities > 0
-                if not entitiesAvailable then
-                    local noEntLabel = vgui.Create("DLabel", container)
-                    noEntLabel:SetText("No entities available.")
-                    noEntLabel:SetPos(10, 10)
-                    noEntLabel:SetSize(280, 20)
-                    noEntLabel:SetColor(Color(255, 255, 255))
-                    UpdateInfoPanel(nil)
-                    print("[RPEnts Module] No entities available after filtering")
-                else
-                    -- Populate the panel with filtered entities
-                    local categories = {}
-                    for _, ent in ipairs(filteredEntities) do
-                        local category = ent.category or "General Entities"
-                        if not categories[category] then
-                            categories[category] = {}
-                        end
-                        table.insert(categories[category], ent)
-                    end
-
-                    local mainCat = vgui.Create("DCollapsibleCategory", container)
-                    mainCat:Dock(TOP)
-                    mainCat:SetLabel("Entities")
-                    mainCat:SetExpanded(true)
-                    mainCat:DockMargin(5, 5, 5, 0)
-
-                    local mainLayout = vgui.Create("DPanel", mainCat)
-                    mainLayout:Dock(FILL)
-                    mainLayout:DockMargin(5, 5, 5, 5)
-                    mainLayout.Paint = function() end
-
-                    mainCat:SetContents(mainLayout)
-
-                    local sortedCategories = {}
-                    for category, _ in pairs(categories) do
-                        table.insert(sortedCategories, category)
-                    end
-                    table.sort(sortedCategories)
-
-                    for _, category in ipairs(sortedCategories) do
-                        local subCat = vgui.Create("DCollapsibleCategory", mainLayout)
-                        subCat:Dock(TOP)
-                        subCat:SetLabel(category)
-                        subCat:SetExpanded(true)
-                        subCat:DockMargin(5, 5, 5, 0)
-
-                        local layout = vgui.Create("DPanel", subCat)
-                        layout:Dock(FILL)
-                        layout:SetTall(math.ceil(#categories[category] / 2) * 130)
-                        layout:DockMargin(5, 5, 5, 5)
-                        layout.Paint = function() end
-
-                        subCat:SetContents(layout)
-
-                        -- Custom sorting for Printers category to ensure "Printer" comes before "Donator Printer"
-                        if category == "Printers" then
-                            table.sort(categories[category], function(a, b)
-                                if a.name == "Printer" then return true end
-                                if b.name == "Printer" then return false end
-                                return a.name < b.name
-                            end)
-                        else
-                            table.sort(categories[category], function(a, b) return a.name < b.name end)
-                        end
-
-                        for i, ent in ipairs(categories[category]) do
-                            local panel = vgui.Create("DPanel", layout)
-                            panel:SetSize(280, 120)
-                            local row = math.floor((i - 1) / 2)
-                            local col = (i - 1) % 2
-                            panel:SetPos(col * (280 + 10) + 5, row * (120 + 10) + 5)
-                            panel.Entity = ent
-                            panel.Paint = function(self, w, h)
-                                local bgColor = (SelectedEntity and SelectedEntity == ent) and Color(60, 60, 60, 240) or Color(40, 40, 40, 200)
-                                draw.RoundedBox(4, 0, 0, w, h, bgColor)
-                            end
-
-                            local modelPanel = vgui.Create("DModelPanel", panel)
-                            modelPanel:SetSize(80, 80)
-                            modelPanel:SetPos(10, 20)
-                            modelPanel:SetModel(ent.model or "models/error.mdl")
-                            modelPanel:SetFOV(20)
-                            modelPanel:SetCamPos(Vector(50, 50, 50))
-                            modelPanel:SetLookAt(Vector(0, 0, 0))
-                            modelPanel:SetMouseInputEnabled(true) -- Enable mouse input for clicking
-                            -- Apply gold tint to Donator Printer's model preview
-                            if ent.name == "Donator Printer" then
-                                modelPanel.RenderOverride = function(self)
-                                    render.SetColorModulation(1, 0.8, 0) -- Gold color (same as in-game)
-                                    self:DrawModel()
-                                    render.SetColorModulation(1, 1, 1) -- Reset
-                                end
-                            end
-                            modelPanel.DoClick = function(self)
-                                UpdateInfoPanel(ent)
-                            end
-
-                            local nameLabel = vgui.Create("DLabel", panel)
-                            nameLabel:SetPos(100, 20)
-                            nameLabel:SetSize(170, 20)
-                            nameLabel:SetText(ent.name)
-                            nameLabel:SetColor(Color(255, 255, 255))
-
-                            local priceLabel = vgui.Create("DLabel", panel)
-                            priceLabel:SetPos(100, 50)
-                            priceLabel:SetSize(170, 20)
-                            priceLabel:SetText("Price: $" .. ent.price)
-                            priceLabel:SetColor(Color(0, 255, 0))
-
-                            panel.OnMousePressed = function(self, code)
-                                if code == MOUSE_LEFT then
-                                    UpdateInfoPanel(self.Entity)
-                                end
-                            end
-                        end
-                    end
-
-                    UpdateInfoPanel(nil)
-                    print("[RPEnts Module] Successfully loaded entities data")
-                end
+                RefreshEntitiesPanel()
                 timer.Remove(timerName)
                 ActiveTimerName = nil
                 return
@@ -319,6 +354,7 @@ function BuildEntitiesPanel(parent)
                 label:SetSize(280, 20)
                 label:SetColor(Color(255, 100, 100))
                 print("[RPEnts Module] Failed to load entities after timeout")
+                container:SetTall(30)
             end
         end)
 
@@ -326,177 +362,41 @@ function BuildEntitiesPanel(parent)
         return
     end
 
-    -- Filter entities based on donator status
-    local filteredEntities = {}
-    for _, ent in ipairs(EntitiesData) do
-        if not ent.donatorOnly or IsDonator then
-            table.insert(filteredEntities, ent)
-        end
-    end
-
-    -- If EntitiesData is still empty after filtering, show "No entities available"
-    if #filteredEntities == 0 then
-        if not IsValid(container) then
-            print("[RPEnts Module] Container panel became invalid, cannot display 'No entities available' message")
-            return
-        end
-        local label = vgui.Create("DLabel", container)
-        label:SetText("No entities available.")
-        label:SetPos(10, 10)
-        label:SetSize(280, 20)
-        label:SetColor(Color(255, 255, 255))
-        UpdateInfoPanel(nil)
-        print("[RPEnts Module] No entities available after filtering")
-        return
-    end
-
-    -- Organize filtered entities by category under the main "Entities" category
-    local categories = {}
-    for _, ent in ipairs(filteredEntities) do
-        local category = ent.category or "General Entities"
-        if not categories[category] then
-            categories[category] = {}
-        end
-        table.insert(categories[category], ent)
-    end
-
-    -- Create the main "Entities" category
-    local mainCat = vgui.Create("DCollapsibleCategory", container)
-    mainCat:Dock(TOP)
-    mainCat:SetLabel("Entities")
-    mainCat:SetExpanded(true)
-    mainCat:DockMargin(5, 5, 5, 0)
-
-    local mainLayout = vgui.Create("DPanel", mainCat)
-    mainLayout:Dock(FILL)
-    mainLayout:DockMargin(5, 5, 5, 5)
-    mainLayout.Paint = function() end
-
-    mainCat:SetContents(mainLayout)
-
-    -- Sort categories alphabetically
-    local sortedCategories = {}
-    for category, _ in pairs(categories) do
-        table.insert(sortedCategories, category)
-    end
-    table.sort(sortedCategories)
-
-    -- Create subcategories under "Entities"
-    for _, category in ipairs(sortedCategories) do
-        local subCat = vgui.Create("DCollapsibleCategory", mainLayout)
-        subCat:Dock(TOP)
-        subCat:SetLabel(category)
-        subCat:SetExpanded(true)
-        subCat:DockMargin(5, 5, 5, 0)
-
-        local layout = vgui.Create("DPanel", subCat)
-        layout:Dock(FILL)
-        layout:SetTall(math.ceil(#categories[category] / 2) * 130)
-        layout:DockMargin(5, 5, 5, 5)
-        layout.Paint = function() end
-
-        subCat:SetContents(layout)
-
-        -- Custom sorting for Printers category to ensure "Printer" comes before "Donator Printer"
-        if category == "Printers" then
-            table.sort(categories[category], function(a, b)
-                if a.name == "Printer" then return true end
-                if b.name == "Printer" then return false end
-                return a.name < b.name
-            end)
-        else
-            table.sort(categories[category], function(a, b) return a.name < b.name end)
-        end
-
-        -- Add each entity to the category, two per row
-        for i, ent in ipairs(categories[category]) do
-            local panel = vgui.Create("DPanel", layout)
-            panel:SetSize(280, 120)
-            -- Position: Two per row
-            local row = math.floor((i - 1) / 2)
-            local col = (i - 1) % 2
-            panel:SetPos(col * (280 + 10) + 5, row * (120 + 10) + 5)
-            panel.Entity = ent
-            panel.Paint = function(self, w, h)
-                local bgColor = (SelectedEntity and SelectedEntity == ent) and Color(60, 60, 60, 240) or Color(40, 40, 40, 200)
-                draw.RoundedBox(4, 0, 0, w, h, bgColor)
-            end
-
-            -- Entity model preview
-            local modelPanel = vgui.Create("DModelPanel", panel)
-            modelPanel:SetSize(80, 80)
-            modelPanel:SetPos(10, 20)
-            modelPanel:SetModel(ent.model or "models/error.mdl")
-            modelPanel:SetFOV(20)
-            modelPanel:SetCamPos(Vector(50, 50, 50))
-            modelPanel:SetLookAt(Vector(0, 0, 0))
-            modelPanel:SetMouseInputEnabled(true) -- Enable mouse input for clicking
-            -- Apply gold tint to Donator Printer's model preview
-            if ent.name == "Donator Printer" then
-                modelPanel.RenderOverride = function(self)
-                    render.SetColorModulation(1, 0.8, 0) -- Gold color (same as in-game)
-                    self:DrawModel()
-                    render.SetColorModulation(1, 1, 1) -- Reset
-                end
-            end
-            modelPanel.DoClick = function(self)
-                UpdateInfoPanel(ent)
-            end
-
-            -- Entity details
-            local nameLabel = vgui.Create("DLabel", panel)
-            nameLabel:SetPos(100, 20)
-            nameLabel:SetSize(170, 20)
-            nameLabel:SetText(ent.name)
-            nameLabel:SetColor(Color(255, 255, 255))
-
-            local priceLabel = vgui.Create("DLabel", panel)
-            priceLabel:SetPos(100, 50)
-            nameLabel:SetSize(170, 20)
-            priceLabel:SetText("Price: $" .. ent.price)
-            priceLabel:SetColor(Color(0, 255, 0))
-
-            -- Clicking the panel selects the entity and updates the info panel
-            panel.OnMousePressed = function(self, code)
-                if code == MOUSE_LEFT then
-                    UpdateInfoPanel(self.Entity)
-                end
-            end
-        end
-    end
-
-    -- Initialize the info panel with no selection
-    UpdateInfoPanel(nil)
+    RefreshEntitiesPanel()
 end
 
--- Receive entity data from the server
 net.Receive("SendEntitiesData", function()
     EntitiesData = net.ReadTable()
     IsDonator = net.ReadBool()
+    IsGunDealer = net.ReadBool()
     print("[RPEnts Module] Received entities data: " .. table.ToString(EntitiesData))
     print("[RPEnts Module] Donator status: " .. tostring(IsDonator))
+    print("[RPEnts Module] Gun Dealer status: " .. tostring(IsGunDealer))
 
-    -- Rebuild the Entities panel if it's open
     if IsValid(entitiesTab) then
         BuildEntitiesPanel(entitiesTab)
+    else
+        needsRefresh = true
+        print("[RPEnts Module] Entities tab not open, will refresh on next open")
     end
 end)
 
--- Listen for DarkRP notifications about entity spawning
 hook.Add("OnPlayerChat", "RPEnts_SpawnFeedback", function(ply, text)
     if ply ~= LocalPlayer() then return end
 
-    -- Check for custom error messages
     if text:find("You must be a donator") then
         ShowNotification("You must be a donator to buy this entity!")
     elseif text:find("You cannot afford") then
         ShowNotification("Cannot afford to buy this entity!")
     elseif text:find("Successfully bought and spawned") then
         ShowNotification("Successfully bought the entity!")
+    elseif text:find("Successfully bought and dropped") then
+        ShowNotification("Successfully dropped the weapon! Press E to pick it up.")
+    elseif text:find("You must be a Gun Dealer") then
+        ShowNotification("You must be a Gun Dealer to buy this entity!")
     end
 end)
 
--- Clean up timer when the panel is closed
 hook.Add("OnContextMenuClose", "RPEnts_CleanUpTimer", function()
     if ActiveTimerName and timer.Exists(ActiveTimerName) then
         timer.Remove(ActiveTimerName)
@@ -505,13 +405,29 @@ hook.Add("OnContextMenuClose", "RPEnts_CleanUpTimer", function()
     end
 end)
 
--- Clean up timer when the inventory menu closes
 hook.Add("OnInventoryMenuClosed", "RPEnts_CleanUpTimerOnInventoryClose", function()
     if ActiveTimerName and timer.Exists(ActiveTimerName) then
         timer.Remove(ActiveTimerName)
         print("[RPEnts Module] Cleaned up timer due to inventory menu close: " .. ActiveTimerName)
         ActiveTimerName = nil
     end
+end)
+
+hook.Add("OnPlayerChangedTeam", "RPEnts_RefreshOnJobChange", function(ply, oldTeam, newTeam)
+    if ply ~= LocalPlayer() then return end
+    print("[RPEnts Module] Player changed job from team " .. oldTeam .. " to " .. newTeam .. ", requesting new entities data")
+    timer.Simple(2, function()
+        local success, err = pcall(function()
+            net.Start("RequestEntitiesData")
+            net.SendToServer()
+        end)
+        if success then
+            print("[RPEnts Module] Requested entities data after job change")
+        else
+            print("[RPEnts Module] Error sending RequestEntitiesData message after job change: " .. tostring(err))
+            ShowNotification("Failed to refresh entities: Network error")
+        end
+    end)
 end)
 
 print("[RPEnts Module] Client-side loaded successfully")

@@ -2,6 +2,8 @@ AddCSLuaFile("cl_init.lua")
 AddCSLuaFile("shared.lua")
 include("shared.lua")
 
+util.AddNetworkString("PrinterForceClientUpdate")
+
 function ENT:Initialize()
     self:SetModel("models/props_c17/consolebox01a.mdl")
     self:PhysicsInit(SOLID_VPHYSICS)
@@ -46,11 +48,11 @@ function ENT:Initialize()
 
     self.sparking = false
     self:SetStoredMoney(0)
+    self.StealCounters = {}
     print("[Printer1] Spawned at position: " .. tostring(self:GetPos()))
     print("[Printer1] Initialized with StoredMoney: " .. self:GetStoredMoney())
     print("[Printer1] Transmit state set to: " .. self:UpdateTransmitState())
 
-    -- Start money generation timer (first print after 60 seconds, then every 60 seconds)
     timer.Create("PrintMoney_" .. self:EntIndex(), 60, 0, function()
         if not IsValid(self) then return end
         self:CreateMoneybag()
@@ -64,15 +66,61 @@ end
 function ENT:Use(activator, caller)
     if not IsValid(activator) or not activator:IsPlayer() then return end
 
-    local storedMoney = self:GetStoredMoney()
-    if storedMoney <= 0 then
-        DarkRP.notify(activator, 1, 4, "This printer has no money to collect!")
+    if self:IsOnFire() then
+        self.NoMoneyCooldown = self.NoMoneyCooldown or {}
+        local lastNotify = self.NoMoneyCooldown[activator:SteamID()] or 0
+        if CurTime() - lastNotify > 5 then
+            DarkRP.notify(activator, 1, 4, "This printer is on fire and cannot be used!")
+            self.NoMoneyCooldown[activator:SteamID()] = CurTime()
+        end
         return
     end
 
+    local storedMoney = self:GetStoredMoney()
+    if storedMoney <= 0 then
+        self.NoMoneyCooldown = self.NoMoneyCooldown or {}
+        local lastNotify = self.NoMoneyCooldown[activator:SteamID()] or 0
+        if CurTime() - lastNotify > 5 then
+            DarkRP.notify(activator, 1, 4, "This printer has no money to collect!")
+            self.NoMoneyCooldown[activator:SteamID()] = CurTime()
+        end
+        return
+    end
+
+    local owner = self:Getowning_ent()
+    local isOwner = IsValid(owner) and owner == activator
+    self.StealCounters = self.StealCounters or {}
+
+    if not isOwner then
+        local steamID = activator:SteamID()
+        self.StealCounters[steamID] = (self.StealCounters[steamID] or 0) + 1
+        print("[Printer1] " .. activator:Nick() .. " collected from printer (Steal count: " .. self.StealCounters[steamID] .. ")")
+
+        if self.StealCounters[steamID] >= 4 then
+            self:Setowning_ent(activator)
+            DarkRP.notify(activator, 0, 4, "You have stolen this printer by collecting from it 4 times!")
+            if IsValid(owner) then
+                DarkRP.notify(owner, 1, 4, activator:Nick() .. " has stolen your printer!")
+            end
+            self.StealCounters = {}
+        else
+            DarkRP.notify(activator, 0, 4, "You collected $" .. storedMoney .. " from someone else's printer! (" .. self.StealCounters[steamID] .. "/4)")
+            if IsValid(owner) then
+                DarkRP.notify(owner, 1, 4, activator:Nick() .. " collected $" .. storedMoney .. " from your printer!")
+            end
+        end
+    else
+        self.StealCounters = {}
+        DarkRP.notify(activator, 0, 4, "You collected $" .. storedMoney .. " from your printer!")
+    end
+
+    for steamID, count in pairs(self.StealCounters) do
+        if steamID != activator:SteamID() then
+            self.StealCounters[steamID] = 0
+        end
+    end
+
     activator:addMoney(storedMoney)
-    DarkRP.notify(activator, 0, 4, "You collected $" .. storedMoney .. " from the printer!")
-    self:EmitSound("items/ammocrate_open.wav")
     self:SetStoredMoney(0)
 
     net.Start("PrinterForceClientUpdate")
@@ -80,17 +128,34 @@ function ENT:Use(activator, caller)
     net.Send(activator)
 end
 
+function ENT:Explode()
+    local pos = self:GetPos()
+    local radius = 200
+    local nearby = ents.FindInSphere(pos, radius)
+    for _, ent in pairs(nearby) do
+        if (ent:GetClass() == "printer1" or ent:GetClass() == "printer2") and ent != self and not ent:IsOnFire() then
+            ent:BurstIntoFlames()
+        end
+    end
+
+    local explosion = ents.Create("env_explosion")
+    explosion:SetPos(self:GetPos())
+    explosion:SetKeyValue("iMagnitude", "100")
+    explosion:SetKeyValue("spawnflags", "1") -- Add NoDamage flag (1 = No Damage)
+    explosion:Spawn()
+    explosion:Fire("Explode", 0, 0)
+
+    self:Remove()
+end
+
 function ENT:OnTakeDamage(dmg)
+    if self:IsOnFire() then return end
+
     self:TakePhysicsDamage(dmg)
     if self.health <= 0 then return end
     self.health = (self.health or 100) - dmg:GetDamage()
     if self.health <= 0 then
-        self:Remove()
-        local explosion = ents.Create("env_explosion")
-        explosion:SetPos(self:GetPos())
-        explosion:SetKeyValue("iMagnitude", "100")
-        explosion:Spawn()
-        explosion:Fire("Explode", 0, 0)
+        self:Explode()
     end
 end
 
@@ -129,21 +194,19 @@ function ENT:CreateMoneybag()
     util.Effect("ManhackSparks", effect)
 
     self.sparking = false
-    -- Removed timer.Simple; now handled by timer.Create in Initialize
 end
 
 function ENT:BurstIntoFlames()
     if not IsValid(self) or self:IsOnFire() then return end
-    self:Ignite(10, 0)
+    self:Ignite(12, 0) -- Set fire duration to 12 seconds
     self.sparking = true
-    timer.Create("FireDamage_" .. self:EntIndex(), 1, 10, function()
+    timer.Create("FireDamage_" .. self:EntIndex(), 1, 12, function()
         if not IsValid(self) then return end
-        local dmg = DamageInfo()
-        dmg:SetDamage(10)
-        dmg:SetDamageType(DMG_BURN)
-        dmg:SetAttacker(self)
-        dmg:SetInflictor(self)
-        self:TakeDamageInfo(dmg)
+        timer.Simple(0, function()
+            if IsValid(self) then
+                self:Explode()
+            end
+        end)
     end)
 end
 

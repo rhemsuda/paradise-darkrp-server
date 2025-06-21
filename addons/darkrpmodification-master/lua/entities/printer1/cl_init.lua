@@ -1,6 +1,6 @@
 include("shared.lua")
 
-util.PrecacheModel("models/props_c17/consolebox01a.mdl") -- Updated to match init.lua
+util.PrecacheModel("models/props_c17/consolebox01a.mdl")
 
 print("[Printer1] cl_init.lua loaded successfully")
 
@@ -20,19 +20,15 @@ function ENT:Initialize()
     self.StoredMoneyWarningPrinted = false
     self.StoredMoneyFallback = 0
     self.IsInitialized = true
-    self.HasDrawn = false
 
-    -- Ensure the model is set
     if self:GetModel() != "models/props_c17/consolebox01a.mdl" then
         print("[Printer1] Warning: Model mismatch, expected models/props_c17/consolebox01a.mdl, got " .. tostring(self:GetModel()))
         self:SetModel("models/props_c17/consolebox01a.mdl")
     end
 
-    -- Explicitly set render mode and color to ensure visibility
     self:SetRenderMode(RENDERMODE_NORMAL)
     self:SetColor(Color(255, 255, 255, 255))
 
-    -- Debug prints to check entity state
     print("[Printer1] Initialized on client at position: " .. tostring(self:GetPos()))
     print("[Printer1] Render mode: " .. self:GetRenderMode())
     print("[Printer1] Color: " .. tostring(self:GetColor()))
@@ -43,11 +39,6 @@ end
 function ENT:Draw()
     if not self.IsInitialized then
         self:Initialize()
-    end
-
-    if not self.HasDrawn then
-        print("[Printer1] Drawing entity at position: " .. tostring(self:GetPos()))
-        self.HasDrawn = true
     end
 
     self:DrawModel()
@@ -82,9 +73,9 @@ function ENT:Draw()
     Ang:RotateAroundAxis(Ang:Up(), 90)
 
     cam.Start3D2D(Pos + Ang:Up() * 11.5, Ang, 0.11)
-        draw.WordBox(2, -TextWidth * 0.5, -30, text, "HUDNumber5", Color(140, 0, 0, 100), Color(255, 255, 255, 255))
-        draw.WordBox(2, -TextWidth2 * 0.5, 18, owner, "HUDNumber5", Color(140, 0, 0, 100), Color(255, 255, 255, 255))
-        draw.WordBox(2, -TextWidth3 * 0.5, 66, moneyText, "HUDNumber5", Color(140, 0, 0, 100), Color(0, 255, 0, 255))
+        draw.SimpleText(text, "HUDNumber5", 0, -30, Color(255, 255, 255, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        draw.SimpleText(owner, "HUDNumber5", 0, 18, Color(255, 255, 255, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        draw.SimpleText(moneyText, "HUDNumber5", 0, 66, Color(0, 255, 0, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
     cam.End3D2D()
 end
 
