@@ -9,6 +9,8 @@ function ENT:Initialize()
     self:SetMoveType(MOVETYPE_VPHYSICS)
     self:SetSolid(SOLID_VPHYSICS)
     self:SetUseType(SIMPLE_USE)
+    self:SetHealth(150)  -- Base health set to 150
+    print("[Custom Empty Shipment] Initialized shipment with health: " .. self:Health())  -- Debug health
 
     local phys = self:GetPhysicsObject()
     if IsValid(phys) then
@@ -30,11 +32,13 @@ function ENT:Initialize()
     self.Weapons = {}
     self.MaxWeapons = 10
     self.AbsorptionActive = false
+    self.password = ""
     self:SetupDataTables()
     self:SetTotalWeapons(0)
     self:SetWeaponClass("")
     self:SetName("Empty Shipment")
     self:SetNWString("Name", "Empty Shipment")
+    self:SetOwner(self:GetOwner() or game.GetWorld())  -- Ensure owner is set
     self.UseCooldown = 0
     print("[Custom Empty Shipment] Initialized shipment entity: " .. tostring(self))
 end
@@ -45,6 +49,9 @@ function ENT:SetupDataTables()
     self:NetworkVar("String", 1, "Name")
     self:NetworkVar("Entity", 0, "gunModel")
     self:NetworkVar("Float", 0, "gunspawn")
+    self:NetworkVar("String", 2, "Password")
+    self:NetworkVar("Bool", 0, "IsLocked")
+    self:NetworkVar("Bool", 1, "IsSold")
     print("[Custom Empty Shipment] SetupDataTables called - networked variables initialized")
 end
 
@@ -53,6 +60,18 @@ function ENT:Use(activator, caller)
     if CurTime() < self.UseCooldown then return end
 
     local ply = activator
+    if self:GetIsLocked() and self.password ~= "" and not ply:IsAdmin() then
+        Derma_StringRequest("Enter Password", "Password for shipment:", "", function(text)
+            if text == self.password then
+                self:SetIsLocked(false)
+                self:Use(ply, caller)
+            else
+                DarkRP.notify(ply, 1, 4, "Incorrect password!")
+            end
+        end)
+        return
+    end
+
     local totalWeapons = self:GetTotalWeapons()
 
     if totalWeapons > 0 then
@@ -127,7 +146,7 @@ function ENT:AddNearbyWeapons(ply)
                                 local newName = weaponData.name
                                 self:SetName(newName)
                                 self:SetNWString("Name", newName)
-                                print("[Custom Empty Shipment] Absorbed " .. weaponData.name .. ", new count: " .. (totalWeapons + 1) .. ", Set name to: " .. newName)
+                                print("[Custom Empty Shipment] Absorbed " .. weaponData.name .. ", new count: " .. (totalWeapons + 1))
                                 foundWeapons = foundWeapons + 1
                                 self:SparkEffect()
                             end
@@ -251,7 +270,7 @@ function ENT:UpdateShipmentState()
         local newName = weaponData.name
         self:SetName(newName)
         self:SetNWString("Name", newName)
-        print("[Custom Empty Shipment] Updating shipment state with weaponClass: " .. tostring(weaponClass) .. ", Setting name to: " .. newName)
+        print("[Custom Empty Shipment] Updated state: Set name to " .. newName .. " (" .. totalWeapons .. "/" .. self.MaxWeapons .. ")")
     else
         self:SetName("Empty Shipment")
         self:SetNWString("Name", "Empty Shipment")
@@ -282,8 +301,67 @@ function ENT:PreAbsorbSparks()
     end
 end
 
+net.Receive("SetShipmentPassword", function(len, ply)
+    local ent = net.ReadEntity()
+    if not IsValid(ent) or not ent.IsSpawnedShipment or ent:GetOwner() ~= ply and not ply:IsAdmin() then return end
+    local password = net.ReadString()
+    ent.password = password
+    ent:SetPassword(password)
+    ent:SetIsLocked(password ~= "")
+    print("[Custom Empty Shipment] " .. ply:Nick() .. " set password for shipment " .. tostring(ent) .. " to: " .. password)
+end)
+
+net.Receive("OpenSellMenu", function(len, ply)
+    if not IsValid(ply) then return end
+    net.Start("OpenSellMenuClient")
+        net.WriteEntity(net.ReadEntity())
+    net.Broadcast()
+end)
+
+net.Receive("SellShipmentItem", function(len, ply)
+    local ent = net.ReadEntity()
+    if not IsValid(ent) or not ent.IsSpawnedShipment or ent:GetOwner() ~= ply and not ply:IsAdmin() then return end
+    local sellPrice = net.ReadFloat()
+    local weaponClass = ent:GetWeaponClass()
+    local weaponData = CustomShipments[weaponClass] or {}
+    local pricePerItem = weaponData.price and weaponData.price / weaponData.amount or nil
+
+    if pricePerItem and sellPrice > 0 then
+        local phys = ent:GetPhysicsObject()
+        if IsValid(phys) then
+            phys:EnableMotion(false)
+        end
+        ent:SetHealth(10000)
+        ent:SetIsSold(true)
+        print("[Custom Empty Shipment] " .. ply:Nick() .. " sold an item from shipment " .. tostring(ent) .. " for " .. sellPrice)
+
+        -- Remove one item and give money
+        if ent.Weapons[weaponClass] and ent.Weapons[weaponClass] > 0 then
+            ent.Weapons[weaponClass] = ent.Weapons[weaponClass] - 1
+            ent:SetTotalWeapons(ent:GetTotalWeapons() - 1)
+            ply:addMoney(sellPrice)
+            DarkRP.notify(ply, 0, 4, "Sold 1 " .. (weaponData.name or weaponClass) .. " for " .. sellPrice .. "!")
+            print("[Custom Empty Shipment] Paid " .. ply:Nick() .. " " .. sellPrice .. " for selling 1 item")
+
+            if ent:GetTotalWeapons() == 0 then
+                ent:SetWeaponClass("")
+                ent:SetName("Empty Shipment")
+                ent:SetNWString("Name", "Empty Shipment")
+                ent:SetIsSold(false)
+                if IsValid(phys) then
+                    phys:EnableMotion(true)
+                end
+                ent:SetHealth(150)
+            end
+            ent:UpdateShipmentState()
+        else
+            DarkRP.notify(ply, 1, 4, "No items left to sell!")
+        end
+    end
+end)
+
 hook.Add("OnEntityCreated", "CustomEmptyShipment_DebugSpawn", function(ent)
     if ent:GetClass() == "custom_empty_shipment" then
-        print("[Custom Empty Shipment] Spawned shipment entity: " .. tostring(ent))
+        print("[Custom Empty Shipment] Spawned shipment entity: " .. tostring(ent) .. " with health: " .. ent:Health())
     end
 end)
