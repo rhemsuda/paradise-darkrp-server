@@ -43,12 +43,17 @@ function ENT:Initialize()
         self:SetMoveType(MOVETYPE_VPHYSICS)
         self:SetSolid(SOLID_VPHYSICS)
         self:SetUseType(SIMPLE_USE)
+        self:SetCollisionGroup(COLLISION_GROUP_WEAPON) -- Avoid player collision
 
-        -- Validate physics object
+        -- Validate physics object and set initial state
         local phys = self:GetPhysicsObject()
         if IsValid(phys) then
             phys:Wake()
             phys:SetMass(10)
+            phys:EnableMotion(true)
+            phys:SetVelocity(Vector(0, 0, 0))
+            phys:SetAngleVelocity(Vector(0, 0, 0))
+            phys:Sleep() -- Force it to settle
             print("[Custom Weapon Drop] Physics object initialized successfully")
         else
             print("[Custom Weapon Drop] Error: Physics object invalid for " .. tostring(self))

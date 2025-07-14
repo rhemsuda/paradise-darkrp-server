@@ -169,7 +169,7 @@ net.Receive("BuyEntity", function(len, ply)
                 return
             end
 
-            if ent.donatorOnly and not ply:IsDonator() then
+            if ent.donatorOnly and not (ULib and ULib.ucl.query(ply, "donator") or ply:IsUserGroup("donator") or ply:IsUserGroup("superadmin")) then
                 DarkRP.notify(ply, 1, 4, "You must be a donator to buy this entity!")
                 print("[RPEnts Module] " .. ply:Nick() .. " is not a donator for " .. entName)
                 return
@@ -179,6 +179,54 @@ net.Receive("BuyEntity", function(len, ply)
                 DarkRP.notify(ply, 1, 4, "You must be a Gun Dealer to buy this entity!")
                 print("[RPEnts Module] " .. ply:Nick() .. " is not a Gun Dealer for " .. entName)
                 return
+            end
+
+            -- Count owned entities
+            local ownedPrinters = 0
+            local ownedRegularPrinters = 0
+            local ownedDonatorPrinters = 0
+            local ownedModules = 0
+            for _, ent in pairs(ents.FindByClass("printer1")) do
+                if IsValid(ent) and ent:Getowning_ent() == ply then
+                    ownedPrinters = ownedPrinters + 1
+                    ownedRegularPrinters = ownedRegularPrinters + 1
+                end
+            end
+            for _, ent in pairs(ents.FindByClass("printer2")) do
+                if IsValid(ent) and ent:Getowning_ent() == ply then
+                    ownedPrinters = ownedPrinters + 1
+                    ownedDonatorPrinters = ownedDonatorPrinters + 1
+                end
+            end
+            for _, ent in pairs(ents.FindByClass("printer_module")) do
+                if IsValid(ent) and ent:Getowning_ent() == ply then
+                    ownedModules = ownedModules + 1
+                end
+            end
+
+            -- Enforce limits
+            if ent.ent == "printer1" or ent.ent == "printer2" then
+                if ownedPrinters >= 4 then
+                    DarkRP.notify(ply, 1, 4, "You can only own a maximum of 4 printers total!")
+                    print("[RPEnts Module] " .. ply:Nick() .. " has reached the max printer limit (4)")
+                    return
+                end
+                if ent.ent == "printer1" and ownedRegularPrinters >= 2 then
+                    DarkRP.notify(ply, 1, 4, "You can only own a maximum of 2 regular printers!")
+                    print("[RPEnts Module] " .. ply:Nick() .. " has reached the max regular printer limit (2)")
+                    return
+                end
+                if ent.ent == "printer2" and ownedDonatorPrinters >= 2 then
+                    DarkRP.notify(ply, 1, 4, "You can only own a maximum of 2 donator printers!")
+                    print("[RPEnts Module] " .. ply:Nick() .. " has reached the max donator printer limit (2)")
+                    return
+                end
+            elseif ent.ent == "printer_module" then
+                if ownedModules >= 4 then
+                    DarkRP.notify(ply, 1, 4, "You can only own a maximum of 4 printer modules!")
+                    print("[RPEnts Module] " .. ply:Nick() .. " has reached the max module limit (4)")
+                    return
+                end
             end
 
             ply:addMoney(-ent.price)
@@ -212,37 +260,58 @@ net.Receive("BuyEntity", function(len, ply)
 
             print("[RPEnts Module] Calculated spawn position: " .. tostring(spawnPos))
 
-            -- Create the appropriate entity
-            local entityClass = ent.ent == "custom_empty_shipment" and "custom_empty_shipment" or "custom_weapon_drop"
-            local drop = ents.Create(entityClass)
-            if not IsValid(drop) then
+            -- Determine entity class based on type
+            local entityClass = nil
+            if ent.ent == "custom_empty_shipment" then
+                entityClass = "custom_empty_shipment"
+            elseif ent.ent == "printer1" or ent.ent == "printer2" or ent.ent == "printer_module" then
+                entityClass = ent.ent
+            else
+                entityClass = "custom_weapon_drop"
+            end
+
+            local entity = ents.Create(entityClass)
+            if not IsValid(entity) then
                 print("[RPEnts Module] Error: Failed to create " .. entityClass .. " for " .. entName)
-                DarkRP.notify(ply, 1, 4, "Failed to spawn entity!")
+                DarkRP.notify(ply, 1, 4, "Failed to spawn " .. entName .. ". Contact an admin.")
                 ply:addMoney(ent.price) -- Refund
                 return
             end
 
-            drop:SetPos(spawnPos)
+            entity:SetPos(spawnPos)
             if entityClass == "custom_weapon_drop" then
-                drop:SetWeaponClass(ent.ent)
-                drop:SetWeaponName(ent.name)
+                entity:SetWeaponClass(ent.ent)
+                entity:SetWeaponName(ent.name)
                 local model = ent.model or "models/props_junk/cardboard_box001a.mdl"
                 print("[RPEnts Module] Setting model directly to: " .. model)
-                drop:SetModel(model)
-                drop:SetWeaponModel(model)
-            else
-                drop:SetModel(ent.model or "models/Items/ammocrate_smg1.mdl")
+                entity:SetModel(model)
+                entity:SetWeaponModel(model)
+            elseif entityClass == "custom_empty_shipment" then
+                entity:SetModel(ent.model or "models/Items/ammocrate_smg1.mdl")
+            else -- Handle printer1, printer2, printer_module
+                entity:SetModel(ent.model or "models/error.mdl")
+                if entityClass == "printer1" or entityClass == "printer2" then
+                    entity:Setowning_ent(ply)
+                elseif entityClass == "printer_module" then
+                    entity:Setowning_ent(ply)
+                    entity.SpawnedBy = ply
+                end
             end
-            drop:Spawn()
+            entity:Spawn()
+            entity:Activate() -- Ensure entity is fully initialized
 
             -- Debug entity properties
             print("[RPEnts Module] Spawned " .. entityClass .. " for " .. entName)
-            print("[RPEnts Module] - Position: " .. tostring(drop:GetPos()))
-            print("[RPEnts Module] - Model: " .. tostring(drop:GetModel()))
-            print("[RPEnts Module] - Class: " .. tostring(ent.ent))
-            print("[RPEnts Module] - IsValid: " .. tostring(IsValid(drop)))
+            print("[RPEnts Module] - Position: " .. tostring(entity:GetPos()))
+            print("[RPEnts Module] - Model: " .. tostring(entity:GetPos()))
+            print("[RPEnts Module] - Class: " .. ent.ent)
+            print("[RPEnts Module] - IsValid: " .. tostring(IsValid(entity)))
 
-            DarkRP.notify(ply, 0, 4, "Successfully bought and dropped " .. entName .. " for $" .. ent.price .. "! Press E to interact.")
+            local notifyMsg = "Successfully bought and dropped " .. entName .. " for $" .. ent.price .. "! Press E to interact."
+            if entityClass == "printer_module" then
+                notifyMsg = "Successfully bought and spawned " .. entName .. " for $" .. ent.price .. "! Press E to interact."
+            end
+            DarkRP.notify(ply, 0, 4, notifyMsg)
             return
         end
     end
@@ -250,6 +319,31 @@ net.Receive("BuyEntity", function(len, ply)
     DarkRP.notify(ply, 1, 4, "Entity not found!")
 end)
 
+net.Receive("PrinterModuleLoadingProgress", function(len, ply)
+    local module = net.ReadEntity()
+    local fraction = net.ReadFloat()
+    if not IsValid(module) or not module:GetClass():match("printer_module") or fraction < 1 then return end
+
+    local nearbyPrinters = ents.FindInSphere(module:GetPos(), 100)
+    local closestPrinter = nil
+    local minDistance = 100
+    for _, target in ipairs(nearbyPrinters) do
+        print("[Debug] Checking entity: " .. target:GetClass()) -- Debug output
+        if (target:GetClass() == "printer1" or target:GetClass() == "printer2") and not target.ModuleConnected and IsValid(target:Getowning_ent()) and target:Getowning_ent() == ply then
+            local distance = module:GetPos():Distance(target:GetPos())
+            if distance < minDistance then
+                minDistance = distance
+                closestPrinter = target
+            end
+        end
+    end
+
+    if IsValid(closestPrinter) then
+        module:ConnectToPrinter(closestPrinter)
+    else
+        DarkRP.notify(ply, 1, 4, "No nearby unconnected printer you own found!")
+    end
+end)
 
 hook.Add("InitPostEntity", "RPEnts_CheckEntities", function()
     print("[RPEnts Module] Running delayed entity check (after InitPostEntity):")

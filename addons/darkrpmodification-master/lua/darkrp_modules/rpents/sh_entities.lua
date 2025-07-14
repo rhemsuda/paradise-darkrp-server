@@ -29,6 +29,24 @@ RPEnts.Entities = {
         donatorOnly = false,
         jobRestricted = false,
     },
+    {
+        name = "Printer Module",
+        ent = "printer_module",
+        model = "models/props_lab/reciever01a.mdl",
+        price = 500,
+        category = "Printers",
+        donatorOnly = false,
+        jobRestricted = false,
+    },
+    {
+        name = "Donator Printer Module",
+        ent = "printer_module",
+        model = "models/props_lab/reciever01a.mdl",
+        price = 500,
+        category = "Printers",
+        donatorOnly = true,
+        jobRestricted = false,
+    },
 }
 
 print("[RPEnts Module] Defined " .. #RPEnts.Entities .. " custom entities from lua/entities")

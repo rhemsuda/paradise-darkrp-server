@@ -10,6 +10,7 @@ function ENT:Initialize()
     self:SetMoveType(MOVETYPE_VPHYSICS)
     self:SetSolid(SOLID_VPHYSICS)
     self:SetUseType(SIMPLE_USE)
+    self.health = 100 -- Explicitly initialize health
 
     local phys = self:GetPhysicsObject()
     if IsValid(phys) then
@@ -19,9 +20,6 @@ function ENT:Initialize()
         phys:EnableDrag(false)
         phys:EnableGravity(true)
         print("[Printer1] Physics object initialized successfully")
-        print("[Printer1] Mass: " .. phys:GetMass())
-        print("[Printer1] Drag enabled: " .. tostring(phys:IsDragEnabled()))
-        print("[Printer1] Gravity enabled: " .. tostring(phys:IsGravityEnabled()))
     else
         print("[Printer1] Error: Failed to initialize physics object")
     end
@@ -38,29 +36,76 @@ function ENT:Initialize()
     if tr.Hit then
         self:SetPos(tr.HitPos + Vector(0, 0, 1))
         print("[Printer1] Adjusted position to ground at: " .. tostring(self:GetPos()))
-        print("[Printer1] Trace hit entity: " .. (IsValid(tr.Entity) and tr.Entity:GetClass() or "none"))
-        print("[Printer1] Trace hit position: " .. tostring(tr.HitPos))
     else
         print("[Printer1] Warning: Trace failed to find ground!")
-        print("[Printer1] Start position: " .. tostring(startPos))
-        print("[Printer1] End position: " .. tostring(startPos + Vector(0, 0, -1010)))
     end
 
     self.sparking = false
     self:SetStoredMoney(0)
     self.StealCounters = {}
+    self.ModuleConnected = nil
+    self.IsDonator = false -- Default non-donator
     print("[Printer1] Spawned at position: " .. tostring(self:GetPos()))
-    print("[Printer1] Initialized with StoredMoney: " .. self:GetStoredMoney())
-    print("[Printer1] Transmit state set to: " .. self:UpdateTransmitState())
 
     timer.Create("PrintMoney_" .. self:EntIndex(), 60, 0, function()
         if not IsValid(self) then return end
         self:CreateMoneybag()
     end)
+
+    net.Start("PrinterForceClientUpdate")
+    net.WriteEntity(self)
+    net.Broadcast()
 end
 
 function ENT:UpdateTransmitState()
     return TRANSMIT_ALWAYS
+end
+
+function ENT:GetIsDonator()
+    return self.IsDonator
+end
+
+function ENT:GetMaxSaves()
+    return self.ModuleConnected and self.ModuleMaxSaves or 3 -- Use module's max saves if connected
+end
+
+function ENT:CreateMoneybag()
+    if not IsValid(self) or self:IsOnFire() then return end
+
+    if GAMEMODE.Config.printeroverheat and not (self.ModuleConnected and IsValid(self.ModuleConnected)) then
+        local overheatchance = GAMEMODE.Config.printeroverheatchance or 22
+        if math.random(1, overheatchance) == 3 then 
+            self:BurstIntoFlames() 
+        end
+    elseif self.ModuleConnected and IsValid(self.ModuleConnected) then
+        local module = self.ModuleConnected
+        if GAMEMODE.Config.printeroverheat then
+            local overheatchance = GAMEMODE.Config.printeroverheatchance or 22
+            if math.random(1, overheatchance) == 3 then
+                if module:SavePrinter() then
+                    DarkRP.notify(self:Getowning_ent(), 0, 4, "Printer cooled! Infused (" .. module:GetSaveCounter() .. "/" .. module:GetMaxSaves() .. ")")
+                    return -- Prevent fire/explosion
+                else
+                    self:BurstIntoFlames() -- No saves left, proceed to fire
+                end
+            end
+        end
+    end
+
+    local amount = GAMEMODE.Config.mprintamount or 250
+    local boost = self.ModuleConnected and self.ModuleConnected:GetIsDonator() and 1.15 or 1.0
+    amount = math.floor(amount * boost)
+    self:SetStoredMoney(self:GetStoredMoney() + amount)
+    DarkRP.notify(self:Getowning_ent(), 0, 4, "Printer has generated $" .. amount .. ". Total stored: $" .. self:GetStoredMoney() .. (self.ModuleConnected and " Infused (" .. self.ModuleConnected:GetSaveCounter() .. "/" .. self.ModuleConnected:GetMaxSaves() .. ")" or ""))
+
+    local effect = EffectData()
+    effect:SetOrigin(self:GetPos() + Vector(0, 0, 15))
+    effect:SetMagnitude(1)
+    effect:SetScale(1)
+    effect:SetRadius(1)
+    util.Effect("ManhackSparks", effect)
+
+    self.sparking = false
 end
 
 function ENT:Use(activator, caller)
@@ -138,10 +183,15 @@ function ENT:Explode()
         end
     end
 
+    -- Explode the connected module if it exists
+    if IsValid(self.ModuleConnected) then
+        self.ModuleConnected:Explode() -- Trigger module explosion
+    end
+
     local explosion = ents.Create("env_explosion")
     explosion:SetPos(self:GetPos())
     explosion:SetKeyValue("iMagnitude", "100")
-    explosion:SetKeyValue("spawnflags", "1") -- Add NoDamage flag (1 = No Damage)
+    explosion:SetKeyValue("spawnflags", "1") -- Add NoDamage flag
     explosion:Spawn()
     explosion:Fire("Explode", 0, 0)
 
@@ -152,53 +202,20 @@ function ENT:OnTakeDamage(dmg)
     if self:IsOnFire() then return end
 
     self:TakePhysicsDamage(dmg)
-    if self.health <= 0 then return end
-    self.health = (self.health or 100) - dmg:GetDamage()
+    if self.health == nil then self.health = 100 end -- Fallback if health is nil
+    self.health = self.health - dmg:GetDamage()
+    if self.ModuleConnected and IsValid(self.ModuleConnected) then
+        if self.ModuleConnected.health == nil then self.ModuleConnected.health = self.health end -- Sync initial HP
+        self.ModuleConnected.health = self.health -- Sync HP with printer
+    end
     if self.health <= 0 then
         self:Explode()
     end
 end
 
-function PrintMore(ent)
-    if not IsValid(ent) then return end
-
-    ent:CreateMoneybag()
-end
-
-function ENT:CreateMoneybag()
-    if not IsValid(self) or self:IsOnFire() then return end
-
-    if GAMEMODE.Config.printeroverheat then
-        local overheatchance
-        if GAMEMODE.Config.printeroverheatchance <= 3 then
-            overheatchance = 22
-        else
-            overheatchance = GAMEMODE.Config.printeroverheatchance or 22
-        end
-        if math.random(1, overheatchance) == 3 then self:BurstIntoFlames() end
-    end
-
-    local amount = GAMEMODE.Config.mprintamount
-    if amount == 0 then
-        amount = 250
-    end
-
-    self:SetStoredMoney(self:GetStoredMoney() + amount)
-    DarkRP.notify(self:Getowning_ent(), 0, 4, "Printer has generated $" .. amount .. ". Total stored: $" .. self:GetStoredMoney())
-
-    local effect = EffectData()
-    effect:SetOrigin(self:GetPos() + Vector(0, 0, 15))
-    effect:SetMagnitude(1)
-    effect:SetScale(1)
-    effect:SetRadius(1)
-    util.Effect("ManhackSparks", effect)
-
-    self.sparking = false
-end
-
 function ENT:BurstIntoFlames()
     if not IsValid(self) or self:IsOnFire() then return end
-    self:Ignite(12, 0) -- Set fire duration to 12 seconds
+    self:Ignite(12, 0)
     self.sparking = true
     timer.Create("FireDamage_" .. self:EntIndex(), 1, 12, function()
         if not IsValid(self) then return end
@@ -232,4 +249,9 @@ function ENT:SpawnFunction(ply, tr, ClassName)
     ent:Setowning_ent(ply)
 
     return ent
+end
+
+function ENT:OnRemove()
+    timer.Remove("PrintMoney_" .. self:EntIndex())
+    timer.Remove("FireDamage_" .. self:EntIndex())
 end
