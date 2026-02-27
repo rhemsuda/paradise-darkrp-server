@@ -45,7 +45,8 @@ local function SendJobsDataToPlayer(ply)
             category = job.category or "Other",
             weapons = job.weapons or {},
             entities = entities,
-            candropweapons = job.candropweapons or false
+            candropweapons = job.candropweapons or false,
+            level = job.level or 0,
         }
     end
 
@@ -79,8 +80,18 @@ net.Receive("RequestJobChange", function(len, ply)
     end
 
     if job.max > 0 and #team.GetPlayers(job.team) >= job.max then
+        DarkRP.notify(ply, 1, 4, "This job is full!")
         DebugPrint("[Jobs Module] " .. ply:Nick() .. " attempted to switch to job at max capacity: " .. job.name)
         return
+    end
+
+    local requiredLevel = job.level or 0
+    if requiredLevel > 0 then
+        local playerLevel = ply:GetNWInt("DarkRP_Level", 1)
+        if playerLevel < requiredLevel then
+            DarkRP.notify(ply, 1, 4, "You need level " .. requiredLevel .. " for this job!")
+            return
+        end
     end
 
     -- Switch the player's job

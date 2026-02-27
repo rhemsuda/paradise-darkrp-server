@@ -76,29 +76,62 @@ local function UpdateInfoPanel(entity)
     priceLabel:SetSize(panelW, 20)
     priceLabel:SetFont("DermaDefaultBold")
     priceLabel:SetColor(Color(0, 255, 0))
-    yPos = yPos + 36
+    yPos = yPos + 24
+
+    -- Level requirement and unlock status (same as jobs)
+    local requiredLevel = entity.level or 0
+    if requiredLevel > 0 then
+        local playerLevel = LocalPlayer():GetNWInt("DarkRP_Level", 1)
+        local levelLabel = vgui.Create("DLabel", InfoPanel)
+        if playerLevel >= requiredLevel then
+            levelLabel:SetText("Unlocked (Level " .. requiredLevel .. ")")
+            levelLabel:SetColor(Color(100, 255, 100))
+        else
+            levelLabel:SetText("Requires level " .. requiredLevel .. " (you: " .. playerLevel .. ")")
+            levelLabel:SetColor(Color(255, 180, 100))
+        end
+        levelLabel:SetPos(pad, yPos)
+        levelLabel:SetSize(panelW, 18)
+        levelLabel:SetFont("DermaDefaultBold")
+        yPos = yPos + 22
+    end
+
+    yPos = yPos + 8
+
+    local playerLevel = LocalPlayer():GetNWInt("DarkRP_Level", 1)
+    local isLocked = requiredLevel > 0 and playerLevel < requiredLevel
 
     local buyButton = vgui.Create("DButton", InfoPanel)
     buyButton:SetSize(math.min(160, panelW), 36)
     buyButton:SetPos(pad, yPos)
-    buyButton:SetText("Buy " .. entity.name)
-    buyButton:SetTextColor(Color(0, 0, 0))
-    buyButton:SetContentAlignment(5)
-    buyButton.Paint = function(self, w, h)
-        draw.RoundedBox(4, 0, 0, w, h, self:IsHovered() and Color(100, 200, 100, 240) or Color(50, 150, 50, 240))
-    end
-    buyButton.DoClick = function()
-        if not SelectedEntity then return end
-        local success, err = pcall(function()
-            net.Start("BuyEntity")
-            net.WriteString(SelectedEntity.name)
-            net.SendToServer()
-        end)
-        if success then
-            print("[RPEnts Module] Requested to buy entity: " .. SelectedEntity.name)
-        else
-            print("[RPEnts Module] Error sending BuyEntity message: " .. tostring(err))
-            ShowNotification("Failed to buy entity: Network error")
+    if isLocked then
+        buyButton:SetText("Level " .. requiredLevel .. " required")
+        buyButton:SetTextColor(Color(120, 120, 120))
+        buyButton:SetContentAlignment(5)
+        buyButton:SetEnabled(false)
+        buyButton.Paint = function(self, w, h)
+            draw.RoundedBox(4, 0, 0, w, h, Color(80, 80, 80, 200))
+        end
+    else
+        buyButton:SetText("Buy " .. entity.name)
+        buyButton:SetTextColor(Color(0, 0, 0))
+        buyButton:SetContentAlignment(5)
+        buyButton.Paint = function(self, w, h)
+            draw.RoundedBox(4, 0, 0, w, h, self:IsHovered() and Color(100, 200, 100, 240) or Color(50, 150, 50, 240))
+        end
+        buyButton.DoClick = function()
+            if not SelectedEntity then return end
+            local success, err = pcall(function()
+                net.Start("BuyEntity")
+                net.WriteString(SelectedEntity.name)
+                net.SendToServer()
+            end)
+            if success then
+                print("[RPEnts Module] Requested to buy entity: " .. SelectedEntity.name)
+            else
+                print("[RPEnts Module] Error sending BuyEntity message: " .. tostring(err))
+                ShowNotification("Failed to buy entity: Network error")
+            end
         end
     end
 end
@@ -235,6 +268,7 @@ function BuildEntitiesPanel(parent)
         local rowHeight = 56
         local rowGap = 4
         local availableW = (IsValid(leftPanel) and leftPanel:GetWide() or 280) - 26
+        local playerLevel = LocalPlayer():GetNWInt("DarkRP_Level", 1)
 
         for _, category in ipairs(sortedCategories) do
             -- Category header (label only, no dropdown).
@@ -248,19 +282,23 @@ function BuildEntitiesPanel(parent)
 
             if category == "Printers" then
                 table.sort(categories[category], function(a, b)
-                    if a.name == "Printer" then return true end
-                    if b.name == "Printer" then return false end
-                    return a.name < b.name
+                    local lvA, lvB = a.level or 1, b.level or 1
+                    if lvA ~= lvB then return lvA < lvB end
+                    return (a.name or "") < (b.name or "")
                 end)
             else
                 table.sort(categories[category], function(a, b) return a.name < b.name end)
             end
 
             for _, ent in ipairs(categories[category]) do
+                local requiredLevel = ent.level or 0
+                local isLocked = requiredLevel > 0 and playerLevel < requiredLevel
+
                 local row = vgui.Create("DPanel", container)
                 row:SetPos(4, listY)
                 row:SetSize(availableW + 10, rowHeight)
                 row.Entity = ent
+                row:SetAlpha(isLocked and 130 or 255)
                 row.Paint = function(self, w, h)
                     local bg = (SelectedEntity and SelectedEntity == ent) and Color(60, 70, 90, 240) or Color(40, 40, 40, 200)
                     draw.RoundedBox(4, 0, 0, w, h, bg)
@@ -283,6 +321,22 @@ function BuildEntitiesPanel(parent)
                 end
                 modelPanel.DoClick = function() UpdateInfoPanel(ent) end
 
+                -- Level overlay: "Lv.X" when locked, "Unlocked" when level met
+                local overlay = vgui.Create("DLabel", row)
+                overlay:SetPos(4, 2)
+                overlay:SetSize(44, 14)
+                overlay:SetFont("DermaDefault")
+                overlay:SetContentAlignment(5)
+                if isLocked then
+                    overlay:SetText("Lv." .. requiredLevel)
+                    overlay:SetColor(Color(255, 220, 100))
+                elseif requiredLevel > 0 then
+                    overlay:SetText("Unlocked")
+                    overlay:SetColor(Color(150, 255, 150))
+                else
+                    overlay:SetText("")
+                end
+
                 local nameLabel = vgui.Create("DLabel", row)
                 nameLabel:SetPos(58, 8)
                 nameLabel:SetSize(availableW - 60, 20)
@@ -292,8 +346,12 @@ function BuildEntitiesPanel(parent)
                 local priceLabel = vgui.Create("DLabel", row)
                 priceLabel:SetPos(58, 28)
                 priceLabel:SetSize(availableW - 60, 18)
-                priceLabel:SetText("$" .. ent.price)
+                local priceText = "$" .. ent.price
+                if ent.level and ent.level > 1 then priceText = priceText .. "  ·  Lv." .. ent.level end
+                priceLabel:SetText(priceText)
                 priceLabel:SetColor(Color(0, 255, 0))
+
+                row:SetTooltip(isLocked and (ent.name .. " (Level " .. requiredLevel .. " required)") or ent.name)
 
                 row.OnMousePressed = function(self, code)
                     if code == MOUSE_LEFT then UpdateInfoPanel(self.Entity) end

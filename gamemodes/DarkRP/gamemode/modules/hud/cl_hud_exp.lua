@@ -24,11 +24,17 @@ local function GetXP()
     return ply:GetNWInt("DarkRP_Experience", 0)
 end
 
+-- XP required to reach next level (server sets DarkRP_ExperienceCurrentLevel and DarkRP_ExperienceNeeded)
 local function GetXPNeeded()
     local ply = LocalPlayer()
     if not IsValid(ply) then return 100 end
-    local need = ply:GetNWInt("DarkRP_ExperienceNeeded", 100)
-    return need > 0 and need or 100
+    return ply:GetNWInt("DarkRP_ExperienceNeeded", 100)
+end
+
+local function GetXPCurrentLevelStart()
+    local ply = LocalPlayer()
+    if not IsValid(ply) then return 0 end
+    return ply:GetNWInt("DarkRP_ExperienceCurrentLevel", 0)
 end
 
 hook.Add("HUDPaint", "Paradise_EXPBar", function()
@@ -44,10 +50,12 @@ hook.Add("HUDPaint", "Paradise_EXPBar", function()
     local x = (w - barW) / 2
     local y = topMargin
 
-    local level = GetLevel()
     local xp = GetXP()
-    local need = GetXPNeeded()
-    local ratio = math.Clamp(need > 0 and (xp / need) or 0, 0, 1)
+    local currentStart = GetXPCurrentLevelStart()
+    local nextStart = GetXPNeeded()
+    local segment = nextStart - currentStart
+    local ratio = (segment > 0 and (xp - currentStart) / segment) or 0
+    ratio = math.Clamp(ratio, 0, 1)
 
     -- Background
     draw.RoundedBox(6, x - 2, y - 2, barW + 4, barH + 4, Color(20, 24, 32, 220))
@@ -58,9 +66,8 @@ hook.Add("HUDPaint", "Paradise_EXPBar", function()
     surface.SetDrawColor(0, 200, 255, 120)
     surface.DrawOutlinedRect(x, y, barW, barH)
 
-    -- Text: "Level N" left, "current / needed" center/right
-    local levelStr = "Level " .. tostring(level)
-    local xpStr = tostring(xp) .. " / " .. tostring(need) .. " XP"
-    draw.SimpleText(levelStr, "HUD_EXPBar", x + 8, y + barH / 2, Color(255, 255, 255), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-    draw.SimpleText(xpStr, "HUD_EXPBar", x + barW - 8, y + barH / 2, Color(255, 255, 255), TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+    -- Text: show XP percentage only (no Level here)
+    local percent = math.floor(ratio * 100 + 0.5)
+    local xpStr = tostring(percent) .. "% XP"
+    draw.SimpleText(xpStr, "HUD_EXPBar", x + barW / 2, y + barH / 2, Color(255, 255, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 end)

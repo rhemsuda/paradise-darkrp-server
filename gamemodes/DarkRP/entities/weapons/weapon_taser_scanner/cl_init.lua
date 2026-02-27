@@ -26,8 +26,11 @@ hook.Add("HUDPaint", "TaserScanner_LoadingBar", function()
     if not IsValid(wep) or wep:GetClass() ~= "weapon_taser_scanner" then return end
     if not wep.GetScanning or not wep:GetScanning() then return end
 
-    local startTime = wep:GetScanStartTime and wep:GetScanStartTime() or 0
-    local elapsed = CurTime() - startTime
+    local startTime = 0
+    if wep.GetScanStartTime then
+        startTime = wep:GetScanStartTime()
+    end
+    local elapsed = CurTime() - (startTime or 0)
     local progress = math.Clamp(elapsed / SCAN_DURATION, 0, 1)
 
     local w, h = 300, 24

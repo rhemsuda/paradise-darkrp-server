@@ -1,180 +1,165 @@
---[[if SERVER then
-    -- Ensure MySQL tables are initialized (already in sv_data.lua)
-    -- Populate darkrp_levelinfo with example data if empty
-    hook.Add("Initialize", "SetupLevelingSystem", function()
-        SetGlobalInt("MaxLevel", 50)
-        MySQLite.query("SELECT COUNT(*) as count FROM darkrp_levelinfo", function(result)
-            if result and tonumber(result[1].count) == 0 then
-                local levelData = { 
-                    {level = 1, experienceRequired = 0},
-                    {level = 2, experienceRequired = 100},
-                    {level = 3, experienceRequired = 210},
-                    {level = 4, experienceRequired = 325},
-                    {level = 5, experienceRequired = 512},
-                    {level = 6, experienceRequired = 804},
-                    {level = 7, experienceRequired = 1150},
-                    {level = 8, experienceRequired = 1580},
-                    {level = 9, experienceRequired = 2130},
-                    {level = 10, experienceRequired = 2990},
-                    {level = 11, experienceRequired = 3800},
-                    {level = 12, experienceRequired = 5010},
-                    {level = 13, experienceRequired = 6405},
-                    {level = 14, experienceRequired = 7930},
-                    {level = 15, experienceRequired = 9670},
-                    {level = 16, experienceRequired = 11640},
-                    {level = 17, experienceRequired = 13420},
-                    {level = 18, experienceRequired = 16247},
-                    {level = 19, experienceRequired = 20320},
-                    {level = 20, experienceRequired = 24804},
-                    {level = 21, experienceRequired = 29106},
-                    {level = 22, experienceRequired = 36220},
-                    {level = 23, experienceRequired = 43108},
-                    {level = 24, experienceRequired = 51200},
-                    {level = 25, experienceRequired = 60960},
-                    {level = 26, experienceRequired = 71320},
-                    {level = 27, experienceRequired = 83200},
-                    {level = 28, experienceRequired = 96720},
-                    {level = 29, experienceRequired = 112000},
-                    {level = 30, experienceRequired = 129000},
-                    {level = 31, experienceRequired = 147800},
-                    {level = 32, experienceRequired = 168500},
-                    {level = 33, experienceRequired = 191200},
-                    {level = 34, experienceRequired = 216000},
-                    {level = 35, experienceRequired = 243000},
-                    {level = 36, experienceRequired = 272320},
-                    {level = 37, experienceRequired = 304080},
-                    {level = 38, experienceRequired = 338400},
-                    {level = 39, experienceRequired = 375400},
-                    {level = 40, experienceRequired = 415200},
-                    {level = 41, experienceRequired = 457920},
-                    {level = 42, experienceRequired = 503680},
-                    {level = 43, experienceRequired = 552600},
-                    {level = 44, experienceRequired = 604800},
-                    {level = 45, experienceRequired = 660400},
-                    {level = 46, experienceRequired = 719520},
-                    {level = 47, experienceRequired = 782280},
-                    {level = 48, experienceRequired = 848800},
-                    {level = 49, experienceRequired = 919200},
-                    {level = 50, experienceRequired = 993600}
-                }
-                for _, data in ipairs(levelData) do
-                    MySQLite.query(string.format("INSERT INTO darkrp_levelinfo (level, experienceRequired) VALUES (%d, %d)", data.level, data.experienceRequired),
-                        nil, function(err) print("[Leveling] Failed to insert level data: " .. err) end)
-                end
-                print("[Leveling] Initialized level data in MySQL.")
-            else
-                print("[Leveling] Level data already exists: " .. result[1].count .. " rows.")
-            end
-        end, function(err)
-            print("[Leveling] Error checking darkrp_levelinfo: " .. err)
-        end)
-    end)
+--[[---------------------------------------------------------------------------
+  Paradise RP – Leveling (100 levels). XP from: quests, crafting, printers, drugs.
+  DB: darkrp_player.experience (added by base migration 20250201), darkrp_levelinfo(level, experienceRequired).
+---------------------------------------------------------------------------]]
+if not SERVER then return end
 
-    -- Load player data on join
-    hook.Add("PlayerInitialSpawn", "LoadPlayerLevel", function(ply)
-        local uid = ply:UniqueID()
-        print("[Leveling] Loading data for " .. ply:Nick() .. " (UID: " .. uid .. ")")
-        MySQLite.query(string.format("SELECT experience FROM darkrp_player WHERE uid = %d", uid), function(data)
-            if data and data[1] then
-                local xp = tonumber(data[1].experience) or 0
-                ply:SetNWInt("Experience", xp)
-                print("[Leveling] Loaded XP: " .. xp .. " for " .. ply:Nick())
-            else
-                MySQLite.query(string.format(
-                    "INSERT INTO darkrp_player (uid, rpname, salary, wallet, experience) VALUES (%d, %s, 30, 0, 0)",
-                    uid, MySQLite.SQLStr(ply:Nick())
-                ), function()
-                    print("[Leveling] Inserted new player " .. ply:Nick() .. " with XP 0")
-                end, function(err)
-                    print("[Leveling] Failed to insert new player: " .. err)
-                end)
-                ply:SetNWInt("Experience", 0)
-            end
+Leveling = Leveling or {}
 
-            MySQLite.query("SELECT level, experienceRequired FROM darkrp_levelinfo ORDER BY level ASC", function(levels)
-                if not levels then print("[Leveling] No level data returned!") return end
-                local xp = ply:GetNWInt("Experience", 0)
-                local currentLevel = 1
-                local nextLevel = 1
-                local nextLevelXp = 0
-                for _, lvl in ipairs(levels) do
-                    if xp >= tonumber(lvl.experienceRequired) then
-                        currentLevel = tonumber(lvl.level)
-                    else
-                        nextLevel = tonumber(lvl.level)
-                        nextLevelXp = tonumber(lvl.experienceRequired)
-                        break
-                    end
-                end
-                ply:SetNWInt("Level", currentLevel)
-                ply:SetNWInt("NextLevel", nextLevel)
-                ply:SetNWInt("NextLevelXP", nextLevelXp)
-                print("[Leveling] Set " .. ply:Nick() .. " to Level: " .. currentLevel .. " with XP: " .. xp)
+local MAX_LEVEL = 100
+local DEBUG = CreateConVar("leveling_debug", "0", FCVAR_ARCHIVE, "Print leveling debug to console (1=on)")
+
+-- Build required XP for level n: level 1 = 0, level 2 = 100, then curve
+local function getRequiredXPForLevel(level)
+    if level <= 1 then return 0 end
+    return math.floor(100 * math.pow(level - 1, 1.45) + 0.5)
+end
+
+-- Create level table and seed 100 levels after DB is ready
+hook.Add("DarkRPDBInitialized", "Paradise_Leveling_Setup", function()
+    MySQLite.query([[
+        CREATE TABLE IF NOT EXISTS darkrp_levelinfo(
+            level INTEGER NOT NULL PRIMARY KEY,
+            experienceRequired BIGINT NOT NULL
+        );
+    ]], function()
+        MySQLite.query("SELECT COUNT(*) AS cnt FROM darkrp_levelinfo", function(data)
+            local count = data and data[1] and tonumber(data[1].cnt) or 0
+            if count >= MAX_LEVEL then return end
+
+            local values = {}
+            for lvl = 1, MAX_LEVEL do
+                local req = getRequiredXPForLevel(lvl)
+                values[#values + 1] = string.format("(%d,%d)", lvl, req)
+            end
+            local sql
+            if MySQLite.isMySQL() then
+                sql = "REPLACE INTO darkrp_levelinfo(level, experienceRequired) VALUES " .. table.concat(values, ",")
+            else
+                sql = "INSERT OR REPLACE INTO darkrp_levelinfo(level, experienceRequired) VALUES " .. table.concat(values, ",")
+            end
+            MySQLite.query(sql, function()
+                if DEBUG:GetBool() then print("[Leveling] Seeded " .. MAX_LEVEL .. " levels.") end
             end, function(err)
-                print("[Leveling] Error loading level data: " .. err)
+                if DEBUG:GetBool() then print("[Leveling] Seed error: " .. tostring(err)) end
             end)
         end, function(err)
-            print("[Leveling] Error loading player data: " .. err)
+            if DEBUG:GetBool() then print("[Leveling] darkrp_levelinfo count error: " .. tostring(err)) end
         end)
+    end, function(err)
+        if DEBUG:GetBool() then print("[Leveling] darkrp_levelinfo create error: " .. tostring(err)) end
     end)
+end)
 
-    -- Function to add XP and handle leveling
-    local function AddXP(ply, amount)
-        local uid = ply:UniqueID()
-        local currentXP = ply:GetNWInt("Experience", 0)
-        local newXP = currentXP + amount
-
-        -- Update XP in MySQL and on player
-        MySQLite.query(string.format("UPDATE darkrp_player SET experience = %d WHERE uid = %d", newXP, uid))
-        ply:SetNWInt("Experience", newXP)
-        print("[Leveling] Added " .. amount .. " XP to " .. ply:Nick() .. ". New XP: " .. newXP)
-
-        -- Check for level-up
-        MySQLite.query("SELECT level, experienceRequired FROM darkrp_levelinfo ORDER BY level ASC", function(levels)
-            local currentLevel = ply:GetNWInt("Level", 1)
-            local newLevel = currentLevel
-            for _, lvl in ipairs(levels) do
-                if newXP >= tonumber(lvl.experienceRequired) then
-                    newLevel = tonumber(lvl.level)
-                else
-                    nextLevel = tonumber(lvl.level)
-                    nextLevelXp = tonumber(lvl.experienceRequired)
-                    break
-                end
-            end
-            if newLevel > currentLevel then
-                ply:SetNWInt("Level", newLevel)
-                ply:SetNWInt("NextLevel", nextLevel)
-                ply:SetNWInt("NextLevelXP", nextLevelXp)
-                ply:ChatPrint("You’ve leveled up to Level " .. newLevel .. "!")
-                print("[Leveling] " .. ply:Nick() .. " leveled up to " .. newLevel)
-            end
-        end)
-    end
-
-    -- Example: Gain XP on kill
-    hook.Add("PlayerDeath", "XPOnKill", function(victim, inflictor, attacker)
-        print("[Leveling] PlayerDeath triggered - Victim: " .. victim:Nick() .. ", Attacker: " .. (IsValid(attacker) and attacker:Nick() or "N/A"))
-        if IsValid(attacker) and attacker:IsPlayer() and attacker ~= victim then
-            AddXP(attacker, 50)
-            attacker:ChatPrint("You gained 50 XP for a kill!")
-        end
-    end)
-
-    -- Command to check XP and level
-    concommand.Add("check_xp", function(ply)
-        local xp = ply:GetNWInt("Experience", 0)
-        local level = ply:GetNWInt("Level", 1)
-        ply:ChatPrint("Level: " .. level .. " | XP: " .. xp)
-    end)
-
-    concommand.Add("give_xp", function(ply, cmd, args)
-        if not ply:IsSuperAdmin() then return end
-        if not args[1] then return end
-        local amount = tonumber(args[1])
-        if amount then
-            AddXP(ply, amount)
-        end
+local levelCache = {}
+local function refreshLevelCache(callback)
+    MySQLite.query("SELECT level, experienceRequired FROM darkrp_levelinfo ORDER BY level ASC", function(rows)
+        levelCache = rows or {}
+        if callback then callback() end
     end)
 end
-]]
+
+-- Recompute level from XP and update NW vars (DarkRP_Level, DarkRP_Experience, DarkRP_ExperienceCurrentLevel, DarkRP_ExperienceNeeded)
+local function updatePlayerLevelFromXP(ply, xp)
+    if #levelCache == 0 then refreshLevelCache(function() updatePlayerLevelFromXP(ply, xp) end) return end
+
+    local currentLevel = 1
+    local currentThreshold = 0
+    local nextThreshold = 0
+
+    for _, row in ipairs(levelCache) do
+        local lvl = tonumber(row.level)
+        local req = tonumber(row.experienceRequired) or 0
+        if xp >= req then
+            currentLevel = lvl
+            currentThreshold = req
+        else
+            nextThreshold = req
+            break
+        end
+    end
+    if nextThreshold == 0 then nextThreshold = currentThreshold end
+
+    ply:SetNWInt("DarkRP_Level", currentLevel)
+    ply:SetNWInt("DarkRP_Experience", xp)
+    ply:SetNWInt("DarkRP_ExperienceCurrentLevel", currentThreshold)
+    ply:SetNWInt("DarkRP_ExperienceNeeded", nextThreshold)
+end
+
+-- Add XP and optionally run level-up logic. Call from quests/crafting/printers/drugs.
+function Leveling.AddXP(ply, amount, source)
+    if not IsValid(ply) or not isnumber(amount) or amount < 0 then return end
+    amount = math.floor(amount)
+    if amount == 0 then return end
+
+    local sid64 = ply:SteamID64()
+    MySQLite.query(string.format("SELECT experience FROM darkrp_player WHERE uid = %s", sid64), function(data)
+        local current = 0
+        if data and data[1] then current = tonumber(data[1].experience) or 0 end
+
+        local newXP = current + amount
+        MySQLite.query(string.format("UPDATE darkrp_player SET experience = %d WHERE uid = %s", newXP, sid64))
+        ply:SetNWInt("DarkRP_Experience", newXP)
+
+        local oldLevel = ply:GetNWInt("DarkRP_Level", 1)
+        updatePlayerLevelFromXP(ply, newXP)
+        local newLevel = ply:GetNWInt("DarkRP_Level", 1)
+
+        if newLevel > oldLevel then
+            ply:ChatPrint("You've leveled up to Level " .. newLevel .. "!")
+        end
+        if DEBUG:GetBool() then
+            print(string.format("[Leveling] %s +%d XP (source: %s) -> %d XP, level %d", ply:Nick(), amount, tostring(source or "?"), newXP, newLevel))
+        end
+    end, function(err)
+        if DEBUG:GetBool() then print("[Leveling] AddXP query error: " .. tostring(err)) end
+    end)
+end
+
+-- Other modules (quests, crafting, printers, drugs) grant XP by calling:
+--   hook.Run("Paradise_AddXP", ply, amount, "quest")  -- or "crafting", "printer", "drugs"
+-- or on server: Leveling.AddXP(ply, amount, "printer")
+hook.Add("Paradise_AddXP", "Leveling_Grant", function(ply, amount, source)
+    Leveling.AddXP(ply, amount, source)
+end)
+
+-- Grant XP when a money printer pays out (any tier: printer1–printer9 or base money_printer)
+local PRINTER_XP_PER_PAYOUT = 3
+hook.Add("moneyPrinterPrinted", "Leveling_PrinterXP", function(printer, moneybag)
+    if not IsValid(printer) then return end
+    local owner = printer:Getowning_ent()
+    if IsValid(owner) and owner:IsPlayer() then
+        Leveling.AddXP(owner, PRINTER_XP_PER_PAYOUT, "printer")
+    end
+end)
+
+-- Load on spawn and set NW vars
+hook.Add("PlayerInitialSpawn", "Paradise_Leveling_Load", function(ply)
+    refreshLevelCache(function()
+        local sid64 = ply:SteamID64()
+        MySQLite.query(string.format("SELECT experience FROM darkrp_player WHERE uid = %s", sid64), function(data)
+            local xp = 0
+            if data and data[1] then xp = tonumber(data[1].experience) or 0 end
+            updatePlayerLevelFromXP(ply, xp)
+            if DEBUG:GetBool() then print("[Leveling] Loaded " .. ply:Nick() .. " XP=" .. xp) end
+        end, function()
+            updatePlayerLevelFromXP(ply, 0)
+        end)
+    end)
+end)
+
+concommand.Add("check_xp", function(ply)
+    if not IsValid(ply) then return end
+    local xp = ply:GetNWInt("DarkRP_Experience", 0)
+    local lvl = ply:GetNWInt("DarkRP_Level", 1)
+    ply:ChatPrint("Level: " .. lvl .. " | XP: " .. xp)
+end)
+
+concommand.Add("give_xp", function(ply, cmd, args)
+    if not IsValid(ply) or not ply:IsSuperAdmin() then return end
+    local amount = tonumber(args and args[1])
+    if amount and amount > 0 then
+        Leveling.AddXP(ply, amount, "give_xp")
+        ply:ChatPrint("Granted " .. amount .. " XP.")
+    end
+end)

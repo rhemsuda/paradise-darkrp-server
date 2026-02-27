@@ -1,0 +1,74 @@
+working on - 
+
+-HUD TTRP style 
+
+Need still 
+
+-Trading instead of drop(switch)(also make sure weapons don't drop on death)
+
+items- 
+Knife(lowlevel)/Crowbar(High Level)/Enhanced crowbar with questline (Prop destroyer)
+
+-Levels (printers / entities)
+5 Styles of printers
+Coolers
+Swag Bags(contraband holder for after raids)
+jobs have level requirements for higher tiered gear/tools
+
+- Teleporters Large map endpoints vehicles wont always be enough.
+
+-POC(cleanup of unowned printers, setup internal printer money / overtaking printers)
+
+-admin menu/system completion
+
+NPCS-
+Banker
+Crafter
+Medic
+Gangmember
+Police
+Drug Dealer
+Dojo (combat)
+Miner
+Car Dealer
+Mechanic(salvage/recovery)
+
+- Quest lines - missions for blueprints / unlockables
+
+- perks tune and add tree
+
+- Drug Growing / Farming
+
+- Partys / Equipment Viewing
+
+
+Jobs-
+Paramedic (defib)
+Miner (Shovel/Pickaxe Demotable)
+Banker(rare random Material(like bankers diamonds Demotable if not banking)
+Drug Dealer (2-4)
+Cook (2 demotable) (want hunger mod to keep people out and about instead of base sitting)
+
+-Cars (if big map want evocity like noobonic)
+keys that can spawn a car (temp/perm cars)
+
+-Bank robbery mission like in noobonic
+
+-Taser for cops(scanner/taser)
+
+-Door system once on map(raid system/Building takeover)
+
+-Armor
+
+-Utility Items
+
+Events(also boostable by players job sizes etc) -
+zombies
+Ant Lion (noobonic)
+Mining Meteors(big rocks)
+job bonuses
+Extra Printers
+
+
+Donator Perks / Store
+

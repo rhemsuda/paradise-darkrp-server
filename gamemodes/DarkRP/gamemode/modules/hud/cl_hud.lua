@@ -39,40 +39,15 @@ colors.white = color_white
 colors.white1 = Color(255, 255, 255, 200)
 
 local function ReloadConVars()
-    ConVars = {
-        background = {0,0,0,100},
-        Healthbackground = {0,0,0,200},
-        Healthforeground = {140,0,0,180},
-        HealthText = {255,255,255,200},
-        Job1 = {0,0,150,200},
-        Job2 = {0,0,0,255},
-        salary1 = {0,150,0,200},
-        salary2 = {0,0,0,255}
-    }
+    -- Fixed colors/sizes for a consistent custom HUD (ignore DarkRP CVars).
+    ConVars.background      = Color(5, 10, 16, 210)   -- main panel
+    ConVars.Healthbackground = Color(8, 12, 20, 230)  -- HP bar background
+    ConVars.Healthforeground = Color(200, 40, 40, 230) -- HP bar fill (modern red)
+    ConVars.HealthText       = Color(255, 255, 255, 230)
 
-    for name, Colour in pairs(ConVars) do
-        ConVars[name] = {}
-        for num, rgb in SortedPairs(Colour) do
-            local CVar = GetConVar(name .. num) or CreateClientConVar(name .. num, rgb, true, false)
-            table.insert(ConVars[name], CVar:GetInt())
-
-            if not cvars.GetConVarCallbacks(name .. num, false) then
-                cvars.AddChangeCallback(name .. num, function()
-                    timer.Simple(0, ReloadConVars)
-                end)
-            end
-        end
-        ConVars[name] = Color(unpack(ConVars[name]))
-    end
-
-
-    HUDWidth =  (GetConVar("HudW") or CreateClientConVar("HudW", 240, true, false)):GetInt()
-    HUDHeight = (GetConVar("HudH") or CreateClientConVar("HudH", 115, true, false)):GetInt()
-
-    if not cvars.GetConVarCallbacks("HudW", false) and not cvars.GetConVarCallbacks("HudH", false) then
-        cvars.AddChangeCallback("HudW", function() timer.Simple(0,ReloadConVars) end)
-        cvars.AddChangeCallback("HudH", function() timer.Simple(0,ReloadConVars) end)
-    end
+    -- Slightly wide panel but not too tall, so text sits neatly above bars.
+    HUDWidth  = 420
+    HUDHeight = 115
 end
 ReloadConVars()
 
@@ -89,35 +64,64 @@ local function DrawHealth()
     local healthRatio = math.Min(Health / maxHealth, 1)
     local rounded = math.Round(3 * healthRatio)
     local Border = math.Min(6, rounded * rounded)
-    draw.RoundedBox(Border, RelativeX + 4, RelativeY - 30, HUDWidth - 8, 20, ConVars.Healthbackground)
-    draw.RoundedBox(Border, RelativeX + 5, RelativeY - 29, (HUDWidth - 9) * healthRatio, 18, ConVars.Healthforeground)
+    -- Health bar (red) – full-width background, filled by ratio, with safe bottom margin
+    local barX = RelativeX + 8
+    local barW = HUDWidth - 16
+    local barH = 18
+    local bottomMargin = 6
+    local gap = 2
 
-    draw.DrawNonParsedText(math.Max(0, math.Round(myHealth)), "DarkRPHUD2", RelativeX + 4 + (HUDWidth - 8) / 2, RelativeY - 32, ConVars.HealthText, 1)
+    -- Place armor bar so its bottom sits at Scrh - bottomMargin, then HP bar above it
+    local armorY = RelativeY - bottomMargin - barH
+    local barY = armorY - gap - barH
 
-    -- Armor
-    local armor = math.Clamp(localplayer:Armor(), 0, 100)
-    if armor ~= 0 then
-        draw.RoundedBox(2, RelativeX + 4, RelativeY - 15, (HUDWidth - 8) * armor / 100, 5, colors.blue)
+    draw.RoundedBox(Border, barX, barY, barW, barH, ConVars.Healthbackground)
+    draw.RoundedBox(Border, barX, barY, barW * healthRatio, barH, ConVars.Healthforeground)
+    draw.DrawNonParsedText(math.Max(0, math.Round(myHealth)), "DarkRPHUD2", barX + barW / 2, barY - 2, ConVars.HealthText, 1)
+
+    -- Armor bar (blue) – same size as HP, slight vertical gap below, always on-screen
+    local armor = math.Clamp(localplayer:Armor() or 0, 0, 100)
+    draw.RoundedBox(Border, barX, armorY, barW, barH, Color(8, 12, 20, 220))
+    if armor > 0 then
+        draw.RoundedBox(Border, barX, armorY, barW * (armor / 100), barH, Color(0, 150, 230, 230))
     end
+    draw.DrawNonParsedText(tostring(armor), "DarkRPHUD2", barX + barW / 2, armorY - 2, colors.white1, 1)
 end
 
-local salaryText, JobWalletText
 local function DrawInfo()
-    salaryText = salaryText or DarkRP.getPhrase("salary", DarkRP.formatMoney(localplayer:getDarkRPVar("salary")), "")
+    local level = localplayer:GetNWInt("DarkRP_Level", 0)
+    local job = localplayer:getDarkRPVar("job") or ""
+    local money = DarkRP.formatMoney(localplayer:getDarkRPVar("money") or 0)
 
-    JobWalletText = JobWalletText or string.format("%s\n%s",
-        DarkRP.getPhrase("job", localplayer:getDarkRPVar("job") or ""),
-        DarkRP.getPhrase("wallet", DarkRP.formatMoney(localplayer:getDarkRPVar("money")), "")
-    )
+    local boxH = 26
+    local boxPad = 10
+    local boxGap = 8
+    local leftX = RelativeX + 12
+    -- Nudge the info boxes a bit higher so they don't kiss the health bar
+    local startY = RelativeY - HUDHeight + 8
 
-    draw.DrawNonParsedText(salaryText, "DarkRPHUD2", RelativeX + 5, RelativeY - HUDHeight + 6, ConVars.salary1, 0)
-    draw.DrawNonParsedText(salaryText, "DarkRPHUD2", RelativeX + 4, RelativeY - HUDHeight + 5, ConVars.salary2, 0)
+    -- Helper: draw a label in its own rounded box (like Level)
+    local function drawLabelBox(text, y)
+        surface.SetFont("DarkRPHUD2")
+        local tw = surface.GetTextSize(text)
+        local boxW = math.max(80, tw + boxPad * 2)
+        draw.RoundedBox(6, leftX, y, boxW, boxH, Color(8, 12, 20, 230))
+        draw.DrawNonParsedText(text, "DarkRPHUD2", leftX + 1 + boxPad, y + 1 + (boxH - 18) / 2, colors.black, 0)
+        draw.DrawNonParsedText(text, "DarkRPHUD2", leftX + boxPad, y + (boxH - 18) / 2, colors.white1, 0)
+        return y + boxH + boxGap
+    end
 
-    surface.SetFont("DarkRPHUD2")
-    local _, h = surface.GetTextSize(salaryText)
+    local y = startY
+    y = drawLabelBox(string.format("Job: %s", job), y)
+    drawLabelBox(string.format("Money: %s", money), y)
 
-    draw.DrawNonParsedText(JobWalletText, "DarkRPHUD2", RelativeX + 5, RelativeY - HUDHeight + h + 6, ConVars.Job1, 0)
-    draw.DrawNonParsedText(JobWalletText, "DarkRPHUD2", RelativeX + 4, RelativeY - HUDHeight + h + 5, ConVars.Job2, 0)
+    -- Level badge on the top-right of the HUD panel
+    local badgeW, badgeH = 90, 26
+    local badgeX = RelativeX + HUDWidth - badgeW - 12
+    local badgeY = RelativeY - HUDHeight + 12
+
+    draw.RoundedBox(6, badgeX, badgeY, badgeW, badgeH, Color(8, 12, 20, 230))
+    draw.DrawNonParsedText("Level " .. tostring(level), "DarkRPHUD2", badgeX + badgeW / 2, badgeY + 5, colors.white1, 1)
 end
 
 local Page = Material("icon16/page_white_text.png")
@@ -152,17 +156,6 @@ hook.Add("DarkRPVarChanged", "agendaHUD", function(ply, var, _, new)
         agendaText = DarkRP.textWrap(new:gsub("//", "\n"):gsub("\\n", "\n"), "DarkRPHUD1", 440)
     else
         agendaText = nil
-    end
-
-    if var == "salary" then
-        salaryText = DarkRP.getPhrase("salary", DarkRP.formatMoney(new), "")
-    end
-
-    if var == "job" or var == "money" then
-        JobWalletText = string.format("%s\n%s",
-            DarkRP.getPhrase("job", var == "job" and new or localplayer:getDarkRPVar("job") or ""),
-            DarkRP.getPhrase("wallet", var == "money" and DarkRP.formatMoney(new) or DarkRP.formatMoney(localplayer:getDarkRPVar("money")), "")
-        )
     end
 end)
 

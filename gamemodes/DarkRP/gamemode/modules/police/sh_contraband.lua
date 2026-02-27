@@ -2,8 +2,7 @@
 -- Entities owned by wanted players are also flagged by stunstick 500 damage
 DarkRP.ContrabandEntities = DarkRP.ContrabandEntities or {
     "money_printer",
-    "printer1",
-    "printer2",
+    "printer1", "printer2", "printer3", "printer4", "printer5", "printer6",
     "printer_module",
     "drug_lab",
     -- Add more as needed; admins can modify this table or add via config

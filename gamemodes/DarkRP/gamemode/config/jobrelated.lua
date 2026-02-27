@@ -33,6 +33,7 @@ TEAM_CITIZEN = DarkRP.createJob("Citizen", {
     hasLicense = false,
     candemote = false,
     category = "Citizens",
+    level = 1,
 })
 
 TEAM_POLICE = DarkRP.createJob("Civil Protection", {
@@ -56,6 +57,7 @@ TEAM_POLICE = DarkRP.createJob("Civil Protection", {
         ["pistol"] = 60,
     },
     category = "Civil Protection",
+    level = 15,
 })
 
 TEAM_GANG = DarkRP.createJob("Gangster", {
@@ -86,6 +88,7 @@ TEAM_GANG = DarkRP.createJob("Gangster", {
     vote = false,
     hasLicense = false,
     category = "Gangsters",
+    level = 5,
 })
 
 TEAM_MOB = DarkRP.createJob("Mob boss", {
@@ -103,6 +106,7 @@ TEAM_MOB = DarkRP.createJob("Mob boss", {
     vote = false,
     hasLicense = false,
     category = "Gangsters",
+    level = 15,
 })
 
 TEAM_GUN = DarkRP.createJob("Gun Dealer", {
@@ -118,6 +122,7 @@ TEAM_GUN = DarkRP.createJob("Gun Dealer", {
     vote = false,
     hasLicense = false,
     category = "Citizens",
+    level = 10,
 })
 
 TEAM_MEDIC = DarkRP.createJob("Medic", {
@@ -136,6 +141,23 @@ TEAM_MEDIC = DarkRP.createJob("Medic", {
     hasLicense = false,
     medic = true,
     category = "Citizens",
+    level = 5,
+})
+
+TEAM_MINER = DarkRP.createJob("Miner", {
+    color = Color(139, 90, 43, 255),
+    model = "models/player/alyx.mdl",
+    description = [[Mine resources with your shovel and sell them for profit.
+        You start with a shovel. Other players can buy shovels from the Entities menu ($5,000) to gather resources too.]],
+    weapons = {"weapon_shovel"},
+    command = "miner",
+    max = 4,
+    salary = GAMEMODE.Config.normalsalary,
+    admin = 0,
+    vote = false,
+    hasLicense = false,
+    category = "Citizens",
+    level = 5,
 })
 
 TEAM_CHIEF = DarkRP.createJob("Civil Protection Chief", {
@@ -161,6 +183,7 @@ TEAM_CHIEF = DarkRP.createJob("Civil Protection Chief", {
         ["pistol"] = 60,
     },
     category = "Civil Protection",
+    level = 25,
 })
 
 TEAM_MAYOR = DarkRP.createJob("Mayor", {
@@ -183,6 +206,7 @@ TEAM_MAYOR = DarkRP.createJob("Mayor", {
     hasLicense = false,
     mayor = true,
     category = "Civil Protection",
+    level = 30,
 })
 
 TEAM_HOBO = DarkRP.createJob("Hobo", {
@@ -203,6 +227,7 @@ TEAM_HOBO = DarkRP.createJob("Hobo", {
     candemote = false,
     hobo = true,
     category = "Citizens",
+    level = 1,
 })
 
 if not DarkRP.disabledDefaults["modules"]["hungermod"] then
@@ -230,6 +255,7 @@ TEAM_GANG    = TEAM_GANG     or -1
 TEAM_MOB     = TEAM_MOB      or -1
 TEAM_GUN     = TEAM_GUN      or -1
 TEAM_MEDIC   = TEAM_MEDIC    or -1
+TEAM_MINER   = TEAM_MINER    or -1
 TEAM_CHIEF   = TEAM_CHIEF    or -1
 TEAM_MAYOR   = TEAM_MAYOR    or -1
 TEAM_HOBO    = TEAM_HOBO     or -1

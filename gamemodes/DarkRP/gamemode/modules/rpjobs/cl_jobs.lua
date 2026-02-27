@@ -19,7 +19,7 @@ local InfoPanel = nil
 -- Expanded "Become job" button under one icon at a time; stored so we can collapse when another is clicked
 local ExpandedButton = nil
 
--- Show "Become X" button to the right of the clicked job icon; collapse previous if any
+-- Show "Become X" or "Level X required" to the right of the clicked job icon; collapse previous if any
 local function showExpandedButton(panel, job, jobIndex)
     local iconSize, iconSpace = 72, 8
     if IsValid(ExpandedButton) then
@@ -29,21 +29,32 @@ local function showExpandedButton(panel, job, jobIndex)
     local layout = panel:GetParent()
     if not IsValid(layout) then return end
     local px, py = panel:GetPos()
-    local btn = vgui.Create("DButton", layout)
+    local playerLevel = LocalPlayer():GetNWInt("DarkRP_Level", 1)
+    local requiredLevel = job.level or 0
+    local isLocked = requiredLevel > 0 and playerLevel < requiredLevel
+
+    local btn = vgui.Create(isLocked and "DLabel" or "DButton", layout)
     btn:SetSize(iconSize, 32)
     btn:SetPos(px + iconSize + 4, py + (iconSize - 32) / 2)
-    btn:SetText("Become →")
-    btn:SetTextColor(Color(0, 0, 0))
-    btn.Paint = function(self, w, h)
-        draw.RoundedBox(4, 0, 0, w, h, self:IsHovered() and Color(100, 200, 100, 240) or Color(50, 150, 50, 240))
-    end
-    btn.DoClick = function()
-        if not job or not jobIndex then return end
-        net.Start("RequestJobChange")
-        net.WriteUInt(jobIndex, 16)
-        net.SendToServer()
-        if IsValid(ExpandedButton) then ExpandedButton:Remove() end
-        ExpandedButton = nil
+    if isLocked then
+        btn:SetText("Level " .. requiredLevel .. " required")
+        btn:SetFont("DermaDefaultBold")
+        btn:SetColor(Color(180, 100, 100))
+        btn:SetWrap(true)
+    else
+        btn:SetText("Become →")
+        btn:SetTextColor(Color(0, 0, 0))
+        btn.Paint = function(self, w, h)
+            draw.RoundedBox(4, 0, 0, w, h, self:IsHovered() and Color(100, 200, 100, 240) or Color(50, 150, 50, 240))
+        end
+        btn.DoClick = function()
+            if not job or not jobIndex then return end
+            net.Start("RequestJobChange")
+            net.WriteUInt(jobIndex, 16)
+            net.SendToServer()
+            if IsValid(ExpandedButton) then ExpandedButton:Remove() end
+            ExpandedButton = nil
+        end
     end
     ExpandedButton = btn
 end
@@ -130,6 +141,24 @@ local function UpdateInfoPanel(job, jobIndex)
     salaryLabel:SetFont("DermaDefaultBold")
     salaryLabel:SetColor(Color(0, 255, 0))
     yPos = yPos + 28
+
+    -- Level requirement and unlock status
+    local requiredLevel = job.level or 0
+    if requiredLevel > 0 then
+        local playerLevel = LocalPlayer():GetNWInt("DarkRP_Level", 1)
+        local levelLabel = vgui.Create("DLabel", InfoPanel)
+        if playerLevel >= requiredLevel then
+            levelLabel:SetText("Unlocked (Level " .. requiredLevel .. ")")
+            levelLabel:SetColor(Color(100, 255, 100))
+        else
+            levelLabel:SetText("Requires level " .. requiredLevel .. " (you: " .. playerLevel .. ")")
+            levelLabel:SetColor(Color(255, 180, 100))
+        end
+        levelLabel:SetPos(10, yPos)
+        levelLabel:SetSize(280, 20)
+        levelLabel:SetFont("DermaDefaultBold")
+        yPos = yPos + 24
+    end
 
     -- Players
     local currentPlayers = #team.GetPlayers(job.team)
@@ -220,8 +249,9 @@ function BuildJobsPanel(parent)
         return
     end
 
-    -- Get the player's current team
+    -- Get the player's current team and level (for fade/unlock)
     local playerTeam = LocalPlayer():Team()
+    local playerLevel = LocalPlayer():GetNWInt("DarkRP_Level", 1)
 
     -- Organize jobs by category
     local categories = {}
@@ -266,11 +296,20 @@ function BuildJobsPanel(parent)
 
         cat:SetContents(layout)
 
-        table.sort(categories[category], function(a, b) return a.data.name < b.data.name end)
+        -- Sort by level first (level 1 base jobs at top); no level (0) = last
+        table.sort(categories[category], function(a, b)
+            local lvA, lvB = a.data.level or 0, b.data.level or 0
+            if lvA == 0 then lvA = 999 end
+            if lvB == 0 then lvB = 999 end
+            if lvA ~= lvB then return lvA < lvB end
+            return (a.data.name or "") < (b.data.name or "")
+        end)
 
         for i, jobEntry in ipairs(categories[category]) do
             local job = jobEntry.data
             local jobIndex = jobEntry.index
+            local requiredLevel = job.level or 0
+            local isLocked = requiredLevel > 0 and playerLevel < requiredLevel
 
             local panel = vgui.Create("DPanel", layout)
             panel:SetSize(iconSize, iconSize)
@@ -279,15 +318,19 @@ function BuildJobsPanel(parent)
             panel:SetPos(col * (iconSize + iconSpace) + iconSpace, row * (iconSize + iconSpace) + iconSpace)
             panel.Job = job
             panel.JobIndex = jobIndex
+            panel.IsLocked = isLocked
+            panel.RequiredLevel = requiredLevel
+            -- Faded when locked, full brightness when unlocked
+            panel:SetAlpha(isLocked and 130 or 255)
             panel.Paint = function(self, w, h)
                 local bgColor = (SelectedJob and SelectedJob.index == jobIndex) and Color(70, 70, 80, 240) or Color(40, 40, 40, 200)
                 draw.RoundedBox(4, 0, 0, w, h, bgColor)
             end
 
-            -- Job name on hover (tooltip); full details in info panel when clicked
-            panel:SetTooltip(job.name)
+            -- Job name on hover; add level hint when locked
+            panel:SetTooltip(isLocked and (job.name .. " (Level " .. requiredLevel .. " required)") or job.name)
 
-            -- Icon only: playermodel for the job (fills the slot)
+            -- Icon: playermodel for the job
             local modelPanel = vgui.Create("DModelPanel", panel)
             modelPanel:Dock(FILL)
             modelPanel:DockMargin(4, 4, 4, 4)
@@ -295,23 +338,40 @@ function BuildJobsPanel(parent)
             modelPanel:SetFOV(28)
             modelPanel:SetCamPos(Vector(25, 25, 70))
             modelPanel:SetLookAt(Vector(0, 0, 65))
-            modelPanel:SetMouseInputEnabled(false) -- let clicks pass through to parent panel
+            modelPanel:SetMouseInputEnabled(false)
 
-            -- Single click: show info + expand Become button under this icon. Double click: become job.
+            -- Overlay: "Level X" when locked, "Unlocked" when level met and job has level requirement
+            local overlay = vgui.Create("DLabel", panel)
+            overlay:SetPos(2, 2)
+            overlay:SetSize(iconSize - 4, 16)
+            overlay:SetFont("DermaDefault")
+            overlay:SetContentAlignment(5)
+            overlay:SetTextInset(2, 0)
+            if isLocked then
+                overlay:SetText("Lv." .. requiredLevel)
+                overlay:SetColor(Color(255, 220, 100))
+            elseif requiredLevel > 0 then
+                overlay:SetText("Unlocked")
+                overlay:SetColor(Color(150, 255, 150))
+            else
+                overlay:SetText("")
+            end
+
+            -- Single click: show info + expand Become / Level required. Double click: become job (only if unlocked).
             panel.OnMousePressed = function(self, code)
                 if code ~= MOUSE_LEFT then return end
                 if not self.Job or not self.JobIndex then return end
-                -- Double-click: become job (DPanel doesn't fire DoDoubleClick; detect manually)
                 local now = CurTime()
                 if self._lastClick and (now - self._lastClick) < 0.35 then
                     self._lastClick = nil
-                    net.Start("RequestJobChange")
-                    net.WriteUInt(self.JobIndex, 16)
-                    net.SendToServer()
+                    if not self.IsLocked then
+                        net.Start("RequestJobChange")
+                        net.WriteUInt(self.JobIndex, 16)
+                        net.SendToServer()
+                    end
                     return
                 end
                 self._lastClick = now
-                -- Single click: update info panel and expand Become button under this icon
                 UpdateInfoPanel(self.Job, self.JobIndex)
                 showExpandedButton(self, job, jobIndex)
             end

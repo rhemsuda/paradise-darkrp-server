@@ -167,6 +167,15 @@ net.Receive("BuyEntity", function(len, ply)
                 return
             end
 
+            -- Level requirement (e.g. printers: level 1, 12, 24, ... 96)
+            local requiredLevel = ent.level or 1
+            local playerLevel = ply:GetNWInt("DarkRP_Level", 1)
+            if playerLevel < requiredLevel then
+                DarkRP.notify(ply, 1, 4, "You need level " .. requiredLevel .. " to buy this!")
+                print("[RPEnts Module] " .. ply:Nick() .. " needs level " .. requiredLevel .. " for " .. entName .. " (has " .. playerLevel .. ")")
+                return
+            end
+
             if ent.donatorOnly and not (ULib and ULib.ucl.query(ply, "donator") or ply:IsUserGroup("donator") or ply:IsUserGroup("superadmin")) then
                 DarkRP.notify(ply, 1, 4, "You must be a donator to buy this entity!")
                 print("[RPEnts Module] " .. ply:Nick() .. " is not a donator for " .. entName)
@@ -179,50 +188,21 @@ net.Receive("BuyEntity", function(len, ply)
                 return
             end
 
-            -- Count owned entities
+            -- Count owned printers (six tiers: printer1 through printer6)
             local ownedPrinters = 0
-            local ownedRegularPrinters = 0
-            local ownedDonatorPrinters = 0
-            local ownedModules = 0
-            for _, ent in pairs(ents.FindByClass("printer1")) do
-                if IsValid(ent) and ent:Getowning_ent() == ply then
-                    ownedPrinters = ownedPrinters + 1
-                    ownedRegularPrinters = ownedRegularPrinters + 1
-                end
-            end
-            for _, ent in pairs(ents.FindByClass("printer2")) do
-                if IsValid(ent) and ent:Getowning_ent() == ply then
-                    ownedPrinters = ownedPrinters + 1
-                    ownedDonatorPrinters = ownedDonatorPrinters + 1
-                end
-            end
-            for _, ent in pairs(ents.FindByClass("printer_module")) do
-                if IsValid(ent) and ent:Getowning_ent() == ply then
-                    ownedModules = ownedModules + 1
+            for _, class in ipairs({"printer1", "printer2", "printer3", "printer4", "printer5", "printer6"}) do
+                for _, e in pairs(ents.FindByClass(class)) do
+                    if IsValid(e) and e:Getowning_ent() == ply then
+                        ownedPrinters = ownedPrinters + 1
+                    end
                 end
             end
 
-            -- Enforce limits
-            if ent.ent == "printer1" or ent.ent == "printer2" then
+            -- Enforce limit: max 4 printers total (any tier)
+            if ent.ent:match("^printer%d+") then
                 if ownedPrinters >= 4 then
                     DarkRP.notify(ply, 1, 4, "You can only own a maximum of 4 printers total!")
                     print("[RPEnts Module] " .. ply:Nick() .. " has reached the max printer limit (4)")
-                    return
-                end
-                if ent.ent == "printer1" and ownedRegularPrinters >= 2 then
-                    DarkRP.notify(ply, 1, 4, "You can only own a maximum of 2 regular printers!")
-                    print("[RPEnts Module] " .. ply:Nick() .. " has reached the max regular printer limit (2)")
-                    return
-                end
-                if ent.ent == "printer2" and ownedDonatorPrinters >= 2 then
-                    DarkRP.notify(ply, 1, 4, "You can only own a maximum of 2 donator printers!")
-                    print("[RPEnts Module] " .. ply:Nick() .. " has reached the max donator printer limit (2)")
-                    return
-                end
-            elseif ent.ent == "printer_module" then
-                if ownedModules >= 4 then
-                    DarkRP.notify(ply, 1, 4, "You can only own a maximum of 4 printer modules!")
-                    print("[RPEnts Module] " .. ply:Nick() .. " has reached the max module limit (4)")
                     return
                 end
             end
@@ -258,11 +238,9 @@ net.Receive("BuyEntity", function(len, ply)
 
             print("[RPEnts Module] Calculated spawn position: " .. tostring(spawnPos))
 
-            -- Determine entity class based on type
+            -- Determine entity class based on type (printer1–printer9, printer_module, or weapon drop)
             local entityClass = nil
-            if ent.ent == "custom_empty_shipment" then
-                entityClass = "custom_empty_shipment"
-            elseif ent.ent == "printer1" or ent.ent == "printer2" or ent.ent == "printer_module" then
+            if ent.ent:match("^printer%d+") or ent.ent == "printer_module" then
                 entityClass = ent.ent
             else
                 entityClass = "custom_weapon_drop"
@@ -284,16 +262,15 @@ net.Receive("BuyEntity", function(len, ply)
                 print("[RPEnts Module] Setting model directly to: " .. model)
                 entity:SetModel(model)
                 entity:SetWeaponModel(model)
-            elseif entityClass == "custom_empty_shipment" then
-                entity:SetModel(ent.model or "models/Items/ammocrate_smg1.mdl")
-            else -- Handle printer1, printer2, printer_module
+            elseif entityClass:match("^printer%d+") then
                 entity:SetModel(ent.model or "models/error.mdl")
-                if entityClass == "printer1" or entityClass == "printer2" then
-                    entity:Setowning_ent(ply)
-                elseif entityClass == "printer_module" then
-                    entity:Setowning_ent(ply)
-                    entity.SpawnedBy = ply
-                end
+                entity:Setowning_ent(ply)
+            elseif entityClass == "printer_module" then
+                entity:SetModel(ent.model or "models/error.mdl")
+                entity:Setowning_ent(ply)
+                entity.SpawnedBy = ply
+            else
+                entity:SetModel(ent.model or "models/error.mdl")
             end
             entity:Spawn()
             entity:Activate() -- Ensure entity is fully initialized

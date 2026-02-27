@@ -284,6 +284,19 @@ function migrateDB(callback)
             return
         end
 
+        -- Paradise: leveling experience column + level table (100 levels)
+        if version < 20250201 then
+            MySQLite.begin()
+                if MySQLite.isMySQL() then
+                    MySQLite.queueQuery([[ALTER TABLE darkrp_player ADD COLUMN experience BIGINT NOT NULL DEFAULT 0;]])
+                else
+                    MySQLite.queueQuery([[ALTER TABLE darkrp_player ADD COLUMN experience INTEGER NOT NULL DEFAULT 0;]])
+                end
+                MySQLite.queueQuery([[REPLACE INTO darkrp_dbversion VALUES(20250201)]])
+            MySQLite.commit(fp{migrate, 20250201})
+            return
+        end
+
         -- All migrations finished
         callback()
     end
@@ -374,18 +387,19 @@ function DarkRP.retrievePlayerData(ply, callback, failed, attempts, err)
 end
 
 function DarkRP.createPlayerData(ply, name, wallet, salary)
+    -- experience column added by Paradise leveling (20250201)
     MySQLite.query([[REPLACE INTO darkrp_player VALUES(]] ..
             ply:SteamID64() .. [[, ]] ..
             MySQLite.SQLStr(name)  .. [[, ]] ..
             salary  .. [[, ]] ..
-            wallet .. ");")
+            wallet .. [[, 0);]])
 
     -- Backwards compatibility
     MySQLite.query([[REPLACE INTO darkrp_player VALUES(]] ..
             ply:UniqueID() .. [[, ]] ..
             MySQLite.SQLStr(name)  .. [[, ]] ..
             salary  .. [[, ]] ..
-            wallet .. ");")
+            wallet .. [[, 0);]])
 end
 
 function DarkRP.storeMoney(ply, amount)
