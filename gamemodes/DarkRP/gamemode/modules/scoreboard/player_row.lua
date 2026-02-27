@@ -87,10 +87,20 @@ function PANEL:UpdatePlayerData()
     if GM10_IsDarkRP then
         self.lblJob:SetText(team.GetName(self.Player:Team()))
         local gangRaw = self.Player:GetNWString("GangName", "")
-        self.lblGang:SetText((gangRaw == "" or gangRaw == "None") and "" or gangRaw)
+        local gangText = (gangRaw == "" or gangRaw == "None") and "" or gangRaw
+        self.lblGang:SetText(gangText)
+        if gangText ~= "" then
+            local colorJSON = self.Player:GetNWString("GangColor", "")
+            local gangCol = color_white
+            if colorJSON ~= "" then
+                local parsed = util.JSONToTable(colorJSON)
+                if parsed then gangCol = Color(parsed.r or 255, parsed.g or 255, parsed.b or 255) end
+            end
+            self.lblGang:SetTextColor(gangCol)
+        else
+            self.lblGang:SetTextColor(color_white)
+        end
     end
-    self.lblFrags:SetText(self.Player:Frags())
-    self.lblDeaths:SetText(self.Player:Deaths())
     self.lblPing:SetText(self.Player:Ping())
 end
 
@@ -105,12 +115,8 @@ function PANEL:Init()
         self.lblGang = vgui.Create("DLabel", self)
         self.lblGang:SetMouseInputEnabled(false)
     end
-    self.lblFrags = vgui.Create("DLabel", self)
-    self.lblDeaths = vgui.Create("DLabel", self)
     self.lblPing = vgui.Create("DLabel", self)
     self.lblName:SetMouseInputEnabled(false)
-    self.lblFrags:SetMouseInputEnabled(false)
-    self.lblDeaths:SetMouseInputEnabled(false)
     self.lblPing:SetMouseInputEnabled(false)
 end
 
@@ -124,12 +130,8 @@ function PANEL:ApplySchemeSettings()
             self.lblGang:SetTextColor(color_white)
         end
     end
-    self.lblFrags:SetFont("ScoreboardPlayerName")
-    self.lblDeaths:SetFont("ScoreboardPlayerName")
     self.lblPing:SetFont("ScoreboardPlayerName")
     self.lblName:SetTextColor(color_white)
-    self.lblFrags:SetTextColor(color_white)
-    self.lblDeaths:SetTextColor(color_white)
     self.lblPing:SetTextColor(color_white)
 end
 
@@ -161,28 +163,21 @@ end
 
 function PANEL:PerformLayout()
     self:SetSize(self:GetWide(), self.Size)
-    local W = self:GetWide()
-    local COL = 60  -- Column width; must match scoreboard.lua COL_W
+    local COLUMN_SIZE = 50  -- Same as original gmod10_scoreboard; row uses left-edge at column boundary
     local ICON_W = 24  -- Icon column before name
-    local sbW = (SCOREBOARD and IsValid(SCOREBOARD)) and SCOREBOARD:GetWide() or (W + 10)
-    -- Row local 0 = scoreboard x 5 (PlayerFrame left margin). For row label to match header:
-    -- 5 + row_x = sbW - COL*n - labelW  =>  row_x = sbW - COL*n - labelW - 5
-    local rowOffset = 5
-    -- Icon (4px) + name
+    local W = self:GetWide()
+    -- Original: lblPing/Deaths/Frags at self:GetWide() - COLUMN_SIZE*n (left edge of text at column start)
     self.lblName:SizeToContents()
     self.lblName:SetPos(ICON_W, 3)
     if GM10_IsDarkRP then
         self.lblJob:SizeToContents()
-        local jobW = self.lblJob:GetWide()
-        self.lblJob:SetPos(W / 2 - jobW / 2, 3)
+        self.lblJob:SetPos(W / 2 - self.lblJob:GetWide() / 2, 3)
         if self.lblGang then
             self.lblGang:SizeToContents()
-            self.lblGang:SetPos(sbW - COL * 4 - self.lblGang:GetWide() - rowOffset, 3)
+            self.lblGang:SetPos(W - COLUMN_SIZE * 3 - self.lblGang:GetWide() / 2, 3)
         end
     end
-    self.lblPing:SetPos(sbW - COL * 1 - self.lblPing:GetWide() - rowOffset, 3)
-    self.lblDeaths:SetPos(sbW - COL * 2 - self.lblDeaths:GetWide() - rowOffset, 3)
-    self.lblFrags:SetPos(sbW - COL * 3 - self.lblFrags:GetWide() - rowOffset, 3)
+    self.lblPing:SetPos(W - COLUMN_SIZE * 1, 3)
     if self.Open or self.Size ~= self.TargetSize then
         self.infoCard:SetVisible(true)
         self.infoCard:SetPos(ICON_W, self.lblName:GetTall() + 10)

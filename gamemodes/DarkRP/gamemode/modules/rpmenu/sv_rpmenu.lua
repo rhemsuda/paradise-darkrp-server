@@ -66,7 +66,8 @@ local function SendGangData(ply)
     if not gangData then return end
 
     local gangLevel = tonumber(gangData.gang_level) or 1
-    ply:SetNWInt("GangLevel", gangLevel)  -- Scoreboard reads this for "Gangname: Level"
+    ply:SetNWInt("GangLevel", gangLevel)
+    ply:SetNWString("GangColor", gangData.gang_color or util.TableToJSON({r = 255, g = 255, b = 255}))
 
     local members = util.JSONToTable(gangData.members or "[]") or {}
     net.Start("RPMenu_SendGangData")

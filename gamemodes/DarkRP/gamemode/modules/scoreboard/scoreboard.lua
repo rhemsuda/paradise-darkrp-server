@@ -26,10 +26,6 @@ function PANEL:Init()
     end
     self.lblPing = vgui.Create("DLabel", self)
     self.lblPing:SetText("Ping")
-    self.lblKills = vgui.Create("DLabel", self)
-    self.lblKills:SetText("Kills")
-    self.lblDeaths = vgui.Create("DLabel", self)
-    self.lblDeaths:SetText("Deaths")
 end
 
 function PANEL:AddPlayerRow(ply)
@@ -64,15 +60,11 @@ function PANEL:Paint()
         local W = self:GetWide()
         local headerY = self.PlayerFrame and (self.PlayerFrame.y - 20) or 80
         draw.SimpleText("W=" .. W .. " (sb_debug_align)", "DermaDefaultBold", 10, 10, Color(255, 0, 0), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
-        local COL = 60
-        draw.SimpleText("Gang R=" .. (W - COL*4), "DermaDefaultBold", math.max(10, W - COL*4 - 60), headerY - 20, Color(255, 100, 100), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
-        draw.SimpleText("Kills R=" .. (W - COL*3), "DermaDefaultBold", math.max(10, W - COL*3 - 60), headerY - 20, Color(100, 255, 100), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+        local COL = 50
+        draw.SimpleText("Gang R=" .. (W - COL*3), "DermaDefaultBold", math.max(10, W - COL*3 - 60), headerY - 20, Color(255, 100, 100), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+        draw.SimpleText("Ping R=" .. (W - COL*1), "DermaDefaultBold", math.max(10, W - COL*1 - 60), headerY - 20, Color(100, 255, 100), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
         surface.SetDrawColor(255, 0, 0, 200)
-        surface.DrawLine(W - COL*4, 0, W - COL*4, self:GetTall())
-        surface.SetDrawColor(0, 255, 0, 200)
         surface.DrawLine(W - COL*3, 0, W - COL*3, self:GetTall())
-        surface.SetDrawColor(255, 255, 0, 200)
-        surface.DrawLine(W - COL*2, 0, W - COL*2, self:GetTall())
         surface.SetDrawColor(0, 100, 255, 200)
         surface.DrawLine(W - COL*1, 0, W - COL*1, self:GetTall())
     end
@@ -104,23 +96,17 @@ function PANEL:PerformLayout()
     end
     self.Hostname:SetText(GetHostName())
     self.lblPing:SizeToContents()
-    self.lblKills:SizeToContents()
-    self.lblDeaths:SizeToContents()
     local headerY = self.PlayerFrame.y - self.lblPing:GetTall() - 3
     local W = self:GetWide()
-    local COL_W = 60  -- Column width; must match player_row.lua COL
-    self.lblPing:SetPos(W - COL_W * 1 - self.lblPing:GetWide(), headerY)
-    self.lblDeaths:SetPos(W - COL_W * 2 - self.lblDeaths:GetWide(), headerY)
-    self.lblKills:SetPos(W - COL_W * 3 - self.lblKills:GetWide(), headerY)
+    local COL_W = 50
+    self.lblPing:SetPos(W - COL_W * 1 - self.lblPing:GetWide() / 2, headerY)
     self.lblPing:SetFont("DefaultSmall")
-    self.lblKills:SetFont("DefaultSmall")
-    self.lblDeaths:SetFont("DefaultSmall")
     if GM10_IsDarkRP then
         self.lblJobName:SizeToContents()
         self.lblJobName:SetPos(W / 2 - self.lblJobName:GetWide() / 2, headerY)
         self.lblJobName:SetFont("DefaultSmall")
         self.lblGang:SizeToContents()
-        self.lblGang:SetPos(W - COL_W * 4 - self.lblGang:GetWide(), headerY)
+        self.lblGang:SetPos(W - COL_W * 3 - self.lblGang:GetWide() / 2, headerY)
         self.lblGang:SetFont("DefaultSmall")
     end
 end
@@ -131,11 +117,7 @@ function PANEL:ApplySchemeSettings()
     self.Hostname:SetTextColor(Color(0, 0, 0, 200))
     self.Description:SetTextColor(color_white)
     self.lblPing:SetFont("DefaultSmall")
-    self.lblKills:SetFont("DefaultSmall")
-    self.lblDeaths:SetFont("DefaultSmall")
     self.lblPing:SetTextColor(Color(0, 0, 0, 100))
-    self.lblKills:SetTextColor(Color(0, 0, 0, 100))
-    self.lblDeaths:SetTextColor(Color(0, 0, 0, 100))
     if GM10_IsDarkRP then
         self.lblJobName:SetFont("DefaultSmall")
         self.lblJobName:SetTextColor(Color(0, 0, 0, 100))

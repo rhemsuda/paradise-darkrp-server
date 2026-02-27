@@ -1,7 +1,9 @@
 -- Panel: ScorePlayerInfoCard (admin_buttons + vote_button already loaded by cl_scoreboard)
 -- Shows DarkRP-style info: Rank (Player/Donator/Admin), money, Endurance level.
--- Donator rank text glows.
 local PANEL = {}
+
+surface.CreateFont("ScoreboardInfoKey",   { font = "Tahoma", size = 13, weight = 700, antialias = true })
+surface.CreateFont("ScoreboardInfoValue", { font = "Tahoma", size = 13, weight = 700, antialias = true })
 
 -- Get display rank from admin mod: Player, Donator, or Admin (Admin+SuperAdmin both show as Admin)
 local function GetScoreboardRank(ply)
@@ -53,23 +55,32 @@ function PANEL:SetInfo(column, k, v)
     if not self.InfoLabels[column][k] then
         self.InfoLabels[column][k] = {}
         self.InfoLabels[column][k].Key = vgui.Create("DLabel", self)
-        -- Value: use DLabel; for Donator we'll draw glow in Paint
         self.InfoLabels[column][k].Value = vgui.Create("DLabel", self)
+        self.InfoLabels[column][k].Key:SetFont("ScoreboardInfoKey")
+        self.InfoLabels[column][k].Value:SetFont("ScoreboardInfoValue")
         self.InfoLabels[column][k].Key:SetText(k)
         self:InvalidateLayout()
     end
     self.InfoLabels[column][k].Value:SetText(tostring(v))
     if self.InfoLabels[column][k].Key then self.InfoLabels[column][k].Key:SetVisible(true) end
     if self.InfoLabels[column][k].Value then self.InfoLabels[column][k].Value:SetVisible(true) end
+    local isAdmin = (k == "Rank:" and v == "Admin")
     local isDonator = (k == "Rank:" and v == "Donator")
+    self.InfoLabels[column][k]._isAdmin = isAdmin
     self.InfoLabels[column][k]._isDonator = isDonator
-    -- Custom Paint for Donator glow
-    if isDonator then
+    if isAdmin then
         self.InfoLabels[column][k].Value.Paint = function(panel)
             local pulse = 0.7 + 0.3 * math.sin(CurTime() * 3)
-            local glowCol = Color(255, 215, 80, math.floor(80 * pulse))
-            draw.SimpleTextOutlined("Donator", panel:GetFont(), 0, 0, Color(255, 220, 100, 255),
-                TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP, glowCol, 2)
+            local glowCol = Color(255, 50, 50, math.floor(100 * pulse))
+            draw.SimpleTextOutlined("Admin", panel:GetFont(), 0, 0, Color(255, 80, 80, 255),
+                TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP, 2, glowCol)
+        end
+    elseif isDonator then
+        self.InfoLabels[column][k].Value.Paint = function(panel)
+            local pulse = 0.7 + 0.3 * math.sin(CurTime() * 3)
+            local glowCol = Color(50, 255, 100, math.floor(100 * pulse))
+            draw.SimpleTextOutlined("Donator", panel:GetFont(), 0, 0, Color(100, 255, 150, 255),
+                TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP, 2, glowCol)
         end
     else
         self.InfoLabels[column][k].Value.Paint = nil
@@ -103,6 +114,14 @@ function PANEL:UpdatePlayerData()
             local gangLevel = self.Player:GetNWInt("GangLevel", 1)
             local capitalized = gangName:sub(1, 1):upper() .. gangName:sub(2):lower()
             self:SetInfo(1, "Gang:", capitalized .. " (" .. tostring(gangLevel) .. ")")
+            -- Apply gang color to the value label
+            local colorJSON = self.Player:GetNWString("GangColor", "")
+            if colorJSON ~= "" and self.InfoLabels[1] and self.InfoLabels[1]["Gang:"] then
+                local parsed = util.JSONToTable(colorJSON)
+                if parsed then
+                    self.InfoLabels[1]["Gang:"].Value:SetTextColor(Color(parsed.r or 255, parsed.g or 255, parsed.b or 255))
+                end
+            end
         else
             self:SetInfo(1, "Gang:", nil)  -- Don't show
         end
@@ -121,9 +140,11 @@ end
 function PANEL:ApplySchemeSettings()
     for _, column in pairs(self.InfoLabels) do
         for k, v in pairs(column) do
-            v.Key:SetTextColor(Color(0, 0, 0, 100))
-            if not v._isDonator then
-                v.Value:SetTextColor(Color(0, 70, 0, 200))
+            v.Key:SetFont("ScoreboardInfoKey")
+            v.Key:SetTextColor(Color(15, 15, 15, 255))
+            v.Value:SetFont("ScoreboardInfoValue")
+            if not v._isDonator and not v._isAdmin then
+                v.Value:SetTextColor(Color(15, 15, 15, 255))
             end
         end
     end
