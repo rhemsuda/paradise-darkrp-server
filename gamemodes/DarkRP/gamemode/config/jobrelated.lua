@@ -45,9 +45,9 @@ TEAM_POLICE = DarkRP.createJob("Civil Protection", {
         The Battering Ram can break down the door of a criminal, with a warrant for their arrest.
         The Battering Ram can also unfreeze frozen props (if enabled).
         Type /wanted <name> to alert the public to the presence of a criminal.]],
-    weapons = {"arrest_stick", "unarrest_stick", "weapon_glock2", "stunstick", "door_ram", "weaponchecker"},
+    weapons = {"arrest_stick", "unarrest_stick", "stunstick", "weaponchecker"},
     command = "cp",
-    max = 4,
+    max = 10,
     salary = GAMEMODE.Config.normalsalary * 1.45,
     admin = 0,
     vote = false,
@@ -80,7 +80,7 @@ TEAM_GANG = DarkRP.createJob("Gangster", {
         The Mob boss sets your agenda and you follow it or you might be punished.]],
     weapons = {},
     command = "gangster",
-    max = 3,
+    max = 10,
     salary = GAMEMODE.Config.normalsalary,
     admin = 0,
     vote = false,
@@ -129,7 +129,7 @@ TEAM_MEDIC = DarkRP.createJob("Medic", {
         Right click with the Medical Kit to heal yourself.]],
     weapons = {"med_kit"},
     command = "medic",
-    max = 3,
+    max = 4,
     salary = GAMEMODE.Config.normalsalary,
     admin = 0,
     vote = false,
@@ -148,7 +148,7 @@ TEAM_CHIEF = DarkRP.createJob("Civil Protection Chief", {
         The Battering Ram can break down the door of a criminal, with a warrant for their arrest.
         Type /wanted <name> to alert the public to the presence of a criminal.
         Type /jailpos to set the Jail Position]],
-    weapons = {"arrest_stick", "unarrest_stick", "weapon_deagle2", "stunstick", "door_ram", "weaponchecker"},
+    weapons = {"arrest_stick", "unarrest_stick", "stunstick", "weaponchecker"},
     command = "chief",
     max = 1,
     salary = GAMEMODE.Config.normalsalary * 1.67,

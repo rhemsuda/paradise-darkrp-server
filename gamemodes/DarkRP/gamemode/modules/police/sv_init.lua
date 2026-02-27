@@ -461,3 +461,16 @@ function DarkRP.hooks:canGiveLicense(ply, target)
 
     return false, reason
 end
+
+-- Make attacker wanted when they damage police or mayor
+hook.Add("EntityTakeDamage", "DarkRP_WantedOnDamageToCP", function(target, dmginfo)
+    if not IsValid(target) or not target:IsPlayer() then return end
+    local attacker = dmginfo:GetAttacker()
+    if not IsValid(attacker) or not attacker:IsPlayer() or attacker == target then return end
+    if dmginfo:GetDamage() <= 0 then return end
+    if target:isCP() or target:isMayor() then
+        if not attacker:isWanted() then
+            attacker:wanted(target, "Attacking " .. (target:isMayor() and "the Mayor" or "Civil Protection"), nil)
+        end
+    end
+end)

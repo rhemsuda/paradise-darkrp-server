@@ -932,7 +932,6 @@ function GM:PlayerLoadout(ply)
 
         if not GAMEMODE.Config.AdminsCopWeapons then return end
 
-        ply:Give("door_ram")
         ply:Give("arrest_stick")
         ply:Give("unarrest_stick")
         ply:Give("stunstick")

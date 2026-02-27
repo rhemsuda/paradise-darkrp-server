@@ -1,0 +1,1 @@
+-- Server init for Taser Scanner (logic is in shared.lua SERVER blocks)

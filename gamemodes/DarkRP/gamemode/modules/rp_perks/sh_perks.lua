@@ -1,0 +1,2 @@
+-- Shared perks: no shared state needed; server (sv_perks) and client (cl_perks) run separately.
+-- This file exists so the DarkRP module loader can include sh_*.lua for rp_perks without error.

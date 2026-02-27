@@ -254,9 +254,17 @@ function PANEL:Init()
     self.lblWeapons:SetTall(50)
     self.innerPanel:AddItem(self.lblWeapons)
 
+    -- Weapon loadout models (icons) instead of text names
+    self.pnlWeaponIcons = vgui.Create("DPanelList", self)
+    self.pnlWeaponIcons:EnableHorizontal(true)
+    self.pnlWeaponIcons:SetSpacing(4)
+    self.pnlWeaponIcons:SetTall(64)
+    self.innerPanel:AddItem(self.pnlWeaponIcons)
+
     self.lblSweps = vgui.Create("DLabel")
     self.lblSweps:SetAutoStretchVertical(true)
     self.lblSweps:SetFont("Roboto Light")
+    self.lblSweps:SetVisible(false)  -- Hide text; we show models instead
     self.innerPanel:AddItem(self.lblSweps)
 
     self.btnGetJob = vgui.Create("F4MenuJobBecomeButton", self)
@@ -273,26 +281,48 @@ function PANEL:Paint(w, h)
     draw.RoundedBox(0, 0, 0, w, h, black)
 end
 
--- functions for getting the weapon names from the job table
-local getWepName = fn.FOr{fn.FAnd{weapons.Get, fn.Compose{fn.Curry(fn.GetValue, 2)("PrintName"), weapons.Get}}, fn.Id}
-local getWeaponNames = fn.Curry(fn.Map, 2)(getWepName)
-local weaponString = fn.Compose{fn.Curry(fn.Flip(table.concat), 2)("\n"), fn.Curry(fn.Seq, 2)(table.sort), getWeaponNames, table.Copy}
+-- Get weapon model path for display (WorldModel from SWEP or list)
+local function getWeaponModel(class)
+    local swep = weapons.Get(class) or list.Get("Weapon")[class]
+    if swep and swep.WorldModel and swep.WorldModel ~= "" then
+        return swep.WorldModel
+    end
+    -- Fallback: common entity classes
+    local fallbacks = {
+        arrest_stick = "models/weapons/w_stunbaton.mdl",
+        unarrest_stick = "models/weapons/w_stunbaton.mdl",
+        stunstick = "models/weapons/w_stunbaton.mdl",
+        weaponchecker = "models/weapons/w_stunbaton.mdl",
+        weapon_taser_scanner = "models/weapons/w_pistol.mdl",
+        med_kit = "models/weapons/w_medkit.mdl",
+        weapon_bugbait = "models/weapons/w_bugbait.mdl",
+        lockpick = "models/props_c17/TrapPropeller_Lever.mdl",
+    }
+    return fallbacks[class] or "models/weapons/w_pistol.mdl"
+end
+
 function PANEL:updateInfo(job)
     self.job = job
 
     self.lblTitle:SetText(job.name and DarkRP.deLocalise(job.name) or (job.team and "" or "No jobs available"))
     self.lblTitle:SizeToContents()
 
-    local weps
-    if not job.weapons then
-        self.lblWeapons:SetText("")
-        weps = ""
+    -- Populate weapon icons (models) instead of text
+    self.pnlWeaponIcons:Clear()
+    if job.weapons and #job.weapons > 0 then
+        for _, class in ipairs(job.weapons) do
+            local modelPath = getWeaponModel(class)
+            local icon = vgui.Create("ModelImage", self.pnlWeaponIcons)
+            icon:SetSize(56, 56)
+            icon:SetModel(modelPath, 1, "000000000")
+            local swep = weapons.Get(class) or list.Get("Weapon")[class]
+            local name = (swep and swep.PrintName) or class
+            icon:SetTooltip(name)
+            self.pnlWeaponIcons:AddItem(icon)
+        end
     else
-        weps = weaponString(job.weapons)
-        weps = weps ~= "" and weps or DarkRP.getPhrase("no_extra_weapons")
+        self.lblWeapons:SetText("")
     end
-
-    self.lblSweps:SetText(weps)
 
     self.btnGetJob:setJob(job, fn.Partial(self:GetParent():GetParent().Hide, self:GetParent():GetParent()))
 

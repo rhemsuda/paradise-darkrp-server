@@ -155,21 +155,27 @@ function SWEP:DoAttack(dmg)
         Owner:EmitSound(self.FleshHit[math.random(#self.FleshHit)])
     else
         Owner:EmitSound(self.Hit[math.random(#self.Hit)])
-        if FPP and FPP.plyCanTouchEnt(Owner, ent, "EntityDamage") then
-            if ent.SeizeReward and not ent.beenSeized and not ent.burningup and Owner:isCP() and ent.Getowning_ent and Owner ~= ent:Getowning_ent() then
-                local amount = isfunction(ent.SeizeReward) and ent:SeizeReward(Owner, dmg) or ent.SeizeReward
+        if FPP and FPP.plyCanTouchEnt(Owner, ent, "EntityDamage") and Owner:isCP() then
+            -- Stunstick vs props: 0 damage if owner not wanted, 500 if owner is wanted
+            local propOwner
+            if ent.CPPIGetOwner then propOwner = ent:CPPIGetOwner() end
+            if not IsValid(propOwner) and ent.Getowning_ent then propOwner = ent:Getowning_ent() end
+            if not IsValid(propOwner) and ent.SID then propOwner = Player(ent.SID) end
 
-                Owner:addMoney(amount)
-                DarkRP.notify(Owner, 1, 4, DarkRP.getPhrase("you_received_x", DarkRP.formatMoney(amount), DarkRP.getPhrase("bonus_destroying_entity")))
-                ent.beenSeized = true
+            local dmgToTake = 0
+            if IsValid(propOwner) and propOwner:IsPlayer() and propOwner:isWanted() then
+                dmgToTake = 500
             end
-            local health = math.max(ent:Health(), ent:GetMaxHealth())
-            health = health == 0 and 1000 or health
 
-            local dmgToTake = GAMEMODE.Config.stunstickdamage <= 1 and GAMEMODE.Config.stunstickdamage * health or GAMEMODE.Config.stunstickdamage
-            -- Ceil because health is an integer value
-            dmgToTake = math.max(0, math.ceil(dmgToTake - dmg))
-            ent:TakeDamage(dmgToTake, Owner, self) -- for illegal entities
+            if dmgToTake > 0 then
+                if ent.SeizeReward and not ent.beenSeized and not ent.burningup and Owner ~= propOwner then
+                    local amount = isfunction(ent.SeizeReward) and ent:SeizeReward(Owner, dmg) or ent.SeizeReward
+                    Owner:addMoney(amount)
+                    DarkRP.notify(Owner, 1, 4, DarkRP.getPhrase("you_received_x", DarkRP.formatMoney(amount), DarkRP.getPhrase("bonus_destroying_entity")))
+                    ent.beenSeized = true
+                end
+                ent:TakeDamage(dmgToTake, Owner, self)
+            end
         end
     end
 end

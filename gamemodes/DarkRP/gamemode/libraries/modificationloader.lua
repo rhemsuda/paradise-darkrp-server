@@ -9,6 +9,7 @@ Disabled defaults
 DarkRP.disabledDefaults = {}
 DarkRP.disabledDefaults["modules"] = {
     ["afk"]              = true,
+    ["gmod10_scoreboard"] = true,  -- Replaced by scoreboard module
     ["chatsounds"]       = false,
     ["events"]           = false,
     ["fpp"]              = false,

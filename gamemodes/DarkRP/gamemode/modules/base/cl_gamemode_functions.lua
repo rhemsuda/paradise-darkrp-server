@@ -26,7 +26,8 @@ function GM:ShowSpare2()
         return jobTable.ShowSpare2(LocalPlayer())
     end
 
-    DarkRP.toggleF4Menu()
+    -- F4 menu disabled: jobs/entities/shipments etc. are in the Q menu (Inventory & Resources).
+    -- DarkRP.toggleF4Menu()
 end
 
 function GM:PlayerStartVoice(ply)
