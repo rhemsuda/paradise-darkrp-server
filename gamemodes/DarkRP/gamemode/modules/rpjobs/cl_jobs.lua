@@ -16,48 +16,6 @@ local JobsData = {}
 -- Currently selected job (for the info panel)
 local SelectedJob = nil
 local InfoPanel = nil
--- Expanded "Become job" button under one icon at a time; stored so we can collapse when another is clicked
-local ExpandedButton = nil
-
--- Show "Become X" or "Level X required" to the right of the clicked job icon; collapse previous if any
-local function showExpandedButton(panel, job, jobIndex)
-    local iconSize, iconSpace = 72, 8
-    if IsValid(ExpandedButton) then
-        ExpandedButton:Remove()
-        ExpandedButton = nil
-    end
-    local layout = panel:GetParent()
-    if not IsValid(layout) then return end
-    local px, py = panel:GetPos()
-    local playerLevel = LocalPlayer():GetNWInt("DarkRP_Level", 1)
-    local requiredLevel = job.level or 0
-    local isLocked = requiredLevel > 0 and playerLevel < requiredLevel
-
-    local btn = vgui.Create(isLocked and "DLabel" or "DButton", layout)
-    btn:SetSize(iconSize, 32)
-    btn:SetPos(px + iconSize + 4, py + (iconSize - 32) / 2)
-    if isLocked then
-        btn:SetText("Level " .. requiredLevel .. " required")
-        btn:SetFont("DermaDefaultBold")
-        btn:SetColor(Color(180, 100, 100))
-        btn:SetWrap(true)
-    else
-        btn:SetText("Become →")
-        btn:SetTextColor(Color(0, 0, 0))
-        btn.Paint = function(self, w, h)
-            draw.RoundedBox(4, 0, 0, w, h, self:IsHovered() and Color(100, 200, 100, 240) or Color(50, 150, 50, 240))
-        end
-        btn.DoClick = function()
-            if not job or not jobIndex then return end
-            net.Start("RequestJobChange")
-            net.WriteUInt(jobIndex, 16)
-            net.SendToServer()
-            if IsValid(ExpandedButton) then ExpandedButton:Remove() end
-            ExpandedButton = nil
-        end
-    end
-    ExpandedButton = btn
-end
 
 -- Function to update the information panel with the selected job's details
 local function UpdateInfoPanel(job, jobIndex)
@@ -66,11 +24,30 @@ local function UpdateInfoPanel(job, jobIndex)
 
     SelectedJob = { data = job, index = jobIndex }
 
-    -- Friendly name for loadout items (weapon_physgun -> Physgun, gmod_tool -> Toolgun)
     local function loadoutDisplayName(class)
         if class == "Weapon Shipments" then return class end
         local s = class:gsub("^weapon_", ""):gsub("^gmod_", "")
         return s:sub(1, 1):upper() .. s:sub(2):lower()
+    end
+
+    -- Get world model for loadout item (weapon/tool class or "Weapon Shipments")
+    -- Prefer runtime WorldModel so we use the game's actual paths; fallback to known paths then generic pistol
+    local FALLBACK_MODEL = "models/weapons/w_pist_p228.mdl"
+    local function loadoutModel(class)
+        if class == "Weapon Shipments" then return "models/items/boxsniperrounds.mdl" end
+        local swep = (weapons.GetStored and weapons.GetStored(class)) or (list.Get("Weapon") and list.Get("Weapon")[class])
+        if swep and swep.WorldModel and swep.WorldModel ~= "" then return swep.WorldModel end
+        -- Base GMod tools often don't register WorldModel; use known paths (GMod wiki: Common_Weapon_Models)
+        local known = {
+            ["weapon_physcannon"] = "models/weapons/w_Physics.mdl",  -- Gravity Gun (no w_physcannon.mdl)
+            ["weapon_physgun"]   = "models/weapons/w_Physics.mdl", -- Physics Gun
+            ["gmod_tool"]        = "models/weapons/w_toolgun.mdl",
+            ["gmod_camera"]      = "models/MaxOfS2D/camera.mdl",
+        }
+        -- Try known path first; if this install uses different casing, util.IsValidModel can't run client-side for all, so we try alternates
+        local path = known[class]
+        if path then return path end
+        return FALLBACK_MODEL
     end
 
     if not job then
@@ -83,28 +60,35 @@ local function UpdateInfoPanel(job, jobIndex)
         return
     end
 
-    local yPos = 10
+    local contentPanel = vgui.Create("DPanel", InfoPanel)
+    contentPanel:Dock(FILL)
+    contentPanel.Paint = function() end
+
+    local panelW = math.max(200, (IsValid(InfoPanel) and InfoPanel:GetWide() or 280) - 24)
+    local pad = 12
+    local yPos = pad
 
     -- Job Name
-    local nameLabel = vgui.Create("DLabel", InfoPanel)
+    local nameLabel = vgui.Create("DLabel", contentPanel)
     nameLabel:SetText(job.name)
-    nameLabel:SetPos(10, yPos)
-    nameLabel:SetSize(280, 22)
+    nameLabel:SetPos(pad, yPos)
+    nameLabel:SetSize(panelW - pad * 2, 22)
     nameLabel:SetFont("DermaDefaultBold")
     nameLabel:SetColor(Color(255, 255, 255))
-    yPos = yPos + 28
+    yPos = yPos + 26
 
-    -- Description
-    local descLabel = vgui.Create("DLabel", InfoPanel)
+    -- Description: enough height so text is never cut off (4–5 lines)
+    local descH = 78
+    local descLabel = vgui.Create("DLabel", contentPanel)
     descLabel:SetText(job.description or "No description available.")
-    descLabel:SetPos(10, yPos)
-    descLabel:SetSize(280, 120)
+    descLabel:SetPos(pad, yPos)
+    descLabel:SetSize(panelW - pad * 2, descH)
     descLabel:SetWrap(true)
     descLabel:SetFont("DermaDefault")
     descLabel:SetColor(Color(220, 220, 220))
-    yPos = yPos + 125
+    yPos = yPos + descH + 6
 
-    -- Loadout - clean bold header and one line per item
+    -- Loadout: larger icons so they fit the panel and aren't crammed
     local baseLoadout = {"weapon_physcannon", "weapon_physgun", "gmod_tool", "gmod_camera"}
     local loadout = table.Copy(baseLoadout)
     if job.candropweapons then
@@ -112,74 +96,113 @@ local function UpdateInfoPanel(job, jobIndex)
     elseif job.weapons and #job.weapons > 0 then
         table.Add(loadout, job.weapons)
     end
+    local iconSize, iconGap = 52, 8
     if #loadout > 0 then
-        local loadoutHeader = vgui.Create("DLabel", InfoPanel)
-        loadoutHeader:SetText("Loadout -")
-        loadoutHeader:SetPos(10, yPos)
-        loadoutHeader:SetSize(280, 20)
+        local loadoutHeader = vgui.Create("DLabel", contentPanel)
+        loadoutHeader:SetText("Loadout")
+        loadoutHeader:SetPos(pad, yPos)
+        loadoutHeader:SetSize(panelW - pad * 2, 20)
         loadoutHeader:SetFont("DermaDefaultBold")
         loadoutHeader:SetColor(Color(255, 255, 255))
         yPos = yPos + 24
 
-        for _, weapon in ipairs(loadout) do
-            local weaponLabel = vgui.Create("DLabel", InfoPanel)
-            weaponLabel:SetText(loadoutDisplayName(weapon))
-            weaponLabel:SetPos(14, yPos)
-            weaponLabel:SetSize(260, 20)
-            weaponLabel:SetFont("DermaDefaultBold")
-            weaponLabel:SetColor(Color(255, 255, 255))
-            yPos = yPos + 22
+        local cols = math.max(1, math.floor((panelW - pad * 2) / (iconSize + iconGap)))
+        for i, weapon in ipairs(loadout) do
+            local col = (i - 1) % cols
+            local row = math.floor((i - 1) / cols)
+            local cell = vgui.Create("DPanel", contentPanel)
+            cell:SetPos(pad + col * (iconSize + iconGap), yPos + row * (iconSize + iconGap))
+            cell:SetSize(iconSize, iconSize)
+            cell.Paint = function(self, w, h)
+                draw.RoundedBox(4, 0, 0, w, h, Color(30, 35, 45, 240))
+            end
+            local mdl = loadoutModel(weapon)
+            local icon = vgui.Create("SpawnIcon", cell)
+            icon:Dock(FILL)
+            icon:DockMargin(3, 3, 3, 3)
+            icon:SetModel(mdl)
+            icon:SetMouseInputEnabled(false)
+            cell:SetTooltip(loadoutDisplayName(weapon))
         end
-        yPos = yPos + 8
+        local loadoutRows = math.ceil(#loadout / cols)
+        yPos = yPos + loadoutRows * (iconSize + iconGap) + 10
     end
 
     -- Salary
-    local salaryLabel = vgui.Create("DLabel", InfoPanel)
+    local salaryLabel = vgui.Create("DLabel", contentPanel)
     salaryLabel:SetText("Salary: $" .. job.salary)
-    salaryLabel:SetPos(10, yPos)
-    salaryLabel:SetSize(280, 20)
+    salaryLabel:SetPos(pad, yPos)
+    salaryLabel:SetSize(panelW - pad * 2, 20)
     salaryLabel:SetFont("DermaDefaultBold")
     salaryLabel:SetColor(Color(0, 255, 0))
-    yPos = yPos + 28
+    yPos = yPos + 24
 
-    -- Level requirement and unlock status
+    -- Level
     local requiredLevel = job.level or 0
     if requiredLevel > 0 then
         local playerLevel = LocalPlayer():GetNWInt("DarkRP_Level", 1)
-        local levelLabel = vgui.Create("DLabel", InfoPanel)
-        if playerLevel >= requiredLevel then
-            levelLabel:SetText("Unlocked (Level " .. requiredLevel .. ")")
-            levelLabel:SetColor(Color(100, 255, 100))
-        else
-            levelLabel:SetText("Requires level " .. requiredLevel .. " (you: " .. playerLevel .. ")")
-            levelLabel:SetColor(Color(255, 180, 100))
-        end
-        levelLabel:SetPos(10, yPos)
-        levelLabel:SetSize(280, 20)
+        local levelLabel = vgui.Create("DLabel", contentPanel)
+        levelLabel:SetText(playerLevel >= requiredLevel and ("Unlocked (Lv." .. requiredLevel .. ")") or ("Requires Lv." .. requiredLevel))
+        levelLabel:SetColor(playerLevel >= requiredLevel and Color(100, 255, 100) or Color(255, 180, 100))
+        levelLabel:SetPos(pad, yPos)
+        levelLabel:SetSize(panelW - pad * 2, 18)
         levelLabel:SetFont("DermaDefaultBold")
-        yPos = yPos + 24
+        yPos = yPos + 22
     end
 
     -- Players
     local currentPlayers = #team.GetPlayers(job.team)
     local maxPlayers = job.max == 0 and "∞" or job.max
-    local playersLabel = vgui.Create("DLabel", InfoPanel)
+    local playersLabel = vgui.Create("DLabel", contentPanel)
     playersLabel:SetText("Players: " .. currentPlayers .. "/" .. maxPlayers)
-    playersLabel:SetPos(10, yPos)
-    playersLabel:SetSize(280, 20)
+    playersLabel:SetPos(pad, yPos)
+    playersLabel:SetSize(panelW - pad * 2, 18)
     playersLabel:SetFont("DermaDefaultBold")
     playersLabel:SetColor(Color(255, 255, 255))
-    yPos = yPos + 40
+    yPos = yPos + 24
 
-    -- Admin Requirements
     if job.admin > 0 then
-        local adminLabel = vgui.Create("DLabel", InfoPanel)
-        adminLabel:SetText("Requires Admin (Level " .. job.admin .. ")")
-        adminLabel:SetPos(10, yPos)
-        adminLabel:SetSize(280, 20)
+        local adminLabel = vgui.Create("DLabel", contentPanel)
+        adminLabel:SetText("Requires Admin (Lv." .. job.admin .. ")")
+        adminLabel:SetPos(pad, yPos)
+        adminLabel:SetSize(panelW - pad * 2, 18)
         adminLabel:SetFont("DermaDefaultBold")
         adminLabel:SetColor(Color(255, 0, 0))
-        yPos = yPos + 40
+        yPos = yPos + 24
+    end
+
+    -- Become button at bottom of info panel
+    local bottomBar = vgui.Create("DPanel", InfoPanel)
+    bottomBar:Dock(BOTTOM)
+    bottomBar:SetTall(50)
+    bottomBar:DockMargin(10, 10, 10, 10)
+    bottomBar.Paint = function() end
+
+    local playerLevel = LocalPlayer():GetNWInt("DarkRP_Level", 1)
+    local requiredLevel = job.level or 0
+    local isLocked = requiredLevel > 0 and playerLevel < requiredLevel
+
+    if isLocked then
+        local lockLabel = vgui.Create("DLabel", bottomBar)
+        lockLabel:SetText("Level " .. requiredLevel .. " required")
+        lockLabel:SetFont("DermaDefaultBold")
+        lockLabel:SetColor(Color(180, 100, 100))
+        lockLabel:Dock(FILL)
+        lockLabel:SetContentAlignment(5)
+    else
+        local becomeBtn = vgui.Create("DButton", bottomBar)
+        becomeBtn:SetText("Become →")
+        becomeBtn:SetTextColor(Color(0, 0, 0))
+        becomeBtn:Dock(FILL)
+        becomeBtn.DoClick = function()
+            if not job or not jobIndex then return end
+            net.Start("RequestJobChange")
+            net.WriteUInt(jobIndex, 16)
+            net.SendToServer()
+        end
+        becomeBtn.Paint = function(self, w, h)
+            draw.RoundedBox(4, 0, 0, w, h, self:IsHovered() and Color(100, 200, 100, 240) or Color(50, 150, 50, 240))
+        end
     end
 
 end
@@ -198,8 +221,9 @@ function BuildJobsPanel(parent)
         if not IsValid(parent) or not IsValid(leftPanel) or not IsValid(InfoPanel) then return end
         local pw = parent:GetWide()
         if pw > 0 then
-            -- Jobs list gets ~55%, info panel gets the rest, so both fit on the page
-            leftPanel:SetWide(math.max(280, math.floor(pw * 0.55)))
+            -- Jobs list wide enough for a proper grid (min ~5 columns of 80px) so no huge vertical list
+            local minWidthForGrid = 5 * (72 + 8) + 30
+            leftPanel:SetWide(math.max(minWidthForGrid, math.floor(pw * 0.55)))
         end
     end
     if parent.PerformLayout then
@@ -256,8 +280,8 @@ function BuildJobsPanel(parent)
     -- Organize jobs by category
     local categories = {}
     for jobIndex, job in pairs(JobsData) do
-        -- Skip the player's current job
-        if job.team == playerTeam then
+        -- Skip the player's current job, but always show Citizen so players can switch back to it
+        if job.team == playerTeam and (job.name or "") ~= "Citizen" then
             DebugPrint("[Jobs Module] Skipping job " .. job.name .. " as it is the player's current job")
             continue
         end
@@ -275,26 +299,37 @@ function BuildJobsPanel(parent)
     end
     table.sort(sortedCategories)
 
-    -- Create a collapsible category for each job category
+    local iconSize, iconSpace = 72, 8
+    local leftW = (IsValid(leftPanel) and leftPanel:GetWide() or 430) - 30
+    local cols = math.max(5, math.floor(leftW / (iconSize + iconSpace)))
+
+    -- Custom headers + grids (no collapsibles); one scroll for the whole panel
     for _, category in ipairs(sortedCategories) do
-        local cat = vgui.Create("DCollapsibleCategory", scroll)
-        cat:Dock(TOP)
-        cat:SetLabel(category)
-        cat:SetExpanded(true)
-        cat:DockMargin(5, 5, 5, 0)
+        -- Header: simple bar with category name
+        local header = vgui.Create("DPanel", scroll)
+        header:Dock(TOP)
+        header:SetTall(28)
+        header:DockMargin(0, 12, 0, 4)
+        header.Paint = function(self, w, h)
+            draw.RoundedBox(0, 0, 0, w, h, Color(35, 45, 60, 250))
+            surface.SetDrawColor(0, 160, 220, 180)
+            surface.DrawOutlinedRect(0, 0, w, h)
+        end
+        local headerLabel = vgui.Create("DLabel", header)
+        headerLabel:SetText(category)
+        headerLabel:SetFont("DermaDefaultBold")
+        headerLabel:SetTextColor(Color(255, 255, 255))
+        headerLabel:Dock(FILL)
+        headerLabel:DockMargin(8, 0, 0, 0)
+        headerLabel:SetContentAlignment(4)
 
-        local layout = vgui.Create("DPanel", cat)
-        layout:Dock(FILL)
-        -- Icon-only grid: each job is a small model icon (no text on the icon)
-        local iconSize, iconSpace = 72, 8
-        local leftW = (IsValid(leftPanel) and leftPanel:GetWide() or 400) - 30
-        local cols = math.max(1, math.floor(leftW / (iconSize + iconSpace)))
+        -- Grid of job icons under this category
         local rows = math.ceil(#categories[category] / cols)
+        local layout = vgui.Create("DPanel", scroll)
+        layout:Dock(TOP)
         layout:SetTall(rows * (iconSize + iconSpace) + iconSpace)
-        layout:DockMargin(5, 5, 5, 5)
+        layout:DockMargin(8, 0, 8, 8)
         layout.Paint = function() end
-
-        cat:SetContents(layout)
 
         -- Sort by level first (level 1 base jobs at top); no level (0) = last
         table.sort(categories[category], function(a, b)
@@ -357,7 +392,7 @@ function BuildJobsPanel(parent)
                 overlay:SetText("")
             end
 
-            -- Single click: show info + expand Become / Level required. Double click: become job (only if unlocked).
+            -- Single click: show info in panel on the right. Double click: become job (only if unlocked).
             panel.OnMousePressed = function(self, code)
                 if code ~= MOUSE_LEFT then return end
                 if not self.Job or not self.JobIndex then return end
@@ -373,7 +408,6 @@ function BuildJobsPanel(parent)
                 end
                 self._lastClick = now
                 UpdateInfoPanel(self.Job, self.JobIndex)
-                showExpandedButton(self, job, jobIndex)
             end
         end
     end

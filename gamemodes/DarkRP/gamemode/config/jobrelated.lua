@@ -230,6 +230,52 @@ TEAM_HOBO = DarkRP.createJob("Hobo", {
     level = 1,
 })
 
+-- Paradise plan placeholder jobs (Phase 5); to be fleshed out with defib, banking, drugs, etc.
+TEAM_PARAMEDIC = DarkRP.createJob("Paramedic", {
+    color = Color(200, 60, 60, 255),
+    model = "models/player/monk.mdl",
+    description = [[Paramedic – revive the fallen with your defib. (Placeholder; full mechanics coming.)]],
+    weapons = {},
+    command = "paramedic",
+    max = 2,
+    salary = GAMEMODE.Config.normalsalary * 1.2,
+    admin = 0,
+    vote = false,
+    hasLicense = false,
+    category = "Citizens",
+    level = 8,
+})
+
+TEAM_BANKER = DarkRP.createJob("Banker", {
+    color = Color(255, 200, 80, 255),
+    model = "models/player/kleiner.mdl",
+    description = [[Banker – handle rare materials and banking. (Placeholder; full mechanics coming.)]],
+    weapons = {},
+    command = "banker",
+    max = 2,
+    salary = GAMEMODE.Config.normalsalary * 1.15,
+    admin = 0,
+    vote = false,
+    hasLicense = false,
+    category = "Citizens",
+    level = 10,
+})
+
+TEAM_DRUGDEALER = DarkRP.createJob("Drug Dealer", {
+    color = Color(100, 60, 140, 255),
+    model = "models/player/Group03/male_02.mdl",
+    description = [[Drug Dealer – limited slots, demotable. (Placeholder; full mechanics coming.)]],
+    weapons = {},
+    command = "drugdealer",
+    max = 4,
+    salary = GAMEMODE.Config.normalsalary,
+    admin = 0,
+    vote = false,
+    hasLicense = false,
+    category = "Gangsters",
+    level = 12,
+})
+
 if not DarkRP.disabledDefaults["modules"]["hungermod"] then
     TEAM_COOK = DarkRP.createJob("Cook", {
         color = Color(238, 99, 99, 255),
@@ -258,8 +304,11 @@ TEAM_MEDIC   = TEAM_MEDIC    or -1
 TEAM_MINER   = TEAM_MINER    or -1
 TEAM_CHIEF   = TEAM_CHIEF    or -1
 TEAM_MAYOR   = TEAM_MAYOR    or -1
-TEAM_HOBO    = TEAM_HOBO     or -1
-TEAM_COOK    = TEAM_COOK     or -1
+TEAM_HOBO       = TEAM_HOBO       or -1
+TEAM_PARAMEDIC  = TEAM_PARAMEDIC  or -1
+TEAM_BANKER     = TEAM_BANKER     or -1
+TEAM_DRUGDEALER = TEAM_DRUGDEALER or -1
+TEAM_COOK       = TEAM_COOK       or -1
 
 -- Door groups
 AddDoorGroup("Cops and Mayor only", TEAM_CHIEF, TEAM_POLICE, TEAM_MAYOR)
@@ -328,3 +377,63 @@ DarkRP.createCategory{
     canSee = fp{fn.Id, true},
     sortOrder = 255,
 }
+
+-- Donator-only category; Mercenary and Specialist appear only for Donators/SuperDonators
+local function isDonator(ply)
+    if not Admin or not Admin.GetEffectiveRank then return false end
+    local r = Admin.GetEffectiveRank(ply)
+    return r == "donator" or r == "sdonator"
+end
+
+DarkRP.createCategory{
+    name = "Exclusive",
+    categorises = "jobs",
+    startExpanded = true,
+    color = Color(200, 160, 60, 255),
+    canSee = isDonator,
+    sortOrder = 50,
+}
+
+TEAM_MERCENARY = DarkRP.createJob("Mercenary", {
+    color = Color(100, 80, 40, 255),
+    model = {
+        "models/player/Group03/male_02.mdl",
+        "models/player/Group03/male_04.mdl",
+        "models/player/Group03/male_06.mdl",
+    },
+    description = [[A Donator job. Same loadout as Citizen plus a Knife for close combat.]],
+    weapons = {"weapon_knife"},
+    command = "mercenary",
+    max = 0,
+    salary = GAMEMODE.Config.normalsalary,
+    admin = 0,
+    vote = false,
+    hasLicense = false,
+    category = "Exclusive",
+    level = 1,
+    customCheck = isDonator,
+    CustomCheckFailMsg = "This job is for Donators and Super Donators only.",
+})
+
+TEAM_SPECIALIST = DarkRP.createJob("Specialist", {
+    color = Color(80, 100, 120, 255),
+    model = {
+        "models/player/Group01/male_02.mdl",
+        "models/player/Group01/male_04.mdl",
+    },
+    description = [[A Donator job. Same loadout as Citizen plus a USP. Requires level 1.]],
+    weapons = {"bb_usp"},
+    command = "specialist",
+    max = 0,
+    salary = GAMEMODE.Config.normalsalary * 1.1,
+    admin = 0,
+    vote = false,
+    hasLicense = false,
+    category = "Exclusive",
+    level = 1,
+    customCheck = isDonator,
+    CustomCheckFailMsg = "This job is for Donators and Super Donators only.",
+})
+
+TEAM_MERCENARY = TEAM_MERCENARY or -1
+TEAM_SPECIALIST = TEAM_SPECIALIST or -1

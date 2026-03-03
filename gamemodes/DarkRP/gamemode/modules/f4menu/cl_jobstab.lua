@@ -287,16 +287,20 @@ local function getWeaponModel(class)
     if swep and swep.WorldModel and swep.WorldModel ~= "" then
         return swep.WorldModel
     end
-    -- Fallback: common entity classes
+    -- Fallback: common classes (GMod wiki Common_Weapon_Models; no w_physcannon.mdl)
     local fallbacks = {
-        arrest_stick = "models/weapons/w_stunbaton.mdl",
-        unarrest_stick = "models/weapons/w_stunbaton.mdl",
-        stunstick = "models/weapons/w_stunbaton.mdl",
-        weaponchecker = "models/weapons/w_stunbaton.mdl",
+        weapon_physcannon = "models/weapons/w_Physics.mdl",
+        weapon_physgun    = "models/weapons/w_Physics.mdl",
+        gmod_tool        = "models/weapons/w_toolgun.mdl",
+        gmod_camera      = "models/MaxOfS2D/camera.mdl",
+        arrest_stick     = "models/weapons/w_stunbaton.mdl",
+        unarrest_stick   = "models/weapons/w_stunbaton.mdl",
+        stunstick        = "models/weapons/w_stunbaton.mdl",
+        weaponchecker    = "models/weapons/w_stunbaton.mdl",
         weapon_taser_scanner = "models/weapons/w_pistol.mdl",
-        med_kit = "models/weapons/w_medkit.mdl",
-        weapon_bugbait = "models/weapons/w_bugbait.mdl",
-        lockpick = "models/props_c17/TrapPropeller_Lever.mdl",
+        med_kit          = "models/weapons/w_medkit.mdl",
+        weapon_bugbait   = "models/weapons/w_bugbait.mdl",
+        lockpick         = "models/weapons/w_crowbar.mdl",  -- lockpick uses crowbar world model in codebase
     }
     return fallbacks[class] or "models/weapons/w_pistol.mdl"
 end

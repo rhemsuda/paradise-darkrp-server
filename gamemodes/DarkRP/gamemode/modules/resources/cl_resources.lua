@@ -1,61 +1,31 @@
 if not CLIENT then return end
 
+-- sh_resources.lua is loaded by the module loader before this file and defines:
+--   Paradise.ResourceItems, Paradise.ResourceAppearances, Paradise.ResourceCategories
+
 -- Helper function to print debug messages conditionally (set rp_debug 1 to see)
 local function DebugPrint(...)
     local cv = GetConVar("rp_debug")
     if cv and cv:GetInt() == 1 then print(...) end
 end
 
--- Client-side Resources Table
+-- Client-side Resources Table (also exposed as Paradise.PlayerResources for crafter menu)
 local Resources = {}
+Paradise = Paradise or {}
+Paradise.PlayerResources = Paradise.PlayerResources or {}
 
--- Resource appearances for visual customization
-local resourceAppearances = {
-    rock = { material = "", color = nil },
-    copper = { material = "models/shiny", color = Color(184, 115, 51, 100) },
-    iron = { material = "models/shiny", color = Color(169, 169, 169, 255) },
-    steel = { material = "models/shiny", color = Color(192, 192, 192, 255) },
-    titanium = { material = "models/shiny", color = Color(46, 139, 87, 255) },
-    emerald = { material = "models/shiny", color = Color(0, 255, 127, 200) },
-    ruby = { material = "models/shiny", color = Color(255, 36, 0, 200) },
-    sapphire = { material = "models/shiny", color = Color(0, 191, 255, 200) },
-    obsidian = { material = "models/shiny", color = Color(47, 79, 79, 200) },
-    diamond = { material = "models/shiny", color = Color(240, 248, 255, 200) }
-    --[[ Commented out lumber appearances for later development
-    ash = { material = "models/shiny", color = Color(139, 69, 19, 255) },
-    birch = { material = "models/shiny", color = Color(245, 245, 220, 255) },
-    oak = { material = "models/shiny", color = Color(160, 82, 45, 255) },
-    mahogany = { material = "models/shiny", color = Color(139, 0, 0, 255) },
-    yew = { material = "models/shiny", color = Color(85, 107, 47, 255) }
-    ]]
-}
-
--- Resource templates for UI categorization
-local resourceTemplates = {
-    minerals = {
-        { id = "rock", name = "Rock", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "copper", name = "Copper", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "iron", name = "Iron", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "steel", name = "Steel", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "titanium", name = "Titanium", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" }
-    },
-    gems = {
-        { id = "emerald", name = "Emerald", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "ruby", name = "Ruby", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "sapphire", name = "Sapphire", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "obsidian", name = "Obsidian", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "diamond", name = "Diamond", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" }
-    },
-    --[[ Commented out lumber section for later development
-    lumber = {
-        { id = "ash", name = "Ash", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" },
-        { id = "birch", name = "Birch", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" },
-        { id = "oak", name = "Oak", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" },
-        { id = "mahogany", name = "Mahogany", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" },
-        { id = "yew", name = "Yew", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" }
+-- Flat lookup for crafter/other UI: resourceID -> { name, icon, color, material }
+-- Built once from the shared tables so both the resource panel and the crafter can reference it.
+Paradise.ResourceDisplay = Paradise.ResourceDisplay or {}
+for id, item in pairs(Paradise.ResourceItems or {}) do
+    local app = Paradise.ResourceAppearances[id] or {}
+    Paradise.ResourceDisplay[id] = {
+        name     = item.name or id,
+        icon     = item.model or "models/props_junk/rock001a.mdl",
+        color    = app.color or Color(200, 200, 200),
+        material = (app.material and app.material ~= "") and app.material or nil,
     }
-    ]]
-}
+end
 
 -- Function to build the resources menu (used by sh_inventory.lua)
 -- Match Inventory Q-menu / Tool Selector sidebar colors (bg_panel, bg_raised)
@@ -66,12 +36,8 @@ function BuildResourcesMenu(parent)
     if not IsValid(parent) then return end
     for _, child in pairs(parent:GetChildren()) do child:Remove() end
     local pad = 8
-    local categories = {
-        { name = "Minerals", items = resourceTemplates.minerals },
-        { name = "Gems", items = resourceTemplates.gems },
-    }
     -- Minerals and Gems side by side so they don't go under the tool section; each gets ~half width.
-    for col, cat in ipairs(categories) do
+    for col, cat in ipairs(Paradise.ResourceCategories or {}) do
         local catPanel = vgui.Create("DPanel", parent)
         catPanel:Dock(LEFT)
         catPanel:DockMargin(col == 1 and pad or pad * 0.5, pad, col == 2 and pad or pad * 0.5, pad)
@@ -84,7 +50,7 @@ function BuildResourcesMenu(parent)
             end
         end
         catPanel:SetWide(260)
-        catPanel:SetTall(60 + #cat.items * 50)
+        catPanel:SetTall(60 + #cat.ids * 50)
 
         local catLabel = vgui.Create("DLabel", catPanel)
         catLabel:SetPos(10, 10)
@@ -93,9 +59,9 @@ function BuildResourcesMenu(parent)
         catLabel:SetFont("DermaDefaultBold")
         catLabel:SetColor(Color(255, 215, 0))
 
-        local i = 1
-        for _, data in ipairs(cat.items) do
-            local resourceID = data.id
+        for i, resourceID in ipairs(cat.ids) do
+            local item = Paradise.ResourceItems[resourceID] or {}
+            local display = Paradise.ResourceDisplay[resourceID] or {}
             local resPanel = vgui.Create("DPanel", catPanel)
             resPanel:SetPos(10, 40 + (i - 1) * 50)
             resPanel:SetSize(240, 40)
@@ -104,24 +70,23 @@ function BuildResourcesMenu(parent)
             local resIcon = vgui.Create("DModelPanel", resPanel)
             resIcon:SetPos(5, 0)
             resIcon:SetSize(40, 40)
-            resIcon:SetModel(data.icon)
+            resIcon:SetModel(item.model or "models/props_junk/rock001a.mdl")
             resIcon:SetFOV(30)
             resIcon:SetCamPos(Vector(30, 30, 30))
             resIcon:SetLookAt(Vector(0, 0, 0))
-            local appearance = resourceAppearances[resourceID] or { material = "models/shiny", color = Color(255, 255, 255) }
-            if appearance.material != "" then resIcon.Entity:SetMaterial(appearance.material) end
-            if appearance.color then resIcon:SetColor(appearance.color) end
+            if display.material then resIcon.Entity:SetMaterial(display.material) end
+            if display.color then resIcon:SetColor(display.color) end
             resIcon.OnCursorEntered = function(self)
                 if IsValid(currentTooltip) then currentTooltip:Remove() end
                 currentTooltip = vgui.Create("DLabel", resPanel)
-                currentTooltip:SetText(data.name)
+                currentTooltip:SetText(item.name or resourceID)
                 currentTooltip:SetPos(50, 10)
                 currentTooltip:SetSize(100, 20)
                 currentTooltip:SetZPos(10000)
                 currentTooltip.Paint = function(self, w, h) draw.RoundedBox(4, 0, 0, w, h, Color(50, 50, 50, 240)) end
             end
-            resIcon.OnCursorExited = function(self) 
-                if IsValid(currentTooltip) then currentTooltip:Remove() currentTooltip = nil end 
+            resIcon.OnCursorExited = function(self)
+                if IsValid(currentTooltip) then currentTooltip:Remove() currentTooltip = nil end
             end
             resIcon.OnMousePressed = function(self, code)
                 if (Resources[resourceID] or 0) <= 0 then return end
@@ -130,9 +95,9 @@ function BuildResourcesMenu(parent)
                     net.WriteString(resourceID)
                     net.WriteUInt(1, 16)
                     net.SendToServer()
-                    DebugPrint("[Resources Module] Dropped 1 " .. resourceID .. " (left-click)")
                 elseif code == MOUSE_RIGHT then
-                    Derma_StringRequest("Drop " .. data.name, "How many to drop? (Max: " .. (Resources[resourceID] or 0) .. ")", "1",
+                    Derma_StringRequest("Drop " .. (item.name or resourceID),
+                        "How many to drop? (Max: " .. (Resources[resourceID] or 0) .. ")", "1",
                         function(text)
                             local amount = math.min(math.floor(tonumber(text) or 0), Resources[resourceID] or 0)
                             if amount > 0 then
@@ -140,7 +105,6 @@ function BuildResourcesMenu(parent)
                                 net.WriteString(resourceID)
                                 net.WriteUInt(amount, 16)
                                 net.SendToServer()
-                                DebugPrint("[Resources Module] Dropped " .. amount .. " " .. resourceID .. " (right-click)")
                             end
                         end, nil, "Drop", "Cancel")
                 end
@@ -151,7 +115,6 @@ function BuildResourcesMenu(parent)
             resAmount:SetText(": " .. (Resources[resourceID] or 0))
             resAmount:SetSize(220, 20)
             resAmount.Think = function(self) self:SetText(": " .. (Resources[resourceID] or 0)) end
-            i = i + 1
         end
     end
 end
@@ -159,13 +122,47 @@ end
 -- Net message handlers
 net.Receive("SyncResources", function()
     Resources = net.ReadTable()
+    Paradise.PlayerResources = Resources -- Expose for crafter menu (pouch amounts)
     DebugPrint("[Resources Module] Synced resources: " .. table.ToString(Resources))
     -- The BuildResourcesMenu call will be handled by sh_inventory.lua
 end)
 
+-- Resource chat: no [Paradise] prefix; resource name shown in its tint color.
+local RESOURCE_MSG_GRAY = Color(150, 155, 165)
+local DEFAULT_RESOURCE_COLOR = Color(180, 185, 190)
+-- Glow colors for Diamond/Obsidian name in chat (luminous so the word stands out in the chat box)
+local DIAMOND_NAME_GLOW  = Color(220, 240, 255)
+local OBSIDIAN_NAME_GLOW = Color(140, 110, 180)
+
+local function resourceChatLine(prefix, resourceID)
+    local display = Paradise.ResourceDisplay[resourceID] or {}
+    local name  = display.name or resourceID
+    local color = display.color or DEFAULT_RESOURCE_COLOR
+    if resourceID == "diamond" then
+        color = DIAMOND_NAME_GLOW
+    elseif resourceID == "obsidian" then
+        color = OBSIDIAN_NAME_GLOW
+    end
+    chat.AddText(RESOURCE_MSG_GRAY, prefix, color, name)
+end
+
 net.Receive("ResourcesMessage", function()
-    local message = net.ReadString()
-    chat.AddText(Color(255, 215, 0), "[Resources] ", Color(255, 255, 255), message)
+    local msgType = net.ReadString()
+    if msgType == "mined" then
+        resourceChatLine("You mined a ", net.ReadString())
+    elseif msgType == "dropped" then
+        local resourceID = net.ReadString()
+        net.ReadUInt(16) -- amount (intentionally not shown in phrasing)
+        resourceChatLine("You dropped a ", resourceID)
+    elseif msgType == "pickedup" then
+        local resourceID = net.ReadString()
+        net.ReadUInt(16) -- amount (intentionally not shown in phrasing)
+        resourceChatLine("Picked up a ", resourceID)
+    elseif msgType == "plain" then
+        chat.AddText(RESOURCE_MSG_GRAY, net.ReadString())
+    else
+        chat.AddText(RESOURCE_MSG_GRAY, msgType)
+    end
 end)
 
 -- This print will always show to confirm successful load
