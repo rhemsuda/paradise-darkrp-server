@@ -1,6 +1,6 @@
 --[[---------------------------------------------------------------------------
   Scoreboard - Shared: ensure client panel files are sent (AddCSLuaFile).
-  Replaces gmod10_scoreboard. Panels in this folder.
+  Scoreboard shared. Panels in this folder.
 ---------------------------------------------------------------------------]]
 if SERVER then
     local M = (GAMEMODE or GM).FolderName .. "/gamemode/modules/scoreboard/"

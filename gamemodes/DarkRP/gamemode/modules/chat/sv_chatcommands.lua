@@ -109,7 +109,7 @@ local function OOC(ply, args)
     return args, DoSay
 end
 DarkRP.defineChatCommand("/", OOC, true, 1.5)
-DarkRP.defineChatCommand("a", OOC, true, 1.5)
+-- "a" reserved for admin broadcast (see admin module); use / or ooc for OOC
 DarkRP.defineChatCommand("ooc", OOC, true, 1.5)
 
 local function MayorBroadcast(ply, args)

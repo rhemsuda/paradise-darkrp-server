@@ -44,7 +44,7 @@ These unblock almost everything else.
 
 ## Phase 4 — NPCs (batch by role)
 
-Implement NPCs in batches; each can use Banker/Crafter/Medic etc. once the NPC system exists (see ROADMAP.md §4).
+Implement NPCs in batches; each can use Banker/Crafter/Medic etc. once the NPC system exists (see ROADMAP.md §4). See **NPC_TODO.md** for task list. Admin menu paused; NPC system started.
 
 | Done | Task |
 |------|------|
@@ -127,7 +127,7 @@ Boostable by job sizes etc.
 
 ## Quick reference — your list grouped
 
-- **Working on** — (you fill in current focus)
+- **Working on** — Crafter NPC done for now. Next: other NPC types or refine Crafter mission lines (see NPC_TODO.md).
 - **Trading** → Phase 1  
 - **Items** (knife/crowbar/enhanced crowbar) → Phase 2  
 - **Levels** (printers, entities, job requirements) → Phase 1 + 2  

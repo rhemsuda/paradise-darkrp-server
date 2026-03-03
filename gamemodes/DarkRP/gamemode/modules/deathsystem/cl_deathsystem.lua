@@ -208,37 +208,47 @@ hook.Add("RenderScreenspaceEffects", "DarkenGhostScreen", function()
     DrawColorModify(tab)
 end)
 
--- Block custom menu access (e.g., Player Loadout menu) and ensure Q menu is closed
+-- When dead (ghost): no Q menu, no job change, no inventory, no spawns. Close any open menus every frame.
+-- Admins/superadmins are allowed to keep the Q menu open (admin panel only).
 hook.Add("PreRender", "PreventGhostMenus", function()
+    if not isGhost then return end
     local ply = LocalPlayer()
-    if isGhost and not ply:IsAdmin() then
-        -- Close any open VGUI panels
-        if vgui.GetKeyboardFocus() then
-            vgui.GetKeyboardFocus():KillFocus()
-        end
-        -- Disable the screen clicker (prevents mouse interaction with menus)
-        gui.EnableScreenClicker(false)
-        -- Explicitly close the spawn menu if it's open
-        if g_SpawnMenu and g_SpawnMenu:IsVisible() then
-            g_SpawnMenu:Close()
-            DebugPrint("[Death System] Closed spawn menu for non-admin ghost player.")
-        end
+    local isAdmin = IsValid(ply) and ply:IsAdmin()
+    -- Admins can keep Q menu open for admin panel; don't close it for them
+    if isAdmin and Inventory and Inventory.AdminPanelOnlyOpen then
+        gui.EnableScreenClicker(true)
+        return
     end
+    -- Close any open VGUI panels and disable mouse so ghost can't interact with menus
+    if vgui.GetKeyboardFocus() then
+        vgui.GetKeyboardFocus():KillFocus()
+    end
+    gui.EnableScreenClicker(false)
+    if g_SpawnMenu and g_SpawnMenu:IsVisible() then
+        g_SpawnMenu:Close()
+    end
+    -- Close inventory/Q menu frame if it exists (Inventory_Close is global from cl_inventory)
+    if Inventory_Close then Inventory_Close() end
+    -- Close F4 menu (jobs/entities) if open
+    if DarkRP and DarkRP.closeF4Menu then DarkRP.closeF4Menu() end
 end)
 
--- Block menu binds for non-admin ghosts
+-- Block menu binds for all ghosts except admins (admins can open Q menu for admin panel only)
 hook.Add("PlayerBindPress", "PreventGhostMenus", function(ply, bind, pressed)
-    if isGhost and not ply:IsAdmin() then
-        -- Block Q menu (spawnmenu) and other common menu binds
-        if bind == "impulse 100" or bind == "+menu" or bind == "+menu_context" then
-            DebugPrint("[Death System] Blocked menu bind (" .. bind .. ") for non-admin ghost player.")
-            return true -- Prevent the bind from executing
-        end
-        -- Block potential binds for rp_loadout (if bound to a key)
-        if string.find(string.lower(bind), "rp_loadout") then
-            DebugPrint("[Death System] Blocked rp_loadout bind (" .. bind .. ") for non-admin ghost player.")
-            return true -- Prevent the bind from executing
-        end
+    if not isGhost then return end
+    -- Admins can use +menu (Q) to open admin panel
+    if bind == "+menu" and IsValid(ply) and ply:IsAdmin() then
+        return -- Don't block; let inventory hook handle it
+    end
+    if bind == "impulse 100" or bind == "+menu" or bind == "+menu_context" then
+        return true
+    end
+    if string.find(string.lower(bind or ""), "rp_loadout") then
+        return true
+    end
+    -- Block F4 menu (jobs/entities) bind
+    if string.find(bind or "", "gm_showspare2", 1, true) then
+        return true
     end
 end)
 
@@ -291,24 +301,10 @@ end)
 
 -- Detect E key press and interact with light spheres
 hook.Add("Think", "DetectSphereInteraction", function()
-    if not isGhost then
-        -- Throttle the debug print to once per second
-        if CurTime() - lastDebugPrint >= 1 then
-            DebugPrint("[Death System] Think hook: Not in ghost mode")
-            lastDebugPrint = CurTime()
-        end
-        return
-    end
+    if not isGhost then return end
 
     local ply = LocalPlayer()
-    -- Use LocalPlayer():KeyDown(IN_USE) to detect the use key
     local usePressed = ply:KeyDown(IN_USE)
-
-    -- Debug print to confirm the hook is running and the key state
-    if CurTime() - lastDebugPrint >= 1 then
-        DebugPrint("[Death System] Think hook: usePressed=" .. tostring(usePressed) .. ", wasUsePressed=" .. tostring(wasUsePressed))
-        lastDebugPrint = CurTime()
-    end
 
     -- Check if the use key state has changed
     if usePressed and not wasUsePressed then

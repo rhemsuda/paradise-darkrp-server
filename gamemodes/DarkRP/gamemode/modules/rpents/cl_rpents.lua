@@ -163,12 +163,12 @@ function BuildEntitiesPanel(parent)
     -- Width set in parent PerformLayout so it scales with content area (avoids fixed 400px cut-off).
     local function layoutEntitiesPanels()
         if not IsValid(parent) or not IsValid(leftPanel) then return end
-        -- Avoid calling SetWide when hierarchy is broken (e.g. tab not active) so engine doesn't hit NULL in GetTall.
         if not IsValid(leftPanel:GetParent()) then return end
         local pw = parent:GetWide()
         if pw > 0 then
-            -- Entities list gets most of the space; info/buy panel stays smaller for when more entities are added.
-            leftPanel:SetWide(math.max(280, math.floor(pw * 0.68)))
+            -- Wide enough for a grid (min ~5 columns) like Jobs tab
+            local minWidthForGrid = 5 * (56 + 6) + 30
+            leftPanel:SetWide(math.max(minWidthForGrid, math.floor(pw * 0.55)))
         end
     end
     if parent.PerformLayout then
@@ -199,10 +199,10 @@ function BuildEntitiesPanel(parent)
         draw.RoundedBox(4, 0, 0, w, h, Color(100, 100, 100))
     end
 
-    -- Container inside the scroll panel
+    -- Container inside the scroll panel (extra top padding so first header isn't cut off)
     local container = vgui.Create("DPanel", scrollPanel)
     container:Dock(TOP)
-    container:DockPadding(5, 5, 5, 5)
+    container:DockPadding(8, 14, 8, 8)
     container.Paint = function() end
 
     InfoPanel = vgui.Create("DPanel", parent)
@@ -248,7 +248,7 @@ function BuildEntitiesPanel(parent)
             return
         end
 
-        -- Group by category (no collapsibles — simple list so nothing gets cut off).
+        -- Group by category; custom headers + compact grid (like Jobs tab)
         local categories = {}
         for _, ent in ipairs(filteredEntities) do
             local category = ent.category or "General Entities"
@@ -264,22 +264,13 @@ function BuildEntitiesPanel(parent)
         end
         table.sort(sortedCategories)
 
-        local listY = 0
-        local rowHeight = 56
-        local rowGap = 4
-        local availableW = (IsValid(leftPanel) and leftPanel:GetWide() or 280) - 26
+        local iconSize, iconSpace = 56, 6
+        local leftW = (IsValid(leftPanel) and leftPanel:GetWide() or 350) - 26
+        local cols = math.max(5, math.floor(leftW / (iconSize + iconSpace)))
         local playerLevel = LocalPlayer():GetNWInt("DarkRP_Level", 1)
+        local layoutY = 4
 
         for _, category in ipairs(sortedCategories) do
-            -- Category header (label only, no dropdown).
-            local header = vgui.Create("DLabel", container)
-            header:SetText(category)
-            header:SetFont("DermaDefaultBold")
-            header:SetColor(Color(200, 220, 255))
-            header:SetPos(8, listY)
-            header:SetSize(availableW, 22)
-            listY = listY + 24
-
             if category == "Printers" then
                 table.sort(categories[category], function(a, b)
                     local lvA, lvB = a.level or 1, b.level or 1
@@ -287,31 +278,62 @@ function BuildEntitiesPanel(parent)
                     return (a.name or "") < (b.name or "")
                 end)
             else
-                table.sort(categories[category], function(a, b) return a.name < b.name end)
+                table.sort(categories[category], function(a, b) return (a.name or "") < (b.name or "") end)
             end
 
-            for _, ent in ipairs(categories[category]) do
+            -- Section header (same style as Jobs)
+            local header = vgui.Create("DPanel", container)
+            header:SetPos(0, layoutY)
+            header:SetSize(leftW + 16, 28)
+            layoutY = layoutY + 32
+            header.Paint = function(self, w, h)
+                draw.RoundedBox(0, 0, 0, w, h, Color(35, 45, 60, 250))
+                surface.SetDrawColor(0, 160, 220, 180)
+                surface.DrawOutlinedRect(0, 0, w, h)
+            end
+            local headerLabel = vgui.Create("DLabel", header)
+            headerLabel:SetText(category)
+            headerLabel:SetFont("DermaDefaultBold")
+            headerLabel:SetTextColor(Color(255, 255, 255))
+            headerLabel:SetPos(8, 0)
+            headerLabel:SetSize(leftW, 28)
+            headerLabel:SetContentAlignment(4)
+
+            -- Grid of compact entity icons
+            local rows = math.ceil(#categories[category] / cols)
+            local gridH = rows * (iconSize + iconSpace) + iconSpace
+            local grid = vgui.Create("DPanel", container)
+            grid:SetPos(8, layoutY)
+            grid:SetSize(leftW, gridH)
+            grid.Paint = function() end
+            layoutY = layoutY + gridH + 8
+
+            for i, ent in ipairs(categories[category]) do
                 local requiredLevel = ent.level or 0
                 local isLocked = requiredLevel > 0 and playerLevel < requiredLevel
 
-                local row = vgui.Create("DPanel", container)
-                row:SetPos(4, listY)
-                row:SetSize(availableW + 10, rowHeight)
-                row.Entity = ent
-                row:SetAlpha(isLocked and 130 or 255)
-                row.Paint = function(self, w, h)
+                local row = math.floor((i - 1) / cols)
+                local col = (i - 1) % cols
+                local cell = vgui.Create("DPanel", grid)
+                cell:SetPos(col * (iconSize + iconSpace), row * (iconSize + iconSpace) + iconSpace)
+                cell:SetSize(iconSize, iconSize)
+                cell.Entity = ent
+                cell:SetAlpha(isLocked and 130 or 255)
+                cell.Paint = function(self, w, h)
                     local bg = (SelectedEntity and SelectedEntity == ent) and Color(60, 70, 90, 240) or Color(40, 40, 40, 200)
                     draw.RoundedBox(4, 0, 0, w, h, bg)
                 end
 
-                local modelPanel = vgui.Create("DModelPanel", row)
-                modelPanel:SetSize(44, 44)
-                modelPanel:SetPos(6, 6)
+                local modelPanel = vgui.Create("DModelPanel", cell)
+                modelPanel:Dock(FILL)
+                modelPanel:DockMargin(4, 4, 4, 4)
                 modelPanel:SetModel(ent.model or "models/error.mdl")
-                modelPanel:SetFOV(28)
+                -- Last two printers (printer5, printer6) use larger models; much higher FOV to show full model
+                local fov = (ent.ent == "printer5" or ent.ent == "printer6") and 62 or 28
+                modelPanel:SetFOV(fov)
                 modelPanel:SetCamPos(Vector(55, 55, 55))
                 modelPanel:SetLookAt(Vector(0, 0, 0))
-                modelPanel:SetMouseInputEnabled(true)
+                modelPanel:SetMouseInputEnabled(false)
                 if ent.name == "Donator Printer" then
                     modelPanel.RenderOverride = function(self)
                         render.SetColorModulation(1, 0.8, 0)
@@ -319,12 +341,10 @@ function BuildEntitiesPanel(parent)
                         render.SetColorModulation(1, 1, 1)
                     end
                 end
-                modelPanel.DoClick = function() UpdateInfoPanel(ent) end
 
-                -- Level overlay: "Lv.X" when locked, "Unlocked" when level met
-                local overlay = vgui.Create("DLabel", row)
-                overlay:SetPos(4, 2)
-                overlay:SetSize(44, 14)
+                local overlay = vgui.Create("DLabel", cell)
+                overlay:SetPos(2, 2)
+                overlay:SetSize(iconSize - 4, 14)
                 overlay:SetFont("DermaDefault")
                 overlay:SetContentAlignment(5)
                 if isLocked then
@@ -337,32 +357,14 @@ function BuildEntitiesPanel(parent)
                     overlay:SetText("")
                 end
 
-                local nameLabel = vgui.Create("DLabel", row)
-                nameLabel:SetPos(58, 8)
-                nameLabel:SetSize(availableW - 60, 20)
-                nameLabel:SetText(ent.name)
-                nameLabel:SetColor(Color(255, 255, 255))
-
-                local priceLabel = vgui.Create("DLabel", row)
-                priceLabel:SetPos(58, 28)
-                priceLabel:SetSize(availableW - 60, 18)
-                local priceText = "$" .. ent.price
-                if ent.level and ent.level > 1 then priceText = priceText .. "  ·  Lv." .. ent.level end
-                priceLabel:SetText(priceText)
-                priceLabel:SetColor(Color(0, 255, 0))
-
-                row:SetTooltip(isLocked and (ent.name .. " (Level " .. requiredLevel .. " required)") or ent.name)
-
-                row.OnMousePressed = function(self, code)
+                cell:SetTooltip((ent.name or "") .. " · $" .. (ent.price or 0) .. (isLocked and (" (Level " .. requiredLevel .. " required)") or ""))
+                cell.OnMousePressed = function(self, code)
                     if code == MOUSE_LEFT then UpdateInfoPanel(self.Entity) end
                 end
-
-                listY = listY + rowHeight + rowGap
             end
-            listY = listY + 8
         end
 
-        container:SetTall(math.max(60, listY + 10))
+        container:SetTall(math.max(60, layoutY + 10))
         container:DockMargin(8, 8, 8, 8)
 
         UpdateInfoPanel(nil)

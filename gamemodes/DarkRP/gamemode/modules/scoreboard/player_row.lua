@@ -163,7 +163,7 @@ end
 
 function PANEL:PerformLayout()
     self:SetSize(self:GetWide(), self.Size)
-    local COLUMN_SIZE = 50  -- Same as original gmod10_scoreboard; row uses left-edge at column boundary
+    local COLUMN_SIZE = 50  -- Row uses left-edge at column boundary
     local ICON_W = 24  -- Icon column before name
     local W = self:GetWide()
     -- Original: lblPing/Deaths/Frags at self:GetWide() - COLUMN_SIZE*n (left edge of text at column start)

@@ -23,24 +23,41 @@ util.AddNetworkString("RequestSphereInteraction")
 -- Table to store player death data (ragdoll, timer, etc.)
 local playerDeathData = {}
 
+-- Expose so other modules (rpjobs, inventory, resources) can block ghost actions
+function IsPlayerGhost(ply)
+    if not IsValid(ply) then return false end
+    return playerDeathData[ply] ~= nil
+end
+
 -- Table to store active light spheres
 local lightSpheres = {}
 
--- Table of predefined coordinates for random light sphere spawns
+-- Fallback coordinates when no Death Orb locations are set in admin settings
 local spawnCoordinates = {
-    Vector(654.717834, -602.373657, -93.968750), -- Example coordinate 1
-    Vector(694.453613, 203.186691, -93.968750),  -- Example coordinate 2
-    Vector(100.0, 100.0, 0.0),                   -- Example coordinate 3
-    Vector(-100.0, -100.0, 0.0),                 -- Example coordinate 4
-    Vector(500.0, 0.0, 0.0),                     -- Example coordinate 5
-    -- Add more coordinates as needed
+    Vector(654.717834, -602.373657, -93.968750),
+    Vector(694.453613, 203.186691, -93.968750),
+    Vector(100.0, 100.0, 0.0),
+    Vector(-100.0, -100.0, 0.0),
+    Vector(500.0, 0.0, 0.0),
 }
+
+-- Paradise.DeathOrbLocations (from admin Settings tab when set): { { pos = Vector(...), ang = Angle(...) }, ... }
+-- If set, random orb spawns use these instead of spawnCoordinates.
+Paradise = Paradise or {}
+Paradise.DeathOrbLocations = Paradise.DeathOrbLocations or {}
+Paradise.NPCSpawnLocations = Paradise.NPCSpawnLocations or {}
 
 -- Hook into PlayerDeath to handle the death system
 hook.Add("PlayerDeath", "CustomDeathSystem", function(ply, inflictor, attacker)
     if not IsValid(ply) then return end
 
     DebugPrint("[Death System] Player " .. ply:Nick() .. " died, initiating ghost mode.")
+
+    -- Remove the ragdoll created by the base gamemode (DoPlayerDeath calls ply:CreateRagdoll()) so we only have one.
+    local baseRagdoll = ply:GetRagdollEntity()
+    if IsValid(baseRagdoll) then
+        baseRagdoll:Remove()
+    end
 
     -- Store the player's death position and angles
     local deathPos = ply:GetPos()
@@ -78,12 +95,14 @@ hook.Add("PlayerDeath", "CustomDeathSystem", function(ply, inflictor, attacker)
         startTime = CurTime(), -- Record the start time for the timer
         messageSent = false, -- Flag to track if the message has been sent
         isDead = true, -- Mark the player as dead
-        isInteracting = false -- Track if the player is interacting with a sphere
+        isInteracting = false, -- Track if the player is interacting with a sphere
+        initialSpawnDone = false -- First spawn after death = ghost at spawn; later spawns = move ghost to spawn
     }
 
-    -- Respawn the player immediately as a ghost at their death position
-    ply:Spawn()
-    MakePlayerGhost(ply)
+    -- Do not spawn here: let the player stay dead (camera at death) until they left-click.
+    -- Base gamemode sets NextSpawnTime in PlayerDeath; when they press attack, PlayerDeathThink calls pl:Spawn().
+    -- Our PlayerSpawn hook then runs and MakePlayerGhost(ply), so they become a ghost at spawn on first click.
+    ply.NextSpawnTime = CurTime() -- Allow spawn as soon as they click (or use respawntime from GM:PlayerDeath if you want a delay)
 end)
 
 -- Function to turn a player into a ghost
@@ -95,26 +114,15 @@ function MakePlayerGhost(ply)
 
     DebugPrint("[Death System] Making " .. ply:Nick() .. " a ghost.")
 
-    -- Set the player's position to their death position
-    ply:SetPos(deathData.deathPos + Vector(0, 0, 50)) -- Slightly above the ragdoll to avoid clipping
-    ply:SetEyeAngles(deathData.deathAng)
-
-    -- Make the player almost invisible (alpha 50 for faint visibility)
+    -- Ghost appearance and physics (position left as set by gamemode = spawn): barely visible, cannot block others, can be shot through
     ply:SetRenderMode(RENDERMODE_TRANSCOLOR)
-    ply:SetColor(Color(255, 255, 255, 50)) -- Alpha of 50 for very faint visibility
+    ply:SetColor(Color(255, 255, 255, 50)) -- Alpha 50 = very faint visibility
 
-    -- Lower the player's gravity (50% of normal)
     ply:SetGravity(0.5)
-
-    -- Strip weapons to prevent interaction
     ply:StripWeapons()
-
-    -- Prevent the player from taking damage
     ply:GodEnable()
-
-    -- Set the player to a move type that allows ghost-like movement
     ply:SetMoveType(MOVETYPE_FLY)
-    ply:SetCollisionGroup(COLLISION_GROUP_NONE) -- Use COLLISION_GROUP_NONE to avoid collision issues
+    ply:SetCollisionGroup(COLLISION_GROUP_NONE) -- No collision: ghost does not block players or block movement
 
     -- Mark the player as a ghost for client-side checks
     ply:SetNWBool("IsGhost", true)
@@ -125,9 +133,11 @@ function MakePlayerGhost(ply)
         deathData.messageSent = true
     end
 
-    -- Start the ghost timer
-    DebugPrint("[Death System] Starting ghost timer for " .. ply:Nick())
-    timer.Create(deathData.timerName, deathData.duration, 1, function()
+    -- Start the ghost timer (use remaining time from death so 300s is from death, not from spawn)
+    local elapsed = CurTime() - deathData.startTime
+    local remaining = math.max(0.1, deathData.duration - elapsed)
+    DebugPrint("[Death System] Starting ghost timer for " .. ply:Nick() .. " (" .. remaining .. "s remaining)")
+    timer.Create(deathData.timerName, remaining, 1, function()
         if not IsValid(ply) then return end
         EndGhostMode(ply)
     end)
@@ -361,22 +371,73 @@ end)
 
 -- Notify players when they spawn if they're still in ghost mode
 hook.Add("PlayerSpawn", "CheckGhostMode", function(ply)
-    if playerDeathData[ply] then
-        -- Reapply ghost properties without sending the message again
-        local deathData = playerDeathData[ply]
-        deathData.messageSent = true -- Ensure the message isn't sent again
+    if not playerDeathData[ply] then return end
+    local deathData = playerDeathData[ply]
+    deathData.messageSent = true -- Ensure the message isn't sent again
+
+    -- First spawn after death: ghost at spawn (gamemode already set position); just apply ghost state.
+    if not deathData.initialSpawnDone then
+        deathData.initialSpawnDone = true
         MakePlayerGhost(ply)
+        return
+    end
+
+    -- Already a ghost and spawn was triggered again (e.g. respawn at base): move ghost to spawn point
+    local spawnPos
+    if GAMEMODE and GAMEMODE.PlayerSelectSpawn then
+        local sp = GAMEMODE:PlayerSelectSpawn(ply)
+        if IsValid(sp) then spawnPos = sp:GetPos() end
+    end
+    if not spawnPos and Paradise.DeathOrbLocations and #Paradise.DeathOrbLocations > 0 then
+        local loc = Paradise.DeathOrbLocations[math.random(1, #Paradise.DeathOrbLocations)]
+        spawnPos = isvector(loc) and loc or (loc and loc.pos)
+    end
+    if not spawnPos and spawnCoordinates and #spawnCoordinates > 0 then
+        spawnPos = spawnCoordinates[math.random(1, #spawnCoordinates)]
+    end
+    if spawnPos then
+        ply:SetPos(spawnPos + Vector(0, 0, 10))
+    end
+    -- Make them "alive" (full health) so spawn logic and other systems see a valid state, then keep ghost
+    ply:SetHealth(ply:GetMaxHealth())
+    ply:SetArmor(0)
+    -- Reapply ghost appearance/state (position was set above)
+    ply:SetRenderMode(RENDERMODE_TRANSCOLOR)
+    ply:SetColor(Color(255, 255, 255, 50))
+    ply:SetGravity(0.5)
+    ply:StripWeapons()
+    ply:GodEnable()
+    ply:SetMoveType(MOVETYPE_FLY)
+    ply:SetCollisionGroup(COLLISION_GROUP_NONE)
+    ply:SetNWBool("IsGhost", true)
+end)
+
+-- Block menu access for all ghosts (no exceptions: dead = no Q menu, no job change, etc.)
+hook.Add("PlayerBindPress", "PreventGhostMenus", function(ply, bind, pressed)
+    if not playerDeathData[ply] then return end
+    if bind == "impulse 100" or bind == "+menu" or bind == "+menu_context" then
+        return true
     end
 end)
 
--- Block menu access for ghosts
-hook.Add("PlayerBindPress", "PreventGhostMenus", function(ply, bind, pressed)
-    if playerDeathData[ply] and not ply:IsAdmin() then
-        -- Block Q menu (spawnmenu) and other common menu binds
-        if bind == "impulse 100" or bind == "+menu" or bind == "+menu_context" then
-            return true -- Prevent the bind from executing
-        end
-    end
+-- Prevent ghosts from spawning any props/entities
+hook.Add("PlayerSpawnProp", "PreventGhostSpawnProp", function(ply, model)
+    if playerDeathData[ply] then return false end
+end)
+hook.Add("PlayerSpawnObject", "PreventGhostSpawnObject", function(ply)
+    if playerDeathData[ply] then return false end
+end)
+
+-- Prevent ghosts from dropping weapons
+hook.Add("canDropWeapon", "PreventGhostDropWeapon", function(gm, ply, weapon)
+    if playerDeathData[ply] then return false end
+end)
+
+-- Dead users can never kill themselves again (no setting; always blocked)
+hook.Add("CanPlayerSuicide", "PreventGhostSuicide", function(ply)
+    if not IsPlayerGhost(ply) then return end
+    DarkRP.notify(ply, 1, 4, "You cannot suicide while dead!")
+    return false
 end)
 
 -- Function to spawn a light sphere at a specific position
@@ -460,8 +521,14 @@ timer.Create("RandomLightSphereSpawn", 60, 0, function()
 
     -- 1/15 chance to spawn a light sphere
     if math.random(1, 15) == 1 then
-        -- Select a random coordinate
-        local spawnPos = spawnCoordinates[math.random(1, #spawnCoordinates)]
+        local spawnPos
+        if Paradise.DeathOrbLocations and #Paradise.DeathOrbLocations > 0 then
+            local loc = Paradise.DeathOrbLocations[math.random(1, #Paradise.DeathOrbLocations)]
+            spawnPos = isvector(loc) and loc or (loc.pos or loc)
+        end
+        if not spawnPos then
+            spawnPos = spawnCoordinates[math.random(1, #spawnCoordinates)]
+        end
         SpawnLightSphereAtPos(spawnPos)
         DebugPrint("[Death System] Randomly spawned a light sphere at " .. tostring(spawnPos))
     else
@@ -580,6 +647,14 @@ concommand.Add("rp_respawn", function(ply, cmd, args)
     EndGhostMode(target)
     ply:ChatPrint("Successfully respawned " .. target:Nick() .. " (" .. target:SteamID() .. ").")
     target:ChatPrint("You have been respawned by an admin.")
+end)
+
+-- Hook for admin modules to silently respawn a dead player (returns true if respawned)
+hook.Add("AdminRequestRespawn", "DeathSystem_RespawnTarget", function(target)
+    if not IsValid(target) then return false end
+    if not playerDeathData[target] or not playerDeathData[target].isDead then return false end
+    EndGhostMode(target)
+    return true
 end)
 
 -- Load confirmation only when rp_debug 1

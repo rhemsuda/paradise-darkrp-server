@@ -11,6 +11,8 @@ Inventory.Client = Inventory.Client or {}
 Inventory.Client.ItemsCatalog = Inventory.Client.ItemsCatalog or {}   -- id -> def
 Inventory.Client.Items = Inventory.Client.Items or {}                 -- flat list of entries from server
 Inventory.Client.MaxPages = Inventory.Client.MaxPages or 1
+Inventory.Client.SelectMode = Inventory.Client.SelectMode or false
+Inventory.Client.SelectedUIDs = Inventory.Client.SelectedUIDs or {}    -- [uid] = true for multi-select
 
 local ItemsCatalog = Inventory.Client.ItemsCatalog
 local Items = Inventory.Client.Items
@@ -265,6 +267,9 @@ local function ensureFrame()
             draw.SimpleText(text, "DermaDefaultBold", w/2, h/2, col("text", color_white), 1, 1)
         end
 
+        -- Store tab name so we can show only Admin Panel when dead admin
+        btn.TabName = text
+
         -- Pre-create a page for this tab and build it once
         local page = vgui.Create("DPanel", content)
         page:Dock(FILL)
@@ -307,15 +312,29 @@ local function ensureFrame()
         page:SetText("Page 1")
         page:SetEnabled(false)
 
+        -- Select mode: toggle multi-select; left-click toggles items, right-click = Delete / Add to trade
+        local selectBtn = vgui.Create("DButton", top)
+        selectBtn:Dock(RIGHT)
+        selectBtn:DockMargin(0, 4, 6, 4)
+        selectBtn:SetWide(80)
+        selectBtn:SetText("Select")
+        selectBtn.DoClick = function()
+            Inventory.Client.SelectMode = not Inventory.Client.SelectMode
+            if not Inventory.Client.SelectMode then Inventory.Client.SelectedUIDs = {} end
+            selectBtn:SetText(Inventory.Client.SelectMode and "Cancel" or "Select")
+            notifyRebuilders()
+        end
+
         -- Refresh button on the Inventory tab
         local refresh = vgui.Create("DButton", top)
         refresh:Dock(RIGHT)
-        refresh:DockMargin(0,4,6,4)
+        refresh:DockMargin(0, 4, 6, 4)
         refresh:SetWide(100)
-    refresh:SetText("Refresh")
-    refresh.DoClick = function()
-        net.Start(Inventory.NET.RequestFull) net.SendToServer()
-    end
+        refresh:SetText("Refresh")
+        refresh.DoClick = function()
+            net.Start(Inventory.NET.RequestFull)
+            net.SendToServer()
+        end
 
         -- Black box that parents the item grid. nil = fill available space; or set e.g. 700, 420 to force size.
         local GRID_PANEL_W, GRID_PANEL_H = nil, nil
@@ -353,6 +372,17 @@ local function ensureFrame()
             self._cellY = ch + slotGap
             self._cell = (self._cellX + self._cellY) / 2
             self._slotSize = math.max(20, math.min(cw, ch))
+            -- Re-position/size all item slots so they match the grid (fixes first-open misalignment when grid wasn't sized yet)
+            local ins = self._inset or 0
+            local cellX, cellY, sz = self._cellX, self._cellY, self._slotSize
+            for _, pnl in ipairs(self:GetChildren()) do
+                if IsValid(pnl) and pnl._inst then
+                    local gx = math.max(1, pnl._inst.x or 1)
+                    local gy = math.max(1, pnl._inst.y or 1)
+                    pnl:SetSize(sz, sz)
+                    pnl:SetPos((gx - 1) * cellX + ins, (gy - 1) * cellY + ins)
+                end
+            end
         end
         function GRID:Paint(w, h)
             local cellX = self._cellX or (Inventory.Config.SLOT + Inventory.Config.PAD)
@@ -565,7 +595,15 @@ local function ensureFrame()
     local b4 = addTab("Resources", buildResources)
     local b5 = addTab("Jobs", buildJobs)
     -- Tools tab omitted: Tool Selector is always visible on the right when Q menu is open.
-    local b7 = addTab("Admin Panel", buildAdmin)
+    -- Admin Panel tab only for admins/superadmins so normal players don't see it
+    local b7
+    if LocalPlayer():IsAdmin() then
+        b7 = addTab("Admin Panel", buildAdmin)
+    end
+
+    -- Store tabs row for dead-admin mode (show only Admin Panel when opening as ghost admin)
+    FRAME.TabsRow = tabsRow
+    FRAME.TabPages = tabPages
 
     -- So content (inventory/tabs) draws on top of the sidebar and never appears underneath it
     if content.MoveToFront then content:MoveToFront() end
@@ -582,11 +620,19 @@ end
 function makeSlotPanel(def, inst)
     local container = vgui.Create("DPanel")
     container:SetSize(Inventory.Config.SLOT, Inventory.Config.SLOT)
-    container.Paint = function(self,w,h)
+    container.Paint = function(self, w, h)
         draw.RoundedBox(4, 0, 0, w, h, Color(35, 35, 35, 255))
-        surface.SetDrawColor(60, 60, 60, 255)
-        surface.DrawOutlinedRect(0, 0, w, h, 1)
-        if drawTile then drawTile(w,h) end
+        -- Rarity-colored border (like loadout: Common gray, Rare blue, Epic purple, etc.)
+        local effectiveRarity = (inst.rarity and inst.rarity ~= "") and inst.rarity or (def and def.rarity or "") or ""
+        local rc = (Inventory.GetRarityColor and Inventory.GetRarityColor(effectiveRarity)) or Color(60, 60, 60, 255)
+        surface.SetDrawColor(rc.r, rc.g, rc.b, 255)
+        surface.DrawOutlinedRect(0, 0, w, h, 2)
+        -- Selection highlight when in Select mode (green border so it doesn't clash with rarity colors)
+        if Inventory.Client.SelectMode and (Inventory.Client.SelectedUIDs or {})[inst.uid or ""] then
+            surface.SetDrawColor(80, 220, 120, 220)
+            surface.DrawOutlinedRect(1, 1, w - 2, h - 2, 2)
+        end
+        if drawTile then drawTile(w, h) end
     end
 
     container.ItemID = inst.id
@@ -600,32 +646,33 @@ function makeSlotPanel(def, inst)
 
     -- Model preview (if available)
     local mdl = nil
-    -- Visual: flat tile with centered icon (single panel only)
+    -- Visual: flat tile with centered icon; blueprints with a model (binder) skip icon so model shows
+    local isBlueprintWithModel = (inst and inst.id and string.sub(inst.id, 1, 10) == "blueprint_") and (def and def.model and string.match(string.lower(def.model), "^models/"))
     local function drawTile(w,h)
         draw.RoundedBox(3, 2, 2, w-4, h-24, Color(50, 50, 54, 255))
         surface.SetDrawColor(80, 80, 90, 255)
         surface.DrawOutlinedRect(2, 2, w-4, h-24, 1)
+        if isBlueprintWithModel then return end
         local matPath = (def and def.icon) or ""
         if not matPath or matPath == "" then
-            -- pick a generic icon by category
             if def and def.class and def.class ~= "" then matPath = "icon16/gun.png" else matPath = "icon16/box.png" end
         end
         local ok, mat = pcall(Material, matPath)
-    if ok and mat then
+        if ok and mat then
             surface.SetDrawColor(255,255,255,255)
             surface.SetMaterial(mat)
-        local s = math.min(w-20, h-36, 48)
+            local s = math.min(w-20, h-36, 48)
             surface.DrawTexturedRect((w-s)/2, (h-24-s)/2+2, s, s)
         else
             draw.SimpleText(def and def.name or (inst and inst.id) or "?", "DermaDefault", w/2, (h-24)/2+2, Color(220,220,220), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
         end
     end
 
-    -- Always-on small model preview behind the flat icon if a model exists
-    -- GMod expects paths under "models/..."; wrong paths (e.g. "Entities/Props/Jobs/...") show as missing
+    -- Always-on small model preview: blueprints use binder model (def.model), weapons use def.model or WorldModel
     do
+        local isBlueprint = (inst and inst.id and string.sub(inst.id, 1, 10) == "blueprint_")
         local modelPath = (def and def.model) or ""
-        if (not modelPath or modelPath == "") and def and def.class and weapons and weapons.GetStored then
+        if (not modelPath or modelPath == "") and not isBlueprint and def and def.class and weapons and weapons.GetStored then
             local swep = weapons.GetStored(def.class)
             if swep and swep.WorldModel and swep.WorldModel ~= "" then modelPath = swep.WorldModel end
         end
@@ -635,7 +682,7 @@ function makeSlotPanel(def, inst)
             mdlp:SetSize(Inventory.Config.SLOT-4, Inventory.Config.SLOT-22)
             mdlp:SetMouseInputEnabled(false)
             mdlp:SetModel(modelPath)
-            mdlp:SetFOV(22)
+            mdlp:SetFOV(isBlueprint and 70 or 38) -- blueprints: wider FOV; weapons: tighter so model is recognizable
             function mdlp:LayoutEntity() return end
             if IsValid(mdlp.Entity) then
                 local mn, mx = mdlp.Entity:GetRenderBounds()
@@ -646,21 +693,27 @@ function makeSlotPanel(def, inst)
         end
     end
 
+    -- Blueprint short name: "M3 Weapon Blueprint" -> "M3 BP" so it doesn't truncate with "..."
+    local slotDisplayName = def.name or inst.id or "?"
+    if (inst and inst.id and string.sub(inst.id, 1, 10) == "blueprint_") and def and def.name then
+        local short = (def.name or ""):gsub(" Weapon Blueprint%s*$", " BP")
+        if short ~= "" and short ~= " BP" then slotDisplayName = short end
+    end
     local lbl = vgui.Create("DLabel", container)
     lbl:SetPos(4, Inventory.Config.SLOT-18)
     lbl:SetSize(Inventory.Config.SLOT-8, 16)
-    lbl:SetText(def.name or inst.id)
+    lbl:SetText(slotDisplayName)
     lbl:SetTextColor(rarityColor(def) or color_white)
-    lbl:SetContentAlignment(4)
+    lbl:SetContentAlignment(5) -- center slot name (e.g. "M3 BP")
     lbl:SetVisible(false)
 
     -- removed per-tile xy overlay
 
     if inst.count and inst.count > 1 then
         local cnt = vgui.Create("DLabel", container)
-        cnt:SetPos(Inventory.Config.SLOT-30, 4)
-        cnt:SetSize(26, 16)
-        cnt:SetText("x"..tostring(inst.count))
+        cnt:SetPos(Inventory.Config.SLOT - 24, Inventory.Config.SLOT - 12)
+        cnt:SetSize(24, 14)
+        cnt:SetText("x" .. tostring(inst.count))
         cnt:SetTextColor(color_white)
         cnt:SetContentAlignment(6)
     end
@@ -668,6 +721,15 @@ function makeSlotPanel(def, inst)
     -- Only the container is draggable/droppable to avoid double-drag sources
     container:Droppable("inv_item")
     container.OnMousePressed = function(self, code)
+        local selectMode = Inventory.Client.SelectMode
+        if code == MOUSE_LEFT and selectMode then
+            local uid = inst.uid or ""
+            if uid == "" then return end
+            Inventory.Client.SelectedUIDs = Inventory.Client.SelectedUIDs or {}
+            Inventory.Client.SelectedUIDs[uid] = not Inventory.Client.SelectedUIDs[uid]
+            if not Inventory.Client.SelectedUIDs[uid] then Inventory.Client.SelectedUIDs[uid] = nil end
+            return
+        end
         if code == MOUSE_LEFT then
             self._dragging = true
             self._committed = false
@@ -681,59 +743,63 @@ function makeSlotPanel(def, inst)
         elseif code == MOUSE_RIGHT then
             local m = (DermaMenu and DermaMenu()) or vgui.Create("DMenu")
             if not IsValid(m) then return end
-            local isWeapon = def.class and def.class ~= ""
-            if not isWeapon then
-        m:AddOption("Use", function()
-            net.Start(Inventory.NET.ItemAction)
-                net.WriteString("use"); net.WriteString(inst.id); net.WriteString("")
-            net.SendToServer()
-        end):SetIcon("icon16/accept.png")
-            end
-
-            -- Single Equip option: use inst.loadoutSlot if set (from admin creation), else choose slot from def
-            -- Block Equip if that slot already has an item (must unequip first)
-            local slot = Inventory.Slots.UTILITY
-            if inst.loadoutSlot == "primary" or inst.loadoutSlot == "sidearm" then
-                slot = inst.loadoutSlot
-            elseif def.sidearm then slot = Inventory.Slots.SIDEARM
-            elseif def.class then
-                local cls = string.lower(def.class)
-                if string.find(cls, "pist") or string.find(cls, "deagle") or string.find(cls, "elite") or
-                   string.find(cls, "glock") or string.find(cls, "usp") or string.find(cls, "p228") or string.find(cls, "fiveseven") then
-                    slot = Inventory.Slots.SIDEARM
-                else slot = Inventory.Slots.PRIMARY end
-            end
-            local loadout = (Inventory.Client and Inventory.Client.Loadout) or {}
-            local slotFilled = (loadout[slot] and loadout[slot] ~= "")
-            if not slotFilled then
-                m:AddOption("Equip", function()
-                    net.Start(Inventory.NET.ItemAction)
-                        net.WriteString("equip"); net.WriteString(inst.id); net.WriteString(slot); net.WriteString(inst.uid or "")
+            local sel = Inventory.Client.SelectedUIDs or {}
+            local count = 0
+            local uids = {}
+            for uid, _ in pairs(sel) do count = count + 1 table.insert(uids, uid) end
+            if selectMode and count > 0 then
+                m:AddOption("Delete (" .. count .. ")", function()
+                    net.Start(Inventory.NET.DeleteByUIDs)
+                    net.WriteUInt(#uids, 16)
+                    for _, uid in ipairs(uids) do net.WriteString(uid) end
                     net.SendToServer()
-                end):SetIcon("icon16/arrow_up.png")
-            end
-            -- When slot is filled, Equip is hidden; user must unequip from loadout (B) first
-
-        m:AddSpacer()
-        m:AddOption("Drop", function()
-            net.Start(Inventory.NET.ItemAction)
-                net.WriteString("drop"); net.WriteString(inst.id); net.WriteString(inst.uid or "")
-            net.SendToServer()
-        end):SetIcon("icon16/arrow_down.png")
-
-        m:AddOption("Delete", function()
-            net.Start(Inventory.NET.DeleteItems)
-                net.WriteUInt(1, 16)
-                net.WriteString(inst.id)
-            net.SendToServer()
-        end):SetIcon("icon16/delete.png")
-
-            if m.Open then
-                m:Open(gui.MouseX(), gui.MouseY())
+                    Inventory.Client.SelectedUIDs = {}
+                    net.Start(Inventory.NET.RequestFull)
+                    net.SendToServer()
+                end):SetIcon("icon16/delete.png")
+                -- Add to trade only when player is in a trade (no trade state yet, so omit)
             else
-                m:SetPos(gui.MouseX(), gui.MouseY())
-                m:MakePopup()
+                local isBlueprint = (inst.id and string.sub(inst.id, 1, 10) == "blueprint_")
+                local isWeapon = def.class and def.class ~= ""
+                if not isWeapon and not isBlueprint then
+                    m:AddOption("Use", function()
+                        net.Start(Inventory.NET.ItemAction)
+                        net.WriteString("use"); net.WriteString(inst.id); net.WriteString("")
+                        net.SendToServer()
+                    end):SetIcon("icon16/accept.png")
+                end
+                local slot = Inventory.Slots.UTILITY
+                if inst.loadoutSlot == "primary" or inst.loadoutSlot == "sidearm" then slot = inst.loadoutSlot
+                elseif def.sidearm then slot = Inventory.Slots.SIDEARM
+                elseif def.class then
+                    local cls = string.lower(def.class)
+                    if string.find(cls, "lockpick") then slot = Inventory.Slots.UTILITY
+                    elseif string.find(cls, "pist") or string.find(cls, "deagle") or string.find(cls, "elite") or string.find(cls, "glock") or string.find(cls, "usp") or string.find(cls, "p228") or string.find(cls, "fiveseven") then slot = Inventory.Slots.SIDEARM
+                    else slot = Inventory.Slots.PRIMARY end
+                end
+                local loadout = (Inventory.Client and Inventory.Client.Loadout) or {}
+                if not isBlueprint and not (loadout[slot] and loadout[slot] ~= "") then
+                    m:AddOption("Equip", function()
+                        net.Start(Inventory.NET.ItemAction)
+                        net.WriteString("equip"); net.WriteString(inst.id); net.WriteString(slot); net.WriteString(inst.uid or "")
+                        net.SendToServer()
+                    end):SetIcon("icon16/arrow_up.png")
+                end
+                m:AddSpacer()
+                m:AddOption("Drop", function()
+                    net.Start(Inventory.NET.ItemAction)
+                    net.WriteString("drop"); net.WriteString(inst.id); net.WriteString(inst.uid or "")
+                    net.SendToServer()
+                end):SetIcon("icon16/arrow_down.png")
+                m:AddOption("Delete", function()
+                    net.Start(Inventory.NET.DeleteByUIDs)
+                    net.WriteUInt(1, 16)
+                    net.WriteString(inst.uid or "")
+                    net.SendToServer()
+                end):SetIcon("icon16/delete.png")
+                -- Add to trade only when in a trade (omit until trade system exposes state)
             end
+            if m.Open then m:Open(gui.MouseX(), gui.MouseY()) else m:SetPos(gui.MouseX(), gui.MouseY()) m:MakePopup() end
         end
     end
 
@@ -793,9 +859,22 @@ function makeSlotPanel(def, inst)
         if container._dragging or container._noTooltip then return end
         if IsValid(tip) then tip:Remove() end
         local slotsHaveForSize = (inst and inst.slots) and tonumber(inst.slots) or 0
+        local isBlueprint = (inst and inst.id and string.sub(inst.id, 1, 10) == "blueprint_")
         local tipW, tipH = 300, 120
         if slotsHaveForSize and slotsHaveForSize > 0 then
             tipW, tipH = 320, 165
+        end
+        if isBlueprint then
+            local recipe = (Crafting and Crafting.GetRecipe and Crafting.GetRecipe(inst.id)) or {}
+            local nRes = 0
+            for _ in pairs(recipe) do nRes = nRes + 1 end
+            tipW = (nRes > 4) and 200 or 175
+            if nRes > 0 then
+                local matRows = (nRes > 4) and math.max(4, nRes - 4) or nRes
+                tipH = 20 + math.max(100, 32 + matRows * 48) + 24
+            else
+                tipH = 20 + 100 + 24
+            end
         end
         local sx, sy = container:LocalToScreen(container:GetWide()+8, 0)
         tip = vgui.Create("DPanel")
@@ -803,31 +882,150 @@ function makeSlotPanel(def, inst)
         tip:SetPos(sx, sy)
         tip:SetZPos(10000)
         tip:SetDrawOnTop(true)
-        tip.Paint = function(self,w,h)
-            -- background
-            draw.RoundedBox(4,0,0,w,h, Color(30,30,30,245))
-            surface.SetDrawColor(70,70,80,255)
-            surface.DrawOutlinedRect(0,0,w,h,1)
-
-            -- top-tier glow around tooltip for Epic/Legendary/Unique
-            local r = def.rarity or ""
-            if r == "Epic" or r == "Legendary" or r == "Unique" then
-                local c = rarityColor(def) or Color(255,255,255)
-                surface.SetDrawColor(c.r, c.g, c.b, 60)
-                surface.DrawOutlinedRect(1,1,w-2,h-2,2)
-                surface.SetDrawColor(c.r, c.g, c.b, 30)
-                surface.DrawOutlinedRect(2,2,w-4,h-4,2)
+        if isBlueprint and Crafting and Crafting.GetResultItemId then
+            local resultId = Crafting.GetResultItemId(inst.id)
+            if resultId then
+                local resultDef = (Inventory and Inventory.Items and Inventory.Items[resultId]) or (ItemsCatalog and ItemsCatalog[resultId])
+                local modelPath = (resultDef and resultDef.model) or ""
+                if (not modelPath or modelPath == "") and resultDef and resultDef.class and weapons and weapons.GetStored then
+                    local swep = weapons.GetStored(resultDef.class)
+                    if swep and swep.WorldModel and swep.WorldModel ~= "" then modelPath = swep.WorldModel end
+                end
+                if modelPath and modelPath ~= "" and string.match(string.lower(modelPath), "^models/") then
+                    local mdlp = vgui.Create("DModelPanel", tip)
+                    local modelH = 70
+                    local modelY = 20 + math.max(0, math.floor((tipH - 44 - modelH) / 2))
+                    mdlp:SetPos(8, modelY)
+                    mdlp:SetSize(68, modelH)
+                    mdlp:SetModel(modelPath)
+                    mdlp:SetFOV(58)
+                    function mdlp:LayoutEntity() return end
+                    if IsValid(mdlp.Entity) then
+                        local mn, mx = mdlp.Entity:GetRenderBounds()
+                        local size = math.max(math.abs(mn.x)+math.abs(mx.x), math.abs(mn.y)+math.abs(mx.y), math.abs(mn.z)+math.abs(mx.z))
+                        mdlp:SetCamPos(Vector(size*0.9, size*1.1, size*0.8))
+                        mdlp:SetLookAt((mn + mx) * 0.5)
+                    end
+                end
+            end
+        end
+        -- Materials: pushed right; if >4, second column moves left for extra slots
+        if isBlueprint and Crafting and Crafting.GetRecipe then
+            local recipe = Crafting.GetRecipe(inst.id) or {}
+            local resDisplay = Paradise and Paradise.ResourceDisplay or {}
+            if next(recipe) then
+                local sorted = {}
+                for resId, need in pairs(recipe) do table.insert(sorted, { id = resId, need = need }) end
+                table.sort(sorted, function(a, b) return (a.id or "") < (b.id or "") end)
+                local iconSz = 36
+                local rowH = 48
+                local colW = 56
+                local rightColX = tipW - 8 - colW
+                local leftColX = rightColX - colW - 6
+                for i, entry in ipairs(sorted) do
+                    local isRightCol = (i <= 4)
+                    local rowIdx = isRightCol and (i - 1) or (i - 5)
+                    local matX = isRightCol and rightColX or leftColX
+                    local matY = 32 + rowIdx * rowH
+                    local info = resDisplay[entry.id] or { name = entry.id, icon = "models/props_junk/rock001a.mdl", color = Color(200, 200, 200), material = nil }
+                    local iconPath = info.icon or "models/props_junk/rock001a.mdl"
+                    local col, mat = info.color, info.material
+                    local row = vgui.Create("DPanel", tip)
+                    row:SetPos(matX, matY)
+                    row:SetSize(colW, rowH)
+                    row.Paint = function(_, rw, rh)
+                        draw.SimpleText(info.name or entry.id, "DermaDefault", 4, 2, Color(255, 255, 255), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+                    end
+                    if string.match(string.lower(iconPath), "^icon") then
+                        local img = vgui.Create("DImage", row)
+                        img:SetPos(0, 12)
+                        img:SetSize(iconSz, iconSz)
+                        img:SetImage(iconPath)
+                    else
+                        local mdl = vgui.Create("DModelPanel", row)
+                        mdl:SetPos(0, 12)
+                        mdl:SetSize(iconSz, iconSz)
+                        mdl:SetModel(iconPath)
+                        mdl:SetFOV(32)
+                        mdl:SetCamPos(Vector(30, 30, 30))
+                        mdl:SetLookAt(Vector(0, 0, 0))
+                        mdl:SetMouseInputEnabled(false)
+                        function mdl:LayoutEntity() return end
+                        timer.Simple(0, function()
+                            if not IsValid(mdl) then return end
+                            if IsValid(mdl.Entity) and mat and mat ~= "" then mdl.Entity:SetMaterial(mat) end
+                            if col and mdl.SetColor then mdl:SetColor(col) end
+                        end)
+                        mdl.Think = function(self)
+                            if not IsValid(self.Entity) then return end
+                            if mat and mat ~= "" then self.Entity:SetMaterial(mat) end
+                            if col and self.SetColor then self:SetColor(col) end
+                        end
+                    end
+                    -- Overlay on icon: amount in box bottom-right only (name drawn above icon in row.Paint)
+                    local overlay = vgui.Create("DPanel", row)
+                    overlay:SetPos(0, 12)
+                    overlay:SetSize(iconSz, iconSz)
+                    overlay.Paint = function(_, ow, oh)
+                        local needStr = tostring(entry.need)
+                        local boxW, boxH = 24, 14
+                        draw.RoundedBox(4, ow - boxW - 2, oh - boxH - 2, boxW, boxH, Color(0, 0, 0, 180))
+                        draw.SimpleText(needStr, "DermaDefault", ow - 2, oh - 2, Color(255, 255, 255), TEXT_ALIGN_RIGHT, TEXT_ALIGN_BOTTOM)
+                    end
+                    overlay:SetMouseInputEnabled(false)
+                end
+            end
+        end
+        tip.Paint = function(self, w, h)
+            draw.RoundedBox(4, 0, 0, w, h, Color(28, 28, 32, 255))
+            surface.SetDrawColor(70, 70, 80, 255)
+            surface.DrawOutlinedRect(0, 0, w, h, 1)
+            -- Rarity-colored border (like loadout: Common gray, Rare blue, Epic purple, etc.)
+            local effectiveRarity = (inst and inst.rarity and inst.rarity ~= "") and inst.rarity or (def and def.rarity or "") or ""
+            local rc = Inventory.GetRarityColor and Inventory.GetRarityColor(effectiveRarity) or Color(120, 120, 120)
+            surface.SetDrawColor(rc.r, rc.g, rc.b, 200)
+            surface.DrawOutlinedRect(1, 1, w - 2, h - 2, 1)
+            if effectiveRarity == "Epic" or effectiveRarity == "Legendary" or effectiveRarity == "Unique" then
+                surface.SetDrawColor(rc.r, rc.g, rc.b, 60)
+                surface.DrawOutlinedRect(2, 2, w - 4, h - 4, 2)
             end
 
-            -- header line: Rarity and Item Name
+            -- header line: Rarity and Item Name (blueprints use short form "M3 BP")
             local effectiveRarity = (inst and inst.rarity and inst.rarity ~= "") and inst.rarity or (def.rarity or "")
             local rc = Inventory.GetRarityColor and Inventory.GetRarityColor(effectiveRarity) or color_white
             local rarityText = (effectiveRarity ~= "" and (effectiveRarity .. " ") or "")
-            draw.SimpleText(rarityText .. (def.name or inst.id), "DermaDefaultBold", 10, 8, rc)
+            local tooltipName = def.name or inst.id or "?"
+            if (inst and inst.id and string.sub(inst.id, 1, 10) == "blueprint_") and def and def.name then
+                local short = (def.name or ""):gsub(" Weapon Blueprint%s*$", " BP")
+                if short ~= "" and short ~= " BP" then tooltipName = short end
+            end
+            draw.SimpleText(rarityText .. tooltipName, "DermaDefaultBold", 10, 8, rc)
 
             local y = 28
-            -- Damage line (weapons only)
-            if def.class and def.class ~= "" then
+            local isBp = (inst and inst.id and string.sub(inst.id, 1, 10) == "blueprint_")
+            -- Blueprint: "Materials" header top-right
+            if isBp and Crafting and Crafting.GetRecipe and next(Crafting.GetRecipe(inst.id) or {}) then
+                draw.SimpleText("Materials", "DermaDefaultBold", w - 60, 8, Color(200, 205, 215))
+            end
+            -- Blueprint: damage range at bottom left
+            if isBp and Crafting and Crafting.GetResultItemId then
+                local resultId = Crafting.GetResultItemId(inst.id)
+                if resultId then
+                    local resultDef = (Inventory and Inventory.Items and Inventory.Items[resultId]) or (ItemsCatalog and ItemsCatalog[resultId])
+                    local dmgMin = tonumber((resultDef and resultDef.damageMin) or 0) or 0
+                    local dmgMax = tonumber((resultDef and resultDef.damageMax) or 0) or 0
+                    if dmgMin <= 0 or dmgMax <= 0 then
+                        local bd = tonumber((resultDef and resultDef.baseDamage) or 0) or 0
+                        dmgMin, dmgMax = bd - 2, bd + 2
+                    end
+                    local maxMul = (Inventory and Inventory.RarityDamageMul and Inventory.RarityDamageMul.Legendary) or 1.90
+                    local maxDmg = math.floor(dmgMax * maxMul)
+                    draw.SimpleText("Damage: " .. tostring(dmgMin) .. "–" .. tostring(maxDmg), "DermaDefault", 10, h - 10, Color(170, 220, 120), TEXT_ALIGN_LEFT, TEXT_ALIGN_BOTTOM)
+                end
+            end
+            -- Damage line (weapons with baseDamage only; tools like lockpick have no damage)
+            local hasWeaponDamage = not isBp and def.class and def.class ~= "" and (tonumber(def.baseDamage) or 0) > 0
+            if hasWeaponDamage then
                 local bd = tonumber((inst and inst.baseDamage) or def.baseDamage or 0) or 0
                 local mul = Inventory.GetRarityDamageMultiplier and Inventory.GetRarityDamageMultiplier(effectiveRarity or "") or 1
                 local dmg = math.floor(bd * mul)
@@ -970,18 +1168,47 @@ net.Receive(Inventory.NET.SyncInventory, function()
 
     rebuild()
     notifyRebuilders()
+    hook.Run("Inventory_Synced") -- e.g. crafter blueprint list can refresh when open after right-click put-back
 end)
 
--- Public open/close for the bridge
-function Inventory_Open()
+-- Public open/close for the bridge. adminOnly = true: show only Admin Panel (for dead admins)
+function Inventory_Open(adminOnly)
     ensureFrame()
     FRAME:SetVisible(true)
     FRAME:MakePopup()
+    -- Refresh grid so icons fill properly (fixes first-spawn layout)
+    rebuild()
+    notifyRebuilders()
+    timer.Simple(0, function()
+        if IsValid(GRID) then GRID:InvalidateLayout(true) end
+    end)
+    if adminOnly and FRAME.TabsRow and FRAME.TabPages then
+        for _, btn in ipairs(FRAME.TabsRow:GetChildren()) do
+            if btn.TabName == "Admin Panel" then
+                btn:SetVisible(true)
+                btn._selected = true
+                btn:DoClick()
+            else
+                btn:SetVisible(false)
+            end
+        end
+        for name, page in pairs(FRAME.TabPages or {}) do
+            if IsValid(page) then page:SetVisible(name == "Admin Panel") end
+        end
+    else
+        Inventory.AdminPanelOnlyOpen = false
+        if FRAME.TabsRow then
+            for _, btn in ipairs(FRAME.TabsRow:GetChildren()) do
+                if btn.SetVisible then btn:SetVisible(true) end
+            end
+        end
+    end
     net.Start(Inventory.NET.RequestFull) net.SendToServer()
     gui.EnableScreenClicker(true)
-    -- After first layout, auto-adjust frame height to fully fit the grid
+    -- After first layout, auto-adjust frame height to fully fit the grid and force grid re-layout (fixes first-load "items not fitting")
     timer.Simple(0.05, function()
         if not IsValid(FRAME) or not IsValid(GRID) then return end
+        if GRID.InvalidateLayout then GRID:InvalidateLayout(true) end
         local desiredH = (Inventory.Config.GRID_H * (Inventory.Config.SLOT + Inventory.Config.PAD)) + 4
         local actualH = GRID:GetTall() or 0
         local delta = desiredH - actualH
@@ -990,10 +1217,17 @@ function Inventory_Open()
             FRAME:SetSize(w, h + delta + 8)
             FRAME:Center()
         end
+        if GRID.InvalidateLayout then GRID:InvalidateLayout(true) end
+    end)
+    -- Extra layout pass after frame is fully visible (first spawn often has wrong sizes until now)
+    timer.Simple(0.15, function()
+        if IsValid(GRID) and GRID.InvalidateLayout then GRID:InvalidateLayout(true) end
     end)
 end
 
 function Inventory_Close()
+    Inventory.AdminPanelOnlyOpen = false
+    Inventory.AdminPanelSteamIDFocused = false
     if IsValid(FRAME) then FRAME:SetVisible(false) end
     gui.EnableScreenClicker(false)
 end
@@ -1001,10 +1235,20 @@ end
 -- Q key (+menu bind): hold to open inventory, release to close. Block spawn menu and handle ourselves.
 hook.Add("PlayerBindPress", "Inventory_BlockMenuBind", function(ply, bind, pressed)
     if bind ~= "+menu" then return end
+    local isGhost = ply:GetNWBool("IsGhost", false)
+    local isAdmin = ply:IsAdmin()
+    -- Dead/ghost players cannot open Q menu unless admin/superadmin
+    if isGhost and not isAdmin then
+        return true
+    end
     if pressed then
-        Inventory_Open()
+        -- Dead admins: open only Admin Panel tab (no inventory/entities/etc)
+        Inventory.AdminPanelOnlyOpen = (isGhost and isAdmin)
+        Inventory_Open(isGhost and isAdmin)
         if g_SpawnMenu and IsValid(g_SpawnMenu) then g_SpawnMenu:SetVisible(false) end
     else
+        -- Keep menu open while typing in Admin Panel "Add by SteamID" box
+        if Inventory.AdminPanelSteamIDFocused then return true end
         Inventory_Close()
     end
     return true -- block default (spawn menu)
@@ -1066,6 +1310,26 @@ net.Receive(Inventory.NET.Notify, function()
         chat.AddText(Color(200,200,200), msg)
     end
     surface.PlaySound("buttons/button15.wav")
+end)
+
+-- Admin give / system messages: no [Paradise] prefix, just the message text
+net.Receive(Inventory.NET.ParadiseChat, function()
+    local msg = net.ReadString() or ""
+    if msg == "" then return end
+    chat.AddText(Color(200, 200, 200), msg)
+end)
+
+-- "You dropped a X" / "Picked up a X" with item name in highlight color (no [Inventory] or [Paradise])
+local INV_MSG_GRAY = Color(150, 155, 165)
+local INV_ITEM_HIGHLIGHT = Color(220, 230, 255)
+net.Receive(Inventory.NET.NotifyItem, function()
+    local msgType = net.ReadString() or ""
+    local itemName = net.ReadString() or "?"
+    if msgType == "dropped" then
+        chat.AddText(INV_MSG_GRAY, "You dropped a ", INV_ITEM_HIGHLIGHT, itemName)
+    elseif msgType == "pickedup" then
+        chat.AddText(INV_MSG_GRAY, "Picked up a ", INV_ITEM_HIGHLIGHT, itemName)
+    end
 end)
 
 --

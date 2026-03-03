@@ -6,6 +6,8 @@ if not SERVER then return end
 
 Leveling = Leveling or {}
 
+util.AddNetworkString("Paradise_LevelUp")
+
 local MAX_LEVEL = 100
 local DEBUG = CreateConVar("leveling_debug", "0", FCVAR_ARCHIVE, "Print leveling debug to console (1=on)")
 
@@ -91,6 +93,12 @@ function Leveling.AddXP(ply, amount, source)
     if not IsValid(ply) or not isnumber(amount) or amount < 0 then return end
     amount = math.floor(amount)
     if amount == 0 then return end
+    -- Donator +5%, SuperDonator +10% (from Admin/sh_ranks)
+    if Admin and Admin.GetRank and Admin.GetExpMultiplier then
+        local rank = Admin.GetRank(ply:SteamID())
+        amount = math.floor(amount * (Admin.GetExpMultiplier(rank) or 1.0))
+    end
+    if amount == 0 then return end
 
     local sid64 = ply:SteamID64()
     MySQLite.query(string.format("SELECT experience FROM darkrp_player WHERE uid = %s", sid64), function(data)
@@ -106,7 +114,9 @@ function Leveling.AddXP(ply, amount, source)
         local newLevel = ply:GetNWInt("DarkRP_Level", 1)
 
         if newLevel > oldLevel then
-            ply:ChatPrint("You've leveled up to Level " .. newLevel .. "!")
+            net.Start("Paradise_LevelUp")
+            net.WriteUInt(newLevel, 8)
+            net.Send(ply)
         end
         if DEBUG:GetBool() then
             print(string.format("[Leveling] %s +%d XP (source: %s) -> %d XP, level %d", ply:Nick(), amount, tostring(source or "?"), newXP, newLevel))
@@ -123,15 +133,8 @@ hook.Add("Paradise_AddXP", "Leveling_Grant", function(ply, amount, source)
     Leveling.AddXP(ply, amount, source)
 end)
 
--- Grant XP when a money printer pays out (any tier: printer1–printer9 or base money_printer)
-local PRINTER_XP_PER_PAYOUT = 3
-hook.Add("moneyPrinterPrinted", "Leveling_PrinterXP", function(printer, moneybag)
-    if not IsValid(printer) then return end
-    local owner = printer:Getowning_ent()
-    if IsValid(owner) and owner:IsPlayer() then
-        Leveling.AddXP(owner, PRINTER_XP_PER_PAYOUT, "printer")
-    end
-end)
+-- XP from printers: granted when owner collects stored money (Use/E), not on payout.
+-- See money_printer init.lua ENT:Use()
 
 -- Load on spawn and set NW vars
 hook.Add("PlayerInitialSpawn", "Paradise_Leveling_Load", function(ply)

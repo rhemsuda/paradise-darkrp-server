@@ -49,9 +49,19 @@ util.AddNetworkString("RequestPerkData")
 util.AddNetworkString("SendPerkData")
 util.AddNetworkString("UpdatePerkData")
 
--- Expose endurance level as NWInt so scoreboard and other clients can read it
+-- Expose endurance level as NWInt; cap to rank max (User 10, Donator 15, SuperDonator 20)
 local function syncEnduranceLevel(ply, perkData)
     local lvl = (perkData and perkData.endurance_level) or 0
+    if Admin and Admin.GetEnduranceMax and Admin.GetEffectiveRank then
+        local maxLvl = Admin.GetEnduranceMax(Admin.GetEffectiveRank(ply))
+        if lvl > maxLvl then
+            lvl = maxLvl
+            if perkData then
+                perkData.endurance_level = lvl
+                UpdatePlayerPerks(ply, perkData)
+            end
+        end
+    end
     ply:SetNWInt("EnduranceLevel", lvl)
 end
 

@@ -6,12 +6,26 @@ ENT.SpawnOffset = Vector(15, 0, 15)
 
 local function PrintMore(ent)
     if not IsValid(ent) then return end
-
     ent.sparking = true
     timer.Simple(3, function()
         if not IsValid(ent) then return end
         ent:CreateMoneybag()
     end)
+end
+
+-- Returns true if an active printer_module nearby has this printer in one of its cooled slots.
+-- Defined at file level so it is created once, not on every CreateMoneybag call.
+local function IsProtectedByModule(printer)
+    for _, ent in ipairs(ents.FindInSphere(printer:GetPos(), 120)) do
+        if ent:GetClass() ~= "printer_module" or not ent.GetActive or not ent:GetActive() then continue end
+        for _, getter in ipairs({ "GetConnectedPrinter", "GetConnectedPrinter2", "GetConnectedPrinter3",
+                                   "GetConnectedPrinter4", "GetConnectedPrinter5", "GetConnectedPrinter6",
+                                   "GetConnectedPrinter7", "GetConnectedPrinter8" }) do
+            local conn = ent[getter] and ent[getter](ent)
+            if IsValid(conn) and conn == printer then return true end
+        end
+    end
+    return false
 end
 
 function ENT:StartSound()
@@ -47,7 +61,7 @@ function ENT:OnTakeDamage(dmg)
 
     if self.burningup then return end
 
-    self.damage = (self.damage or 100) - dmg:GetDamage()
+    self.damage = (self.damage or 250) - dmg:GetDamage()
     if self.damage <= 0 then
         local rnd = math.random(1, 10)
         if rnd < 3 then
@@ -101,23 +115,39 @@ function ENT:CreateMoneybag()
     local prevent, hookAmount = hook.Run("moneyPrinterPrintMoney", self, amount)
     if prevent == true then return end
 
-    local MoneyPos = self:GetPos() + self.SpawnOffset
     amount = hookAmount or amount
 
-    if self.OverheatChance and self.OverheatChance > 0 then
-        local overheatchance
-        if self.OverheatChance <= 3 then
-            overheatchance = 22
-        else
-            overheatchance = self.OverheatChance or 22
-        end
+    -- Overheat check (IsProtectedByModule defined at file level above Initialize)
+    if self.OverheatChance and self.OverheatChance > 0 and not IsProtectedByModule(self) then
+        local overheatchance = (self.OverheatChance <= 3) and 28 or (self.OverheatChance or 28)
         if math.random(1, overheatchance) == 3 then self:BurstIntoFlames() end
     end
 
-    local moneybag = DarkRP.createMoneyBag(MoneyPos, amount)
-    hook.Run("moneyPrinterPrinted", self, moneybag)
+    -- Paradise: store money internally instead of spawning bags; owner collects with E
+    local stored = self:GetStoredMoney() + amount
+    self:SetStoredMoney(stored)
     self.sparking = false
     timer.Simple(math.random(self.MinTimer, self.MaxTimer), function() PrintMore(self) end)
+end
+
+-- Paradise: Use (E) to collect stored money; XP scales with amount collected + bonus for bigger takes
+function ENT:Use(activator, caller, useType, value)
+    if not IsValid(activator) or not activator:IsPlayer() then return end
+    if activator ~= self:Getowning_ent() then return end
+    local stored = self:GetStoredMoney()
+    if stored <= 0 then return end
+
+    activator:addMoney(stored)
+    self:SetStoredMoney(0)
+    DarkRP.notify(activator, 0, 4, "Collected " .. DarkRP.formatMoney(stored))
+
+    -- XP scales with amount: base ~1 per $80, plus bonus for larger single collects (more for big takes)
+    if Leveling and Leveling.AddXP then
+        local base = math.floor(stored / 80)
+        local bonus = math.floor(stored / 400)  -- extra XP when you let it accumulate (e.g. $400+ gives +1, $800+ gives +2)
+        local xp = math.max(1, base + bonus)
+        Leveling.AddXP(activator, xp, "printer")
+    end
 end
 
 function ENT:Think()
@@ -126,7 +156,8 @@ function ENT:Think()
         self:Remove()
         return
     end
-    self:StartSound()
+    -- Sound is started once in Initialize; do NOT call StartSound() here or it
+    -- creates a new CSoundPatch every frame, stacking sound objects indefinitely.
     if not self.sparking then return end
 
     local effectdata = EffectData()

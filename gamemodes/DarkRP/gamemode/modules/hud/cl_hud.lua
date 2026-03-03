@@ -384,8 +384,8 @@ local function DisplayNotify(msg)
     GAMEMODE:AddNotify(txt, msg:ReadShort(), msg:ReadLong())
     surface.PlaySound(notificationSound)
 
-    -- Log to client console
-    MsgC(Color(255, 20, 20, 255), "[DarkRP] ", Color(200, 200, 200, 255), txt, "\n")
+    -- Log to client console (no gamemode prefix; tooltip shows message only)
+    MsgC(Color(200, 200, 200, 255), txt, "\n")
 end
 usermessage.Hook("_Notify", DisplayNotify)
 

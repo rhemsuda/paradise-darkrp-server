@@ -24,20 +24,30 @@ local function AddToChat(bits)
     local col2 = Color(net.ReadUInt(8), net.ReadUInt(8), net.ReadUInt(8))
 
     local text = net.ReadString()
+    local dead = IsValid(ply) and not ply:Alive()
+    local deadRed = Color(255, 0, 0)
     local shouldShow
     if text and text ~= "" then
         if IsValid(ply) then
-            shouldShow = hook.Call("OnPlayerChat", GAMEMODE, ply, text, false, not ply:Alive(), prefixText, col1, col2)
+            shouldShow = hook.Call("OnPlayerChat", GAMEMODE, ply, text, false, dead, prefixText, col1, col2)
         end
 
         if shouldShow ~= true then
-            chat.AddNonParsedText(col1, prefixText, col2, ": " .. text)
+            if dead then
+                chat.AddNonParsedText(col1, prefixText, deadRed, " (DEAD)", col2, ": " .. text)
+            else
+                chat.AddNonParsedText(col1, prefixText, col2, ": " .. text)
+            end
         end
     else
         shouldShow = hook.Call("ChatText", GAMEMODE, "0", prefixText, prefixText, "darkrp")
 
         if shouldShow ~= true then
-            chat.AddNonParsedText(col1, prefixText)
+            if dead then
+                chat.AddNonParsedText(col1, prefixText, deadRed, " (DEAD)")
+            else
+                chat.AddNonParsedText(col1, prefixText)
+            end
         end
     end
     chat.PlaySound()

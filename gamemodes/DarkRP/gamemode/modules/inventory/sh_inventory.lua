@@ -14,7 +14,8 @@ Inventory.Config = {
 }
 
 -- Rarity framework (weapons only for now; utilities/others may omit)
-Inventory.Rarities = { "Common", "Rare", "Epic", "Legendary", "Unique" }
+-- Order: Common < Rare < Unique < Epic < Legendary
+Inventory.Rarities = { "Common", "Rare", "Unique", "Epic", "Legendary" }
 Inventory.RarityColors = {
     Common    = Color(154,160,166),   -- #9aa0a6
     Rare      = Color(78,161,255),    -- #4ea1ff
@@ -27,12 +28,13 @@ function Inventory.GetRarityColor(r)
 end
 
 -- Damage multipliers per rarity (applied to baseDamage)
+-- Order: Common < Rare < Unique < Epic < Legendary (Legendary = top)
 Inventory.RarityDamageMul = {
     Common    = 1.00,
     Rare      = 1.25,
-    Epic      = 1.50,
-    Legendary = 2.00,
-    Unique    = 2.25,
+    Unique    = 1.40,  -- just above Rare
+    Epic      = 1.65,  -- second most rare
+    Legendary = 1.90,  -- most rare, highest damage
 }
 function Inventory.GetRarityDamageMultiplier(r)
     return (r and Inventory.RarityDamageMul[r]) or 1.0
@@ -80,35 +82,40 @@ Inventory.NET = {
     RequestFull   = "INV_RequestFull",
     SyncInventory = "INV_SyncInventory",
     SyncLoadout   = "INV_SyncLoadout",
-    SyncResources = "INV_SyncResources",
+    -- Note: resource pouch sync is handled by sv_resources.lua ("SyncResources"), not here.
     ItemAction    = "INV_ItemAction",
     MoveItem      = "INV_MoveItem",
     DeleteItems   = "INV_DeleteItems",
+    DeleteByUIDs  = "INV_DeleteByUIDs",
     RequestLoadout= "INV_RequestLoadout",
     Notify        = "INV_Notify",
+    NotifyItem    = "INV_NotifyItem",  -- "You dropped a X" / "Picked up a X" with item name (client shows name in highlight color)
     AdminCreateItem = "INV_AdminCreateItem",
     AdminModifyItem = "INV_AdminModifyItem",
     AdminDeleteInstance = "INV_AdminDeleteInstance",
     AdminRequestPlayerInv = "INV_AdminRequestPlayerInv",
     AdminSendPlayerInv = "INV_AdminSendPlayerInv",
     AdminCreateItemFor = "INV_AdminCreateItemFor",
+    ParadiseChat       = "INV_ParadiseChat",  -- unified styled chat (gray [Paradise] + message)
 }
 
 if SERVER then
     util.AddNetworkString(Inventory.NET.RequestFull)
     util.AddNetworkString(Inventory.NET.SyncInventory)
     util.AddNetworkString(Inventory.NET.SyncLoadout)
-    util.AddNetworkString(Inventory.NET.SyncResources)
     util.AddNetworkString(Inventory.NET.ItemAction)
     util.AddNetworkString(Inventory.NET.MoveItem)
     util.AddNetworkString(Inventory.NET.DeleteItems)
+    util.AddNetworkString(Inventory.NET.DeleteByUIDs)
     util.AddNetworkString(Inventory.NET.RequestLoadout)
     util.AddNetworkString(Inventory.NET.Notify)
+    util.AddNetworkString(Inventory.NET.NotifyItem)
     util.AddNetworkString(Inventory.NET.AdminCreateItem)
     util.AddNetworkString(Inventory.NET.AdminModifyItem)
     util.AddNetworkString(Inventory.NET.AdminDeleteInstance)
     util.AddNetworkString(Inventory.NET.AdminRequestPlayerInv)
     util.AddNetworkString(Inventory.NET.AdminSendPlayerInv)
     util.AddNetworkString(Inventory.NET.AdminCreateItemFor)
+    util.AddNetworkString(Inventory.NET.ParadiseChat)
 end
 

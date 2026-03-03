@@ -175,7 +175,8 @@ local function buildUI()
             if not self._def then return end
             if IsValid(tip) then tip:Remove() end
             local d = self._def
-            local effectiveRarity = d.rarity or ""
+            local inst = (Inventory.Client and Inventory.Client.LoadoutInstances and self._slotName) and Inventory.Client.LoadoutInstances[self._slotName] or nil
+            local effectiveRarity = (inst and inst.rarity and inst.rarity ~= "") and inst.rarity or (d.rarity or "")
             local rc = (Inventory and Inventory.GetRarityColor and Inventory.GetRarityColor(effectiveRarity)) or Color(255, 255, 255)
             local tipW, tipH = 280, 100
             local sx, sy = self:LocalToScreen(self:GetWide() + 8, 0)
@@ -196,7 +197,7 @@ local function buildUI()
                 draw.SimpleText(nameStr, "DermaDefaultBold", 10, 8, rc)
                 local y = 28
                 if d.class and d.class ~= "" then
-                    local bd = tonumber(d.baseDamage or 0) or 0
+                    local bd = (inst and inst.baseDamage and inst.baseDamage > 0) and inst.baseDamage or (tonumber(d.baseDamage or 0) or 0)
                     local mul = (Inventory and Inventory.GetRarityDamageMultiplier and Inventory.GetRarityDamageMultiplier(effectiveRarity or "")) or 1
                     draw.SimpleText("Damage: " .. math.floor(bd * mul), "DermaDefault", 10, y, Color(170, 220, 120))
                     y = y + 18
@@ -240,6 +241,14 @@ net.Receive(Inventory.NET.SyncLoadout, function()
     current.armor   = net.ReadString()
     current.boots   = net.ReadString()
     current.utility = net.ReadString()
+    -- Per-slot instance data (rarity, baseDamage) so tooltip shows e.g. Epic M249 not def "Rare"
+    local instSlots = { "primary", "sidearm", "armor", "boots", "utility" }
+    Inventory.Client.LoadoutInstances = Inventory.Client.LoadoutInstances or {}
+    for _, slot in ipairs(instSlots) do
+        local r = net.ReadString() or ""
+        local bd = net.ReadUInt(16) or 0
+        Inventory.Client.LoadoutInstances[slot] = (r ~= "" or bd > 0) and { rarity = r ~= "" and r or nil, baseDamage = bd } or nil
+    end
 
     -- Expose for cl_inventory (equip menu: don't offer Equip if slot is filled)
     Inventory.Client.Loadout = {

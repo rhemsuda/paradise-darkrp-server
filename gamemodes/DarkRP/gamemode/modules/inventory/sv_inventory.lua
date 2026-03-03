@@ -23,18 +23,13 @@ local function makeUID()
     return tostring(util.CRC(tostring(SysTime()) .. tostring(math.Rand(0,1)) .. tostring(math.random(1, 1e9))))
 end
 
-local function defaultState()
-    return {
-        pages = 1,
-        items = {},   -- array of {id="pistol", page=1, x=1, y=1, count=1, baseDamage=..., rarity=..., slots=...}
-        loadout = { primary=nil, sidearm=nil, armor=nil, boots=nil, utility=nil },
-        loadoutInstances = {},  -- slot -> instance table (so unequip returns same baseDamage/rarity/slots)
-        resources = { rock=0, iron=0, copper=0, steel=0, titanium=0 },
-    }
+-- Find an online player by SteamID or SteamID64. Returns player or nil.
+local function findPlayerBySteamID(steamid)
+    for _, p in ipairs(player.GetAll()) do
+        if p:SteamID() == steamid or p:SteamID64() == steamid then return p end
+    end
+    return nil
 end
-
-local PlayerInv = PlayerInv or {} -- sid64 -> state
-local PlayerWeaponDamage = PlayerWeaponDamage or {} -- sid64 -> class -> damage
 
 local function isOccupied(s, page, x, y)
     for _, it in ipairs(s.items or {}) do
@@ -52,14 +47,47 @@ local function findFreeSlot(s)
             end
         end
     end
-    -- if full, append a new page if allowed
     if (s.pages or 1) < (Inventory.Config.MAX_PAGES or 1) then
         s.pages = (s.pages or 1) + 1
         return s.pages, 1, 1
     end
-    -- fallback: place at 1,1 on first page (will overlap)
     return 1, 1, 1
 end
+
+-- Build and return a new item instance table to be inserted into a player's state.
+-- opts: { count, rarity, baseDamage, slots, admin, crafter, loadoutSlot }
+local function makeItemInstance(s, itemId, def, opts)
+    opts = opts or {}
+    local p, x, y = findFreeSlot(s)
+    local inst = {
+        id    = itemId,
+        uid   = makeUID(),
+        page  = p, x = x, y = y,
+        count = math.max(1, opts.count or 1),
+        slots = math.Clamp(tonumber(opts.slots or 0) or 0, 0, 6),
+    }
+    if opts.rarity and opts.rarity ~= "" then inst.rarity = opts.rarity end
+    local effBase = (opts.baseDamage and opts.baseDamage > 0) and opts.baseDamage or (tonumber(def.baseDamage) or 0)
+    if effBase > 0 then inst.baseDamage = effBase end
+    if opts.admin then inst.admin = true end
+    if opts.crafter and opts.crafter ~= "" then inst.crafter = opts.crafter end
+    local ls = opts.loadoutSlot
+    if ls == "primary" or ls == "sidearm" then inst.loadoutSlot = ls end
+    return inst, effBase
+end
+
+local function defaultState()
+    return {
+        pages = 1,
+        items = {},   -- array of {id="pistol", page=1, x=1, y=1, count=1, baseDamage=..., rarity=..., slots=...}
+        loadout = { primary=nil, sidearm=nil, armor=nil, boots=nil, utility=nil },
+        loadoutInstances = {},  -- slot -> instance table (so unequip returns same baseDamage/rarity/slots)
+        -- Note: resources (mining pouch) are tracked by sv_resources.lua / PlayerResources[], NOT here.
+    }
+end
+
+local PlayerInv = PlayerInv or {} -- sid64 -> state
+local PlayerWeaponDamage = PlayerWeaponDamage or {} -- sid64 -> class -> damage
 
 local function save(ply)
     local s = PlayerInv[sid64(ply)]
@@ -74,11 +102,116 @@ local function save(ply)
 end
 
 local inv_svdebug = CreateConVar("inv_svdebug", "0", FCVAR_ARCHIVE, "Inventory server debug prints")
+local sendFull -- forward declaration so GiveItemToPlayer / RemoveOneItemByUID can call it
+
+-- Add count of itemId to state s, respecting def.maxStack (e.g. blueprints 20). Fills existing stacks first, then new slots.
+-- opts: rarity, baseDamage, slots, admin, crafter, loadoutSlot (used when creating new instances).
+-- Returns total number added (always count unless state invalid).
+local function addItemsToState(s, itemId, count, opts)
+    if not s or not s.items then return 0 end
+    local def = Inventory.Items[itemId]
+    if not def then return 0 end
+    opts = opts or {}
+    count = math.max(1, count or 1)
+    local maxStack = (def.maxStack and def.maxStack > 1) and def.maxStack or 1
+    local remaining = count
+
+    if maxStack > 1 then
+        -- Fill existing stacks of same id up to maxStack each
+        for _, it in ipairs(s.items) do
+            if (it.id or "") == itemId and remaining > 0 then
+                local current = it.count or 1
+                local room = maxStack - current
+                if room > 0 then
+                    local add = math.min(room, remaining)
+                    it.count = current + add
+                    remaining = remaining - add
+                end
+            end
+        end
+    end
+
+    -- Create new stack(s): maxStack == 1 means one instance per count; else chunks of maxStack
+    -- For weapons with damageMin/damageMax: roll baseDamage per instance (each weapon unique)
+    local dmgMin = def.damageMin or ((def.baseDamage or 15) - 2)
+    local dmgMax = def.damageMax or ((def.baseDamage or 15) + 2)
+    local hasDamageRange = (dmgMin and dmgMax and dmgMin > 0 and dmgMax >= dmgMin)
+    local initialRemaining = remaining
+    while remaining > 0 do
+        local take = (maxStack == 1) and 1 or math.min(maxStack, remaining)
+        local baseDmg = opts.baseDamage
+        if hasDamageRange then
+            -- Use pre-rolled only for single crafted weapon; otherwise roll fresh per instance
+            if opts.baseDamage and opts.baseDamage > 0 and initialRemaining == 1 and remaining == initialRemaining then
+                baseDmg = opts.baseDamage
+            else
+                baseDmg = math.Clamp(math.random(dmgMin, dmgMax), 1, 255)
+            end
+        end
+        local inst, _ = makeItemInstance(s, itemId, def, {
+            count = take,
+            rarity = opts.rarity,
+            baseDamage = baseDmg,
+            slots = opts.slots,
+            admin = opts.admin,
+            crafter = opts.crafter,
+            loadoutSlot = opts.loadoutSlot,
+        })
+        table.insert(s.items, inst)
+        remaining = remaining - take
+    end
+    return count
+end
+
+-- Give an item to a player (used by crafting, etc.). opts = { crafter = "Name", rarity = "", baseDamage = 0, slots = 0 }
+-- Stackable items (e.g. blueprints maxStack 20): fills existing stacks then creates new stacks.
+function Inventory.GiveItemToPlayer(ply, itemId, count, opts)
+    if not IsValid(ply) or not itemId or itemId == "" then return false end
+    local def = Inventory.Items[itemId]
+    if not def then return false end
+    local s = PlayerInv[sid64(ply)]
+    if not s then return false end
+    opts = opts or {}
+    count = math.max(1, count or 1)
+    addItemsToState(s, itemId, count, opts)
+    PlayerInv[sid64(ply)] = s
+    save(ply)
+    sendFull(ply)
+    return true
+end
+
+-- Remove one instance by UID (or decrement count if stack). Returns true if removed/decremented.
+function Inventory.RemoveOneItemByUID(ply, uid)
+    if not IsValid(ply) or not uid or uid == "" then return false end
+    local s = PlayerInv[sid64(ply)]
+    if not s or not s.items then return false end
+    for i, it in ipairs(s.items) do
+        if (it.uid or "") == uid then
+            if it.count and it.count > 1 then
+                it.count = it.count - 1
+            else
+                table.remove(s.items, i)
+            end
+            save(ply)
+            sendFull(ply)
+            return true
+        end
+    end
+    return false
+end
 
 local function plyNotify(ply, msg)
     if not IsValid(ply) or not msg or msg == "" then return end
     net.Start(Inventory.NET.Notify)
         net.WriteString(msg)
+    net.Send(ply)
+end
+-- Drop/pickup messages: "You dropped a X" / "Picked up a X" with item name (client shows name in highlight color)
+local function sendNotifyItem(ply, msgType, itemName)
+    if not IsValid(ply) or not itemName or itemName == "" then return end
+    net.Start(Inventory.NET.NotifyItem)
+        net.WriteString(msgType)
+        net.WriteString(itemName)
     net.Send(ply)
 end
 
@@ -134,7 +267,7 @@ local function load(ply)
     for _, it in ipairs(s.items or {}) do if not it.uid or it.uid == "" then it.uid = makeUID() end end
 end
 
-local function sendFull(ply)
+sendFull = function(ply)
     local s = PlayerInv[sid64(ply)] or defaultState()
     net.Start(Inventory.NET.SyncInventory)
         net.WriteUInt(s.pages or 1, 8)
@@ -177,16 +310,22 @@ local function sendFull(ply)
         net.WriteString(lo.armor or "")
         net.WriteString(lo.boots or "")
         net.WriteString(lo.utility or "")
+        local instSlots = { "primary", "sidearm", "armor", "boots", "utility" }
+        local loadoutInstances = s.loadoutInstances or {}
+        for _, slot in ipairs(instSlots) do
+            local inst = loadoutInstances[slot]
+            if lo[slot] and lo[slot] ~= "" and inst then
+                net.WriteString(inst.rarity or "")
+                net.WriteUInt(inst.baseDamage or 0, 16)
+            else
+                net.WriteString("")
+                net.WriteUInt(0, 16)
+            end
+        end
     net.Send(ply)
 
-    local r = s.resources or {}
-    net.Start(Inventory.NET.SyncResources)
-        net.WriteUInt(r.rock or 0, 16)
-        net.WriteUInt(r.iron or 0, 16)
-        net.WriteUInt(r.copper or 0, 16)
-        net.WriteUInt(r.steel or 0, 16)
-        net.WriteUInt(r.titanium or 0, 16)
-    net.Send(ply)
+    -- Resources (mining pouch) are synced by sv_resources.lua via "SyncResources" / net.WriteTable.
+    -- INV_SyncResources was removed: it was sent here but never received on the client.
 end
 
 hook.Add("PlayerInitialSpawn", "INV_Load", function(ply)
@@ -197,13 +336,13 @@ end)
 -- Admin create item handler (uses exact entered values; no randomization – reserve randomization for crafting)
 net.Receive(Inventory.NET.AdminCreateItem, function(_, ply)
     if not IsValid(ply) or not ply:IsAdmin() then return end
-    local id = net.ReadString() or ""
-    local count = net.ReadUInt(16) or 1
-    local rarity = net.ReadString() or ""
-    local baseDamage = net.ReadUInt(16) or 0
-    local isAdminSpawned = net.ReadBool()
-    local crafterName = net.ReadString() or ""
-    local slots = net.ReadUInt(4) or 0
+    local id          = net.ReadString() or ""
+    local count       = net.ReadUInt(16) or 1
+    local rarity      = net.ReadString() or ""
+    local baseDamage  = net.ReadUInt(16) or 0
+    local isAdmin     = net.ReadBool()
+    local crafter     = net.ReadString() or ""
+    local slots       = net.ReadUInt(4) or 0
     local loadoutSlot = net.ReadString() or ""
 
     if id == "" then return end
@@ -211,18 +350,16 @@ net.Receive(Inventory.NET.AdminCreateItem, function(_, ply)
     if not def then return end
 
     local s = PlayerInv[sid64(ply)] or defaultState()
-    local p,x,y = findFreeSlot(s)
-    local inst = { id=id, uid=makeUID(), page=p, x=x, y=y, count=math.max(1, count), slots=math.Clamp(tonumber(slots or 0) or 0, 0, 6) }
-    if rarity ~= "" then inst.rarity = rarity end
-    if baseDamage and baseDamage > 0 then inst.baseDamage = baseDamage end
-    if isAdminSpawned then inst.admin = true end
-    if crafterName ~= "" then inst.crafter = crafterName end
-    if loadoutSlot == "primary" or loadoutSlot == "sidearm" then inst.loadoutSlot = loadoutSlot end
+    local inst, effBase = makeItemInstance(s, id, def, {
+        count = count, rarity = rarity, baseDamage = baseDamage,
+        admin = isAdmin, crafter = crafter, slots = slots, loadoutSlot = loadoutSlot,
+    })
     table.insert(s.items, inst)
     PlayerInv[sid64(ply)] = s
     save(ply)
     sendFull(ply)
-    ServerLog(string.format("[INV][ADMIN] %s (%s) created %dx %s (rarity=%s, baseDamage=%d)\n", ply:Nick(), ply:SteamID(), count, id, rarity, baseDamage or 0))
+    ServerLog(string.format("[INV][ADMIN] %s (%s) created %dx %s (rarity=%s, baseDamage=%d)\n",
+        ply:Nick(), ply:SteamID(), count, id, rarity, effBase or 0))
 end)
 
 -- Admin modify an existing instance by uid
@@ -267,7 +404,7 @@ net.Receive(Inventory.NET.AdminDeleteInstance, function(_, ply)
         save(ply)
         sendFull(ply)
         ServerLog(string.format("[INV][ADMIN] %s deleted uid=%s id=%s\n", ply:Nick(), uid, removed.id or "?"))
-        if IsValid(ply) then ply:ChatPrint(string.format("[Inventory] Deleted %s (uid %s)", removed.id or "?", uid)) end
+        if IsValid(ply) then plyNotify(ply, string.format("Deleted %s (uid %s)", removed.id or "?", uid)) end
     end
 end)
 
@@ -275,11 +412,13 @@ hook.Add("PlayerDisconnected", "INV_Save", function(ply) save(ply) end)
 
 -- Client asks for a fresh snapshot
 net.Receive(Inventory.NET.RequestFull, function(_, ply)
+    if IsPlayerGhost and IsPlayerGhost(ply) then return end
     sendFull(ply)
 end)
 
 -- Move item (drag/drop)
 net.Receive(Inventory.NET.MoveItem, function(_, ply)
+    if IsPlayerGhost and IsPlayerGhost(ply) then return end
     local s = PlayerInv[sid64(ply)]; if not s then return end
     local uid   = net.ReadString()
     local iid   = net.ReadString() -- type id (unused for lookup)
@@ -325,10 +464,7 @@ end)
 net.Receive(Inventory.NET.AdminRequestPlayerInv, function(_, ply)
     if not IsValid(ply) or not ply:IsAdmin() then return end
     local steamId = net.ReadString() or ""
-    local tgt
-    for _, p in ipairs(player.GetAll()) do
-        if p:SteamID() == steamId or p:SteamID64() == steamId then tgt = p break end
-    end
+    local tgt = findPlayerBySteamID(steamId)
     if not IsValid(tgt) then return end
     local s = PlayerInv[sid64(tgt)] or defaultState()
     -- Send a compact snapshot to the requesting admin
@@ -354,46 +490,54 @@ end)
 -- Admin create item directly for a specific player
 net.Receive(Inventory.NET.AdminCreateItemFor, function(_, ply)
     if not IsValid(ply) or not ply:IsAdmin() then return end
-    local targetSid = net.ReadString() or ""
-    local id = net.ReadString() or ""
-    local count = net.ReadUInt(16) or 1
-    local rarity = net.ReadString() or ""
-    local baseDamage = net.ReadUInt(16) or 0
-    local isAdminSpawned = net.ReadBool()
-    local crafterName = net.ReadString() or ""
-    local slots = net.ReadUInt(4) or 0
+    local targetSid   = net.ReadString() or ""
+    local id          = net.ReadString() or ""
+    local count       = net.ReadUInt(16) or 1
+    local rarity      = net.ReadString() or ""
+    local baseDamage  = net.ReadUInt(16) or 0
+    local isAdmin     = net.ReadBool()
+    local crafter     = net.ReadString() or ""
+    local slots       = net.ReadUInt(4) or 0
     local loadoutSlot = net.ReadString() or ""
-    local tgt
-    for _, p in ipairs(player.GetAll()) do
-        if p:SteamID() == targetSid or p:SteamID64() == targetSid then tgt = p break end
-    end
+
+    local tgt = findPlayerBySteamID(targetSid)
     if not IsValid(tgt) or id == "" then return end
-    local def = Inventory.Items[id]; if not def then return end
+    local def = Inventory.Items[id]
+    if not def then return end
+
     local s = PlayerInv[sid64(tgt)] or defaultState()
-    local p,x,y = findFreeSlot(s)
-    local inst = { id=id, uid=makeUID(), page=p, x=x, y=y, count=math.max(1, count), slots=math.Clamp(tonumber(slots or 0) or 0, 0, 6) }
-    if rarity ~= "" then inst.rarity = rarity end
-    if baseDamage and baseDamage > 0 then inst.baseDamage = baseDamage end
-    if isAdminSpawned then inst.admin = true end
-    if crafterName ~= "" then inst.crafter = crafterName end
-    if loadoutSlot == "primary" or loadoutSlot == "sidearm" then inst.loadoutSlot = loadoutSlot end
-    table.insert(s.items, inst)
+    addItemsToState(s, id, count, {
+        rarity = rarity, baseDamage = baseDamage,
+        admin = isAdmin, crafter = crafter, slots = slots, loadoutSlot = loadoutSlot,
+    })
     PlayerInv[sid64(tgt)] = s
     save(tgt)
     sendFull(tgt)
-    -- logging
+    local effBase = (baseDamage and baseDamage > 0) and baseDamage or (tonumber(def.baseDamage) or 0)
     ServerLog(string.format("[INV][ADMIN] %s gave %dx %s to %s (%s) rarity=%s base=%d slots=%d\n",
-        ply:Nick(), count, id, tgt:Nick(), tgt:SteamID(), rarity, baseDamage or 0, inst.slots or 0))
-    if IsValid(ply) then ply:ChatPrint(string.format("[Inventory] Gave %dx %s to %s", count, id, tgt:Nick())) end
-    if IsValid(tgt) then tgt:ChatPrint(string.format("[Inventory] Admin %s gave you %dx %s", ply:Nick(), count, id)) end
-    -- Notify requesting admin with a fresh snapshot
-    net.Start(Inventory.NET.AdminRequestPlayerInv)
-        net.WriteString(targetSid)
-    net.Send(ply)
+        ply:Nick(), count, id, tgt:Nick(), tgt:SteamID(), rarity, effBase or 0, slots or 0))
+    if Paradise and Paradise.AdminLogEntry then
+        Paradise.AdminLogEntry("item",
+            string.format("%s gave %dx %s to %s (%s)", ply:Nick(), count, id, tgt:Nick(), tgt:SteamID()),
+            { admin = ply:SteamID(), target = tgt:SteamID(), item = id, count = count })
+    end
+    -- Unified Paradise chat: admin-only "Gave X to Y"; target sees "Admin X gave you..."
+    local adminMsg = string.format("Gave %dx %s to %s", count, id, tgt:Nick())
+    local targetMsg = string.format("Admin %s gave you %dx %s", ply:Nick(), count, id)
+    for _, p in ipairs(player.GetAll()) do
+        if not IsValid(p) then continue end
+        if p == tgt then
+            net.Start(Inventory.NET.ParadiseChat) net.WriteString(targetMsg) net.Send(p)
+        elseif p:IsAdmin() then
+            net.Start(Inventory.NET.ParadiseChat) net.WriteString(adminMsg) net.Send(p)
+        end
+    end
+    -- sendFull(tgt) above already updated the target; admin can press Refresh to re-view.
 end)
 
 -- Delete (single or multi)
 net.Receive(Inventory.NET.DeleteItems, function(_, ply)
+    if IsPlayerGhost and IsPlayerGhost(ply) then return end
     local s = PlayerInv[sid64(ply)]; if not s then return end
     local n = net.ReadUInt(16)
     local toDel = {}
@@ -413,8 +557,36 @@ net.Receive(Inventory.NET.DeleteItems, function(_, ply)
     if removedCount > 0 then plyNotify(ply, string.format("Deleted %d item(s)", removedCount)) end
 end)
 
+-- Delete by UIDs (for multi-select; removes exact instances)
+net.Receive(Inventory.NET.DeleteByUIDs, function(_, ply)
+    if IsPlayerGhost and IsPlayerGhost(ply) then return end
+    local s = PlayerInv[sid64(ply)]
+    if not s then return end
+    local n = net.ReadUInt(16)
+    if n > 64 then n = 64 end
+    local toDel = {}
+    for i = 1, n do
+        local uid = net.ReadString() or ""
+        if uid ~= "" then toDel[uid] = true end
+    end
+    local keep = {}
+    local removedCount = 0
+    for _, it in ipairs(s.items or {}) do
+        if not toDel[it.uid or ""] then
+            table.insert(keep, it)
+        else
+            removedCount = removedCount + (it.count or 1)
+        end
+    end
+    s.items = keep
+    save(ply)
+    sendFull(ply)
+    if removedCount > 0 then plyNotify(ply, string.format("Deleted %d item(s)", removedCount)) end
+end)
+
 -- Item actions (use/equip/drop) – minimal versions
 net.Receive(Inventory.NET.ItemAction, function(_, ply)
+    if IsPlayerGhost and IsPlayerGhost(ply) then return end
     local act = net.ReadString()  -- "use" | "equip" | "unequip" | "drop"
     local id  = net.ReadString()
     local slot= net.ReadString() or ""
@@ -528,7 +700,7 @@ net.Receive(Inventory.NET.ItemAction, function(_, ply)
             if def.class and ply:HasWeapon(def.class) then ply:StripWeapon(def.class) end
             if PlayerWeaponDamage[sid64(ply)] then PlayerWeaponDamage[sid64(ply)][def.class] = nil end
             spawnInventoryDropEntity(ply, inst, def)
-            plyNotify(ply, string.format("Dropped %s", def.name or id))
+            sendNotifyItem(ply, "dropped", def.name or id)
         end
     elseif act == "drop" then
         -- Third string (slot var) is the instance UID for drop – do NOT ReadString again or we corrupt the stream
@@ -559,7 +731,7 @@ net.Receive(Inventory.NET.ItemAction, function(_, ply)
             else
                 table.remove(s.items, idx)
             end
-            plyNotify(ply, string.format("Dropped %s", def.name or id))
+            sendNotifyItem(ply, "dropped", def.name or id)
             spawnInventoryDropEntity(ply, inst, def)
         end
     end
@@ -624,7 +796,7 @@ function Inventory.DropHeldWeaponAsItem(ply)
     end
     save(ply)
     sendFull(ply)
-    plyNotify(ply, string.format("Dropped %s", def.name or foundId))
+    sendNotifyItem(ply, "dropped", def.name or foundId)
     return true
 end
 
@@ -655,7 +827,7 @@ hook.Add("PlayerUse", "INV_PickupDroppedItem", function(ply, ent)
     PlayerInv[sid64(ply)] = s
     save(ply)
     sendFull(ply)
-    plyNotify(ply, string.format("Picked up %s", def.name or id))
+    sendNotifyItem(ply, "pickedup", def.name or id)
     ent:Remove()
     return false
 end)
@@ -707,6 +879,7 @@ end)
 
 -- Explicit refresh for the separate loadout window
 net.Receive(Inventory.NET.RequestLoadout, function(_, ply)
+    if IsPlayerGhost and IsPlayerGhost(ply) then return end
     local s = PlayerInv[sid64(ply)] or defaultState()
     local lo = s.loadout or {}
     net.Start(Inventory.NET.SyncLoadout)
@@ -715,6 +888,18 @@ net.Receive(Inventory.NET.RequestLoadout, function(_, ply)
         net.WriteString(lo.armor or "")
         net.WriteString(lo.boots or "")
         net.WriteString(lo.utility or "")
+        local instSlots = { "primary", "sidearm", "armor", "boots", "utility" }
+        local loadoutInstances = s.loadoutInstances or {}
+        for _, slot in ipairs(instSlots) do
+            local inst = loadoutInstances[slot]
+            if lo[slot] and lo[slot] ~= "" and inst then
+                net.WriteString(inst.rarity or "")
+                net.WriteUInt(inst.baseDamage or 0, 16)
+            else
+                net.WriteString("")
+                net.WriteUInt(0, 16)
+            end
+        end
     net.Send(ply)
 end)
 
@@ -723,16 +908,16 @@ function Inventory.GetPlayerLoadoutWeapons(ply)
     if not IsValid(ply) then return {} end
     local s = PlayerInv[sid64(ply)]
     if not s or not s.loadout then return {} end
-    local weapons = {}
+    local result = {}  -- named 'result' to avoid shadowing the global 'weapons' table
     for slot, itemId in pairs(s.loadout) do
         if itemId and itemId ~= "" then
             local def = Inventory.Items and Inventory.Items[itemId]
             if def and def.class and def.class ~= "" then
-                table.insert(weapons, { class = def.class, name = def.name or itemId })
+                table.insert(result, { class = def.class, name = def.name or itemId })
             end
         end
     end
-    return weapons
+    return result
 end
 
 -- Admin/dev helper: give an item to yourself for testing
@@ -758,8 +943,7 @@ concommand.Add("inv_giveitem", function(ply, cmd, args)
     end
     local s = PlayerInv[sid64(ply)] or defaultState()
     s.items = s.items or {}
-    local p,x,y = findFreeSlot(s)
-    table.insert(s.items, { id=id, uid=makeUID(), page=p, x=x, y=y, count=math.max(1, count) })
+    addItemsToState(s, id, math.max(1, count), {})
     PlayerInv[sid64(ply)] = s
     save(ply)
     sendFull(ply)
@@ -769,6 +953,35 @@ concommand.Add("inv_giveitem", function(ply, cmd, args)
             admin:ChatPrint(string.format("[INV] %s (%s) gave self %dx %s", ply:Nick(), ply:SteamID(), count, id))
         end
     end
+end)
+
+-- Admin: give item to another player
+-- Usage: inv_giveitem_to <steamid> <item_id> [count]
+concommand.Add("inv_giveitem_to", function(ply, cmd, args)
+    if not IsValid(ply) or not ply:IsAdmin() then return end
+    local steamid = tostring(args[1] or "")
+    local id = string.lower(tostring(args[2] or ""))
+    local count = tonumber(args[3] or 1) or 1
+    if steamid == "" or id == "" then ply:ChatPrint("Usage: inv_giveitem_to <steamid> <item_id> [count]") return end
+    local target = findPlayerBySteamID(steamid)
+    if not IsValid(target) then ply:ChatPrint("Player not found (must be online)") return end
+    if not Inventory.Items[id] then
+        for k in pairs(Inventory.Items) do
+            if string.lower(k) == id then id = k break end
+            local def = Inventory.Items[k]
+            if def and def.aliases then
+                for _, a in ipairs(def.aliases) do if string.lower(a) == id then id = k break end end
+            end
+        end
+    end
+    if not Inventory.Items[id] then ply:ChatPrint("Unknown item id: " .. tostring(args[2])) return end
+    local s = PlayerInv[sid64(target)] or defaultState()
+    s.items = s.items or {}
+    addItemsToState(s, id, math.max(1, count), {})
+    PlayerInv[sid64(target)] = s
+    save(target)
+    sendFull(target)
+    ply:ChatPrint(string.format("Gave %dx %s to %s", count, id, target:Nick()))
 end)
 
 -- Make /drop drop the held weapon as an inventory item (same as dropping from inventory UI).

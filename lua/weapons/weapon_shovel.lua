@@ -1,10 +1,5 @@
 if SERVER then
     AddCSLuaFile()
-    print("[1Shovel Debug] Server loading weapon_shovel.lua at " .. CurTime())
-end
-
-if CLIENT then
-    print("[1Shovel Debug] Client loading weapon_shovel.lua at " .. CurTime())
 end
 
 SWEP.Base = "weapon_base" -- Explicitly set to GMod's default base
@@ -35,19 +30,20 @@ SWEP.SlotPos = 2
 SWEP.DrawAmmo = false
 SWEP.DrawCrosshair = true
 
-SWEP.ViewModel = "models/weapons/v_crowbar.mdl" -- Crowbar hands for animation
-SWEP.WorldModel = "models/props_junk/shovel01a.mdl" -- Shovel in third-person
+-- First-person: use shovel prop so player sees a shovel, not crowbar (same as world model)
+SWEP.ViewModel = "models/props_junk/shovel01a.mdl"
+SWEP.ViewModelFOV = 54
+SWEP.WorldModel = "models/props_junk/shovel01a.mdl"
 
 SWEP.HoldType = "melee"
 SWEP.Range = 75 -- Crowbar-like range in units
 
 function SWEP:Initialize()
     self:SetHoldType(self.HoldType)
-    self:SetWeaponHoldType(self.HoldType) -- Ensure hold type is set
+    self:SetWeaponHoldType(self.HoldType)
     if SERVER then
-        self:SetModel(self.WorldModel) -- Set world model on server
+        self:SetModel(self.WorldModel)
     end
-    print("[Shovel Debug] Shovel SWEP initialized for " .. (SERVER and "server" or "client"))
 end
 
 function SWEP:PrimaryAttack()
@@ -69,24 +65,18 @@ function SWEP:PrimaryAttack()
             filter = ply,
             mask = MASK_SHOT
         })
-        if trace.Hit then
-            local hitType = IsValid(trace.Entity) and trace.Entity:GetClass() or "world"
-            print("[Shovel Debug] Swing hit: " .. hitType .. " at " .. trace.Fraction * self.Range .. " units, Material: " .. trace.HitTexture .. " (MatType: " .. trace.MatType .. ")")
-            if trace.HitWorld then
-                local matType = trace.MatType
-                local hitTexture = trace.HitTexture:lower()
-                local isRockSurface = (matType == MAT_DIRT or matType == MAT_SAND or 
-                                      hitTexture:find("nature/") or hitTexture:find("rock/") or hitTexture:find("ground/") or 
-                                      hitTexture:find("dirt") or hitTexture:find("sand"))
-                if isRockSurface then
-                    self:EmitSound("weapons/crowbar/crowbar_impact" .. math.random(1, 2) .. ".wav")
-                    AddResourceToInventory(ply, "rock", 1)
-                    if math.random(1, 8) == 1 then AddResourceToInventory(ply, "copper", 1) end
-                    if math.random(1, 25) == 1 then AddResourceToInventory(ply, "iron", 1) end
-                    if math.random(1, 50) == 1 then AddResourceToInventory(ply, "steel", 1) end
-                else
-                    print("[Shovel Debug] Non-rock surface hit: " .. hitTexture)
-                end
+        if trace.Hit and trace.HitWorld then
+            local matType = trace.MatType
+            local hitTexture = (trace.HitTexture or ""):lower()
+            local isRockSurface = (matType == MAT_DIRT or matType == MAT_SAND or
+                hitTexture:find("nature/") or hitTexture:find("rock/") or hitTexture:find("ground/") or
+                hitTexture:find("dirt") or hitTexture:find("sand"))
+            if isRockSurface then
+                self:EmitSound("weapons/crowbar/crowbar_impact" .. math.random(1, 2) .. ".wav")
+                AddResourceToInventory(ply, "rock", 1)
+                if math.random(1, 8) == 1 then AddResourceToInventory(ply, "copper", 1) end
+                if math.random(1, 25) == 1 then AddResourceToInventory(ply, "iron", 1) end
+                if math.random(1, 50) == 1 then AddResourceToInventory(ply, "steel", 1) end
             end
         end
         ply:LagCompensation(false)
@@ -96,9 +86,4 @@ end
 function SWEP:Deploy()
     self:EmitSound("weapons/crowbar/crowbar_draw.wav")
     return true
-end
-
--- Ensure the SWEP is registered correctly
-if SERVER then
-    print("[Shovel Debug] Registering SWEP as weapon_shovel")
 end

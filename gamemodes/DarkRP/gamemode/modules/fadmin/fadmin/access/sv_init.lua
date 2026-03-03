@@ -67,15 +67,18 @@ hook.Add("DatabaseInitialized", "InitializeFAdminGroups", function()
         end)
 
         local function createGroups(privs)
+            -- Ranks: User < Donator < SDonator < Admin < Super Admin (immunity ascending)
             FAdmin.Access.AddGroup("superadmin", 2, privs.superadmin, 100)
             FAdmin.Access.AddGroup("admin", 1, privs.admin, 50)
+            FAdmin.Access.AddGroup("sdonator", 0, privs.sdonator or privs.user, 25)
+            FAdmin.Access.AddGroup("donator", 0, privs.donator or privs.user, 15)
             FAdmin.Access.AddGroup("user", 0, privs.user, 10)
             FAdmin.Access.AddGroup("noaccess", 0, privs.noaccess, 0)
         end
 
         MySQLite.query("SELECT DISTINCT PRIVILEGE FROM FADMIN_PRIVILEGES;", function(privTbl)
             local privs = {}
-            local hasPrivs = {"noaccess", "user", "admin", "superadmin"}
+            local hasPrivs = {"noaccess", "user", "donator", "sdonator", "admin", "superadmin"}
 
             -- No privileges registered to anyone. Reset everything
             if not privTbl or table.IsEmpty(privTbl) then

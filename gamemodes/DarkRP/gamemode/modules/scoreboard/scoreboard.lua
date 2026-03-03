@@ -13,7 +13,7 @@ function PANEL:Init()
     self.Hostname = vgui.Create("DLabel", self)
     self.Hostname:SetText(GetHostName())
     self.Description = vgui.Create("DLabel", self)
-    self.Description:SetText(GAMEMODE.Name .. " - " .. GAMEMODE.Author)
+    self.Description:SetText(GAMEMODE and GAMEMODE.Name or "Plagued Paradise")
     self.PlayerFrame = vgui.Create("PlayerFrame", self)
     self.PlayerRows = {}
     self:UpdateScoreboard()

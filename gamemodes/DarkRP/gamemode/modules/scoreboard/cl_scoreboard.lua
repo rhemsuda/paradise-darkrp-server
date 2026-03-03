@@ -1,5 +1,5 @@
 --[[---------------------------------------------------------------------------
-  Scoreboard - Client entry (replaces gmod10_scoreboard).
+  Scoreboard - Client entry.
   Loaded as a DarkRP module. Panels in this folder.
 ---------------------------------------------------------------------------]]
 if not CLIENT then return end
@@ -10,10 +10,18 @@ hook.Add("Initialize", "ScoreboardRemoveOld", function()
     GAMEMODE.ScoreboardShow = nil
     GAMEMODE.ScoreboardHide = nil
     GAMEMODE.HUDDrawScoreBoard = nil
-    if GAMEMODE.Name == "DarkRP" then
+    -- Detect our gamemode by folder so we always remove FAdmin scoreboard (display name is Plagued Paradise)
+    local folder = (GAMEMODE or GM).FolderName or ""
+    if string.lower(folder) == "darkrp" then
         hook.Remove("ScoreboardHide", "FAdmin_scoreboard")
         hook.Remove("ScoreboardShow", "FAdmin_scoreboard")
         GM10_IsDarkRP = true
+        -- Prevent stuck scoreboard/menus on reload or lag: close FAdmin scoreboard and our scoreboard, release mouse
+        if FAdmin and FAdmin.ScoreBoard and FAdmin.ScoreBoard.HideScoreBoard then
+            FAdmin.ScoreBoard.HideScoreBoard()
+        end
+        GAMEMODE.ShowScoreboard = false
+        gui.EnableScreenClicker(false)
     end
 end)
 
@@ -35,6 +43,10 @@ function CreateScoreboard()
 end
 
 hook.Add("ScoreboardShow", "ScoreboardShow", function()
+    -- Ensure FAdmin scoreboard never stays visible (e.g. after lag or reload)
+    if FAdmin and FAdmin.ScoreBoard and FAdmin.ScoreBoard.HideScoreBoard then
+        FAdmin.ScoreBoard.HideScoreBoard()
+    end
     GAMEMODE.ShowScoreboard = true
     gui.EnableScreenClicker(true)
     if not pScoreBoard then
@@ -49,6 +61,10 @@ hook.Add("ScoreboardHide", "ScoreboardHide", function()
     gui.EnableScreenClicker(false)
     if pScoreBoard then
         pScoreBoard:SetVisible(false)
+    end
+    -- Keep FAdmin scoreboard closed when we hide
+    if FAdmin and FAdmin.ScoreBoard and FAdmin.ScoreBoard.HideScoreBoard then
+        FAdmin.ScoreBoard.HideScoreBoard()
     end
 end)
 

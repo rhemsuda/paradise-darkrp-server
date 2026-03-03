@@ -74,7 +74,17 @@ net.Receive("RequestEntitiesData", function(len, ply)
     local isGunDealer = ply:Team() == TEAM_GUN or (RPExtraTeams[ply:Team()] and RPExtraTeams[ply:Team()].name == "Gun Dealer")
     print("[RPEnts Module] Job check for " .. ply:Nick() .. ": Team = " .. ply:Team() .. ", IsGunDealer = " .. tostring(isGunDealer))
 
-    local entitiesToSend = table.Copy(RPEnts.Entities or {})
+    local entitiesToSend = {}
+    local plyJobName = RPExtraTeams and RPExtraTeams[ply:Team()] and RPExtraTeams[ply:Team()].name or nil
+    for _, ent in ipairs(RPEnts.Entities or {}) do
+        if ent.allowedJob then
+            if plyJobName == ent.allowedJob then
+                table.insert(entitiesToSend, ent)
+            end
+        else
+            table.insert(entitiesToSend, ent)
+        end
+    end
 
     -- Add all single weapons if the player is a Gun Dealer
     if isGunDealer then
@@ -188,6 +198,14 @@ net.Receive("BuyEntity", function(len, ply)
                 return
             end
 
+            if ent.allowedJob then
+                local plyJobName = RPExtraTeams and RPExtraTeams[ply:Team()] and RPExtraTeams[ply:Team()].name or nil
+                if plyJobName ~= ent.allowedJob then
+                    DarkRP.notify(ply, 1, 4, "This entity is only available to the " .. (ent.allowedJob or "required") .. " job!")
+                    return
+                end
+            end
+
             -- Count owned printers (six tiers: printer1 through printer6)
             local ownedPrinters = 0
             for _, class in ipairs({"printer1", "printer2", "printer3", "printer4", "printer5", "printer6"}) do
@@ -198,10 +216,15 @@ net.Receive("BuyEntity", function(len, ply)
                 end
             end
 
-            -- Enforce limit: max 4 printers total (any tier)
+            -- Enforce limit: base 4 + Donator/SuperDonator +2 (from Admin/sh_ranks)
+            local maxPrinters = 4
+            if Admin and Admin.GetRank and Admin.GetPrinterBonus then
+                local rank = Admin.GetRank(ply:SteamID())
+                maxPrinters = 4 + (Admin.GetPrinterBonus(rank) or 0)
+            end
             if ent.ent:match("^printer%d+") then
-                if ownedPrinters >= 4 then
-                    DarkRP.notify(ply, 1, 4, "You can only own a maximum of 4 printers total!")
+                if ownedPrinters >= maxPrinters then
+                    DarkRP.notify(ply, 1, 4, "You can only own a maximum of " .. maxPrinters .. " printers!")
                     print("[RPEnts Module] " .. ply:Nick() .. " has reached the max printer limit (4)")
                     return
                 end

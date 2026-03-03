@@ -5,20 +5,10 @@ local PANEL = {}
 surface.CreateFont("ScoreboardInfoKey",   { font = "Tahoma", size = 13, weight = 700, antialias = true })
 surface.CreateFont("ScoreboardInfoValue", { font = "Tahoma", size = 13, weight = 700, antialias = true })
 
--- Get display rank from admin mod: Player, Donator, or Admin (Admin+SuperAdmin both show as Admin)
+-- Rank shown on scoreboard: User, Member, Donator, Super Donator, Admin (admin+superadmin both as Admin). Set by server via ParadiseRankDisplay.
 local function GetScoreboardRank(ply)
-    if not IsValid(ply) then return "Player" end
-    if ply:IsSuperAdmin() or ply:IsAdmin() then return "Admin" end
-    if ply.IsUserGroup and (ply:IsUserGroup("donator") or ply:IsUserGroup("vip")) then return "Donator" end
-    if ply.GetUserGroup then
-        local ug = ply:GetUserGroup()
-        if ug == "donator" or ug == "vip" then return "Donator" end
-    end
-    if FAdmin and ply.FAdmin_GetGlobal then
-        local ok, val = pcall(function() return ply:FAdmin_GetGlobal("fadmin_donator") end)
-        if ok and val then return "Donator" end
-    end
-    return "Player"
+    if not IsValid(ply) then return "User" end
+    return ply:GetNWString("ParadiseRankDisplay", "User")
 end
 
 function PANEL:Init()
@@ -65,7 +55,7 @@ function PANEL:SetInfo(column, k, v)
     if self.InfoLabels[column][k].Key then self.InfoLabels[column][k].Key:SetVisible(true) end
     if self.InfoLabels[column][k].Value then self.InfoLabels[column][k].Value:SetVisible(true) end
     local isAdmin = (k == "Rank:" and v == "Admin")
-    local isDonator = (k == "Rank:" and v == "Donator")
+    local isDonator = (k == "Rank:" and (v == "Donator" or v == "Super Donator"))
     self.InfoLabels[column][k]._isAdmin = isAdmin
     self.InfoLabels[column][k]._isDonator = isDonator
     if isAdmin then
@@ -79,7 +69,8 @@ function PANEL:SetInfo(column, k, v)
         self.InfoLabels[column][k].Value.Paint = function(panel)
             local pulse = 0.7 + 0.3 * math.sin(CurTime() * 3)
             local glowCol = Color(50, 255, 100, math.floor(100 * pulse))
-            draw.SimpleTextOutlined("Donator", panel:GetFont(), 0, 0, Color(100, 255, 150, 255),
+            local text = panel:GetText()
+            draw.SimpleTextOutlined(text, panel:GetFont(), 0, 0, Color(100, 255, 150, 255),
                 TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP, 2, glowCol)
         end
     else

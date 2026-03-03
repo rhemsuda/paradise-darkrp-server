@@ -1,5 +1,14 @@
 if not SERVER then return end
 
+-- Load shared resource definitions (Paradise.ResourceItems, Paradise.ResourceAppearances, Paradise.ResourceCategories).
+-- Explicit include + AddCSLuaFile so it is available before the rest of this file runs
+-- (module loader includes sv_* before sh_*, so we must pull it in manually here).
+AddCSLuaFile("sh_resources.lua")
+include("sh_resources.lua")
+
+-- Global alias kept for backward compatibility (sv_crafting etc. reference ResourceItems directly).
+ResourceItems = Paradise.ResourceItems
+
 -- Helper function to print debug messages conditionally (set rp_debug 1 to see)
 local function DebugPrint(...)
     local cv = GetConVar("rp_debug")
@@ -11,48 +20,81 @@ util.AddNetworkString("SyncResources")
 util.AddNetworkString("DropResource")
 util.AddNetworkString("ResourcesMessage")
 
--- Resource Definitions
-ResourceItems = ResourceItems or {}
-local resourceTemplates = {
-    minerals = {
-        { id = "rock", name = "Rock", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "copper", name = "Copper", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "iron", name = "Iron", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "steel", name = "Steel", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "titanium", name = "Titanium", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" }
-    },
-    gems = {
-        { id = "emerald", name = "Emerald", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "ruby", name = "Ruby", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "sapphire", name = "Sapphire", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "obsidian", name = "Obsidian", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" },
-        { id = "diamond", name = "Diamond", icon = "models/props_junk/rock001a.mdl", model = "models/props_junk/rock001a.mdl" }
-    },
-    --[[ Commented out lumber section for later development
-    lumber = {
-        { id = "ash", name = "Ash", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" },
-        { id = "birch", name = "Birch", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" },
-        { id = "oak", name = "Oak", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" },
-        { id = "mahogany", name = "Mahogany", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" },
-        { id = "yew", name = "Yew", icon = "icon16/brick.png", model = "models/props_junk/rock001a.mdl" }
-    }
-    ]]
-}
-for _, category in pairs(resourceTemplates) do
-    for _, data in ipairs(category) do
-        ResourceItems[data.id] = { name = data.name, icon = data.icon, model = data.model }
-    end
-end
-
 -- Player Resources Table (moved from PlayerInventories.resources)
 PlayerResources = PlayerResources or {}
 
 -- Function to send resource-related messages to the player
+-- msgType: "mined" (resourceID), "dropped" (resourceID, amount), or "plain" (message string)
 local function SendResourcesMessage(ply, message)
     if not IsValid(ply) then return end
     net.Start("ResourcesMessage")
+    net.WriteString("plain")
     net.WriteString(message)
     net.Send(ply)
+end
+local function SendResourcesMessageMined(ply, resourceID)
+    if not IsValid(ply) or not ResourceItems[resourceID] then return end
+    net.Start("ResourcesMessage")
+    net.WriteString("mined")
+    net.WriteString(resourceID)
+    net.Send(ply)
+end
+local function SendResourcesMessageDropped(ply, resourceID, amount)
+    if not IsValid(ply) or not ResourceItems[resourceID] then return end
+    net.Start("ResourcesMessage")
+    net.WriteString("dropped")
+    net.WriteString(resourceID)
+    net.WriteUInt(amount, 16)
+    net.Send(ply)
+end
+-- Used when a player picks up a paradise_resource entity (world drop).
+function SendResourcesMessagePickedUp(ply, resourceID, amount)
+    if not IsValid(ply) or not ResourceItems[resourceID] then return end
+    net.Start("ResourcesMessage")
+    net.WriteString("pickedup")
+    net.WriteString(resourceID)
+    net.WriteUInt(amount, 16)
+    net.Send(ply)
+end
+
+-- Take resources from player's pouch. amounts = { resource_id = amount }. Returns true if player had enough (and deducts); false otherwise.
+function TakeResourcesFromPouch(ply, amounts)
+    if not IsValid(ply) or not amounts or type(amounts) ~= "table" then return false end
+    local steamID = ply:SteamID()
+    local resources = PlayerResources[steamID] or {}
+    for resId, need in pairs(amounts) do
+        if not ResourceItems[resId] or (need or 0) <= 0 then continue end
+        local have = resources[resId] or 0
+        if have < need then return false end
+    end
+    for resId, need in pairs(amounts) do
+        if not ResourceItems[resId] or (need or 0) <= 0 then continue end
+        resources[resId] = (resources[resId] or 0) - need
+        if resources[resId] <= 0 then resources[resId] = nil end
+    end
+    PlayerResources[steamID] = resources
+    net.Start("SyncResources")
+    net.WriteTable(resources)
+    net.Send(ply)
+    SavePlayerResources(ply)
+    return true
+end
+
+-- Return resources to player's pouch (e.g. when crafter menu closes with staged resources). amounts = { resource_id = amount }.
+function ReturnResourcesToPouch(ply, amounts)
+    if not IsValid(ply) or not amounts or type(amounts) ~= "table" then return end
+    local steamID = ply:SteamID()
+    local resources = PlayerResources[steamID] or {}
+    for resId, amount in pairs(amounts) do
+        if ResourceItems[resId] and (amount or 0) > 0 then
+            resources[resId] = (resources[resId] or 0) + amount
+        end
+    end
+    PlayerResources[steamID] = resources
+    net.Start("SyncResources")
+    net.WriteTable(resources)
+    net.Send(ply)
+    SavePlayerResources(ply)
 end
 
 -- Function to add resources to a player's inventory
@@ -69,8 +111,8 @@ function AddResourceToInventory(ply, resourceID, amount, silent)
     net.WriteTable(resources)
     net.Send(ply)
     SavePlayerResources(ply)
-    if not silent then 
-        SendResourcesMessage(ply, "Mined a " .. ResourceItems[resourceID].name)
+    if not silent then
+        SendResourcesMessageMined(ply, resourceID)
         DebugPrint("[Resources Module] " .. ply:Nick() .. " mined " .. (amount or 1) .. " " .. ResourceItems[resourceID].name)
     end
 end
@@ -110,8 +152,34 @@ function SavePlayerResources(ply)
     end)
 end
 
+-- Track resource entities dropped on the ground so we can cap at 5 total (any type)
+local ResourceDropEntities = {}
+
+local function forgetResourceEntity(ent)
+    if not IsValid(ent) then return end
+    for i, e in ipairs(ResourceDropEntities) do
+        if e == ent then
+            table.remove(ResourceDropEntities, i)
+            break
+        end
+    end
+end
+
+hook.Add("EntityRemoved", "Resources_ForgetDropped", forgetResourceEntity)
+
+-- Cap: max 5 resource entities on the ground; remove oldest when over
+local MAX_RESOURCE_ENTITIES = 5
+local function enforceResourceEntityCap()
+    while #ResourceDropEntities >= MAX_RESOURCE_ENTITIES do
+        local oldest = ResourceDropEntities[1]
+        table.remove(ResourceDropEntities, 1)
+        if IsValid(oldest) then oldest:Remove() end
+    end
+end
+
 -- Handle dropping resources
 net.Receive("DropResource", function(len, ply)
+    if IsPlayerGhost and IsPlayerGhost(ply) then return end
     local resourceID = net.ReadString()
     local amount = net.ReadUInt(16)
     if not ResourceItems[resourceID] or amount < 1 then 
@@ -131,31 +199,29 @@ net.Receive("DropResource", function(len, ply)
     net.WriteTable(resources)
     net.Send(ply)
     SavePlayerResources(ply)
-    SendResourcesMessage(ply, "Dropped " .. amount .. " " .. ResourceItems[resourceID].name .. ".")
+    SendResourcesMessageDropped(ply, resourceID, amount)
     DebugPrint("[Resources Module] " .. ply:Nick() .. " dropped " .. amount .. " " .. ResourceItems[resourceID].name)
 
-    -- Spawn the proper resource entity (resource_diamond, resource_iron, etc.) when it exists; else prop_physics
+    enforceResourceEntityCap()
+
+    -- Spawn a single pickupable resource entity for all resource types (paradise_resource)
     local spawnPos = ply:GetEyeTrace().HitPos + Vector(0, 0, 10)
-    local ent = ents.Create("resource_" .. resourceID)
+    local ent = ents.Create("paradise_resource")
     if IsValid(ent) then
+        ent:SetModel(ResourceItems[resourceID].model or "models/props_junk/rock001a.mdl")
         ent:SetPos(spawnPos)
         ent:Spawn()
         ent:Activate()
         ent:SetNWString("ResourceType", resourceID)
         ent:SetNWInt("Amount", amount)
+        local app = Paradise.ResourceAppearances[resourceID] or {}
+        if app.material and app.material ~= "" then ent:SetMaterial(app.material) end
+        if app.color then ent:SetColor(app.color) end
         local phys = ent:GetPhysicsObject()
         if IsValid(phys) then
             phys:SetVelocity(ply:GetAimVector() * 100)
         end
-    else
-        ent = ents.Create("prop_physics")
-        if IsValid(ent) then
-            ent:SetModel(ResourceItems[resourceID].model or "models/props_junk/rock001a.mdl")
-            ent:SetPos(spawnPos)
-            ent:Spawn()
-            local phys = ent:GetPhysicsObject()
-            if IsValid(phys) then phys:SetVelocity(ply:GetAimVector() * 100) end
-        end
+        table.insert(ResourceDropEntities, ent)
     end
 end)
 
@@ -172,12 +238,38 @@ concommand.Add("addresource", function(ply, _, args)
     AddResourceToInventory(ply, args[1], tonumber(args[2]) or 1)
 end)
 
-concommand.Add("open_resources", function(ply)
-    if not IsValid(ply) then return end
-    net.Start("SyncResources")
-    net.WriteTable(PlayerResources[ply:SteamID()] or {})
-    net.Send(ply)
-end)
 
 -- This print will always show to confirm successful load
+-- Admin: give resources to a player. Usage: inv_giveresource <steamid> <resource_id> <amount>
+concommand.Add("inv_giveresource", function(ply, cmd, args)
+    if not IsValid(ply) or not ply:IsAdmin() then return end
+    local steamid = tostring(args[1] or "")
+    local resourceID = tostring(args[2] or "")
+    local amount = tonumber(args[3] or 1) or 1
+    if steamid == "" or resourceID == "" then ply:ChatPrint("Usage: inv_giveresource <steamid> <resource_id> <amount>") return end
+    if not ResourceItems[resourceID] then ply:ChatPrint("Unknown resource: " .. resourceID) return end
+    local target = nil
+    for _, p in ipairs(player.GetAll()) do
+        if p:SteamID() == steamid then target = p break end
+    end
+    if not IsValid(target) then ply:ChatPrint("Player not found (must be online)") return end
+    AddResourceToInventory(target, resourceID, amount, true)
+    local resName = ResourceItems[resourceID].name
+    -- Target sees "Admin X gave you Nx Resource" only (no [INV] prefix to match your system)
+    local targetMsg = string.format("Admin %s gave you %dx %s", ply:Nick(), amount, resName)
+    if IsValid(target) then
+        net.Start("INV_ParadiseChat")
+        net.WriteString(targetMsg)
+        net.Send(target)
+    end
+    for _, p in ipairs(player.GetAll()) do
+        if not IsValid(p) or p == target then continue end
+        if p:IsAdmin() then
+            net.Start("INV_ParadiseChat")
+            net.WriteString(string.format("Gave %dx %s to %s", amount, resName, target:Nick()))
+            net.Send(p)
+        end
+    end
+end)
+
 print("[Resources Module] Loaded successfully (Server).")

@@ -64,6 +64,10 @@ end)
 -- Handle job change request
 net.Receive("RequestJobChange", function(len, ply)
     if not IsValid(ply) then return end
+    if IsPlayerGhost and IsPlayerGhost(ply) then
+        DarkRP.notify(ply, 1, 4, "You cannot change job while dead!")
+        return
+    end
 
     local jobIndex = net.ReadUInt(16)
     local job = RPExtraTeams[jobIndex]

@@ -10,5 +10,3 @@ hook.Add("F4MenuTabs", "RemoveWeaponsTab", function(tabs)
         end
     end
 end)
-
-print("[F4MenuOverride] Loaded client-side F4 menu override to remove Weapons tab")
